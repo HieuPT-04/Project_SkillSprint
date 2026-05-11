@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.skillsprint.entity.Roadmap;
-import com.skillsprint.enums.RoadmapStatus;
+import com.skillsprint.enums.roadmap.RoadmapStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoadmapRepository extends JpaRepository<Roadmap, UUID> {

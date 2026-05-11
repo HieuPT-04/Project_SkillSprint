@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.entity.StudyWorkspace;
-import com.skillsprint.enums.WorkspaceStatus;
+import com.skillsprint.enums.workspace.WorkspaceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface StudyWorkspaceRepository extends JpaRepository<StudyWorkspace, UUID> {

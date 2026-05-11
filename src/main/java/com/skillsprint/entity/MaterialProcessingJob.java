@@ -3,8 +3,8 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.ProcessingJobStatus;
-import com.skillsprint.enums.ProcessingStep;
+import com.skillsprint.enums.material.ProcessingJobStatus;
+import com.skillsprint.enums.material.ProcessingStep;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

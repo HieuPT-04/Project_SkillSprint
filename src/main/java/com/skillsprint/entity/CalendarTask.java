@@ -6,12 +6,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
 
-import com.skillsprint.enums.CalendarTaskCategory;
-import com.skillsprint.enums.CalendarTaskPriority;
-import com.skillsprint.enums.CalendarTaskSource;
-import com.skillsprint.enums.CalendarTaskStatus;
-import com.skillsprint.enums.ClassifiedBy;
-import com.skillsprint.enums.EisenhowerQuadrant;
+import com.skillsprint.enums.calendar.CalendarTaskCategory;
+import com.skillsprint.enums.calendar.CalendarTaskPriority;
+import com.skillsprint.enums.calendar.CalendarTaskSource;
+import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import com.skillsprint.enums.calendar.ClassifiedBy;
+import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

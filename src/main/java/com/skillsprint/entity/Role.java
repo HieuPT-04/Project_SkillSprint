@@ -3,7 +3,7 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.RoleName;
+import com.skillsprint.enums.auth.RoleName;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.entity.UploadedMaterial;
-import com.skillsprint.enums.FileType;
-import com.skillsprint.enums.MaterialProcessingStatus;
+import com.skillsprint.enums.material.FileType;
+import com.skillsprint.enums.material.MaterialProcessingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UploadedMaterialRepository extends JpaRepository<UploadedMaterial, UUID> {

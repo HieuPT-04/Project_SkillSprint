@@ -3,7 +3,7 @@ package com.skillsprint.entity;
 import java.util.List;
 import java.util.UUID;
 
-import com.skillsprint.enums.DifficultyLevel;
+import com.skillsprint.enums.learningstructure.DifficultyLevel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

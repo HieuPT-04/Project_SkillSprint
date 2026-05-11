@@ -2,7 +2,7 @@ package com.skillsprint.entity;
 
 import java.util.UUID;
 
-import com.skillsprint.enums.ExtractionStatus;
+import com.skillsprint.enums.material.ExtractionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

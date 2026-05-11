@@ -4,8 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-import com.skillsprint.enums.ConfidenceLevel;
-import com.skillsprint.enums.PreferredLanguage;
+import com.skillsprint.enums.workspace.ConfidenceLevel;
+import com.skillsprint.enums.workspace.PreferredLanguage;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

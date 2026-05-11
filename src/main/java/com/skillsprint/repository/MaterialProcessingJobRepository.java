@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.skillsprint.entity.MaterialProcessingJob;
-import com.skillsprint.enums.ProcessingJobStatus;
+import com.skillsprint.enums.material.ProcessingJobStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MaterialProcessingJobRepository extends JpaRepository<MaterialProcessingJob, UUID> {

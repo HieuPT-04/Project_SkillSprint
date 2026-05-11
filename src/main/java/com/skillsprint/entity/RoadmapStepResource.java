@@ -3,8 +3,8 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.ResourcePlatform;
-import com.skillsprint.enums.ResourceType;
+import com.skillsprint.enums.roadmap.ResourcePlatform;
+import com.skillsprint.enums.roadmap.ResourceType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

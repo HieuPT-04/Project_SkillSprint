@@ -4,8 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.GeneratedBy;
-import com.skillsprint.enums.LearningStructureStatus;
+import com.skillsprint.enums.learningstructure.GeneratedBy;
+import com.skillsprint.enums.learningstructure.LearningStructureStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

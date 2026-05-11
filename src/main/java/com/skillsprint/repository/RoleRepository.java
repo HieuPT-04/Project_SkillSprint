@@ -4,7 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.skillsprint.entity.Role;
-import com.skillsprint.enums.RoleName;
+import com.skillsprint.enums.auth.RoleName;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoleRepository extends JpaRepository<Role, UUID> {

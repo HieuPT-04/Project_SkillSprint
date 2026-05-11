@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.entity.CalendarTask;
-import com.skillsprint.enums.CalendarTaskStatus;
+import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID> {

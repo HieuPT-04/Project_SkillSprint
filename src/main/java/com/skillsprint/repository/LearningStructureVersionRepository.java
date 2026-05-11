@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.skillsprint.entity.LearningStructureVersion;
-import com.skillsprint.enums.LearningStructureStatus;
+import com.skillsprint.enums.learningstructure.LearningStructureStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LearningStructureVersionRepository extends JpaRepository<LearningStructureVersion, UUID> {

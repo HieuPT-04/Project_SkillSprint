@@ -5,9 +5,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import com.skillsprint.enums.CalendarScheduleRunStatus;
-import com.skillsprint.enums.CalendarScheduleScope;
-import com.skillsprint.enums.WeekDay;
+import com.skillsprint.enums.calendar.CalendarScheduleRunStatus;
+import com.skillsprint.enums.calendar.CalendarScheduleScope;
+import com.skillsprint.enums.calendar.WeekDay;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

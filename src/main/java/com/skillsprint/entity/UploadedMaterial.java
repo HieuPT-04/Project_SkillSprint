@@ -3,9 +3,9 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.FileType;
-import com.skillsprint.enums.MaterialProcessingStatus;
-import com.skillsprint.enums.UploadStatus;
+import com.skillsprint.enums.material.FileType;
+import com.skillsprint.enums.material.MaterialProcessingStatus;
+import com.skillsprint.enums.material.UploadStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

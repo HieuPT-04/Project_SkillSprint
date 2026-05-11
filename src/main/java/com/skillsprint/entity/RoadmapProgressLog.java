@@ -3,8 +3,8 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.skillsprint.enums.RoadmapProgressActionType;
-import com.skillsprint.enums.RoadmapStepStatus;
+import com.skillsprint.enums.roadmap.RoadmapProgressActionType;
+import com.skillsprint.enums.roadmap.RoadmapStepStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
