@@ -2,6 +2,9 @@ spring:
   application:
     # Application name displayed in logs and Spring context.
     name: EXE201_SkillSprint
+  config:
+    # Load local environment variables from .env when present.
+    import: optional:file:.env[.properties]
   profiles:
     # Default active profile. Spring will also load application-dev.yml.
     active: dev
