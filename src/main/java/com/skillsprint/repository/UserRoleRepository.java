@@ -12,7 +12,7 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UUID> {
 
     List<UserRole> findByRoleRoleId(UUID roleId);
 
-    List<UserRole> findByWorkspaceId(UUID workspaceId);
+    List<UserRole> findByWorkspaceWorkspaceId(UUID workspaceId);
 
-    boolean existsByUserUserIdAndRoleRoleIdAndWorkspaceId(String userId, UUID roleId, UUID workspaceId);
+    boolean existsByUserUserIdAndRoleRoleIdAndWorkspaceWorkspaceId(String userId, UUID roleId, UUID workspaceId);
 }

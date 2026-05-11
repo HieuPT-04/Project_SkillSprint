@@ -1,10 +1,12 @@
 package com.skillsprint.entity;
 
-import java.time.Instant;
 import java.util.UUID;
 
+import com.skillsprint.enums.WorkspaceStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -15,29 +17,30 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "role_permissions")
-public class RolePermission {
+@Table(name = "study_workspaces")
+public class StudyWorkspace extends BaseAuditEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "rp_id")
-    private UUID rolePermissionId;
+    @Column(name = "workspace_id")
+    private UUID workspaceId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "role_id", nullable = false)
-    private Role role;
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "permission_id", nullable = false)
-    private Permission permission;
+    @Column(name = "name", nullable = false)
+    private String name;
 
-    @CreationTimestamp
-    @Column(name = "granted_at", nullable = false, updatable = false)
-    private Instant grantedAt;
+    @Column(name = "description")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private WorkspaceStatus status = WorkspaceStatus.ACTIVE;
 }

@@ -8,7 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,13 +17,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(
-        name = "users",
-        indexes = {
-                @Index(name = "idx_users_email", columnList = "email"),
-                @Index(name = "idx_users_status", columnList = "status")
-        }
-)
+@Table(name = "users")
 public class User extends BaseAuditEntity {
 
     @Id

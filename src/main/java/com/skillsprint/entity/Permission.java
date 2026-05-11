@@ -9,7 +9,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,13 +18,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(
-        name = "permissions",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uq_permissions_resource_action",
-                columnNames = {"resource", "action"}
-        )
-)
+@Table(name = "permissions")
 public class Permission {
 
     @Id

@@ -11,7 +11,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,10 +21,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(
-        name = "roles",
-        indexes = @Index(name = "idx_roles_role_name", columnList = "role_name")
-)
+@Table(name = "roles")
 public class Role {
 
     @Id
