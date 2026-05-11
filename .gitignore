@@ -1,0 +1,7 @@
+AGENTS.md
+TASKS.md
+target/
+.DS_Store
+
+.idea/
+*.iml

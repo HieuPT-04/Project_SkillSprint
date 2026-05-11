@@ -1,0 +1,11 @@
+spring:
+  application:
+    # Application name displayed in logs and Spring context.
+    name: EXE201_SkillSprint
+  profiles:
+    # Default active profile. Spring will also load application-dev.yml.
+    active: dev
+
+server:
+  # Default HTTP port for the backend application.
+  port: 8080
