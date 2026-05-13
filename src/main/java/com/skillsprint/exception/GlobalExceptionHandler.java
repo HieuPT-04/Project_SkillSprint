@@ -1,9 +1,8 @@
 package com.skillsprint.exception;
 
+import com.skillsprint.common.ApiResponse;
 import java.util.List;
-
-import com.skillsprint.common.response.ErrorResponse;
-import com.skillsprint.common.response.FieldErrorDetail;
+import com.skillsprint.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,17 +15,21 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(BaseException.class)
-    public ResponseEntity<ErrorResponse> handleBaseException(
-            BaseException ex,
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAppException(
+            AppException ex,
             HttpServletRequest request
     ) {
-        ErrorResponse response = ErrorResponse.of(ex.getCode(), ex.getMessage(), request.getRequestURI());
-        return ResponseEntity.status(ex.getStatus()).body(response);
+        ApiResponse<Object> response = ApiResponse.error(
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(ex.getErrorCode().getStatus()).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
             HttpServletRequest request
     ) {
@@ -36,8 +39,8 @@ public class GlobalExceptionHandler {
                 .map(this::toFieldErrorDetail)
                 .toList();
 
-        ErrorResponse response = ErrorResponse.validation(
-                "Request validation failed",
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.VALIDATION_ERROR,
                 request.getRequestURI(),
                 errors
         );
@@ -45,12 +48,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<ErrorResponse> handleHandlerMethodValidation(
+    public ResponseEntity<ApiResponse<Object>> handleHandlerMethodValidation(
             HandlerMethodValidationException ex,
             HttpServletRequest request
     ) {
-        ErrorResponse response = ErrorResponse.of(
-                "VALIDATION_ERROR",
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.VALIDATION_ERROR,
                 "Request validation failed",
                 request.getRequestURI()
         );
@@ -58,12 +61,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnhandledException(
+    public ResponseEntity<ApiResponse<Object>> handleUnhandledException(
             Exception ex,
             HttpServletRequest request
     ) {
-        ErrorResponse response = ErrorResponse.of(
-                "INTERNAL_SERVER_ERROR",
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.INTERNAL_SERVER_ERROR,
                 "Unexpected server error",
                 request.getRequestURI()
         );
