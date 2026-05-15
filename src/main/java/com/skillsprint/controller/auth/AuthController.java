@@ -1,6 +1,7 @@
 package com.skillsprint.controller.auth;
 
 import com.skillsprint.dto.request.auth.ConfirmRegisterRequest;
+import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
@@ -49,6 +50,15 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.success("Login successfully", response));
+        String message = response.getChallengeName() == null ? "Login successfully" : "New password required";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @PostMapping("/complete-new-password")
+    public ResponseEntity<ApiResponse<AuthResponse>> completeNewPassword(
+            @Valid @RequestBody CompleteNewPasswordRequest request
+    ) {
+        AuthResponse response = authService.completeNewPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
     }
 }

@@ -3,6 +3,7 @@ package com.skillsprint.service.auth;
 import com.skillsprint.configuration.cognito.CognitoProperties;
 import com.skillsprint.configuration.cognito.CognitoSecretHashUtil;
 import com.skillsprint.dto.request.auth.ConfirmRegisterRequest;
+import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
@@ -26,8 +27,11 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUse
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminListGroupsForUserRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminRespondToAuthChallengeRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminRespondToAuthChallengeResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ChallengeNameType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIdentityProviderException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmSignUpRequest;
@@ -143,21 +147,15 @@ public class AuthService {
                             .build()
             );
 
-            AdminGetUserResponse cognitoUser = cognitoClient.adminGetUser(
-                    AdminGetUserRequest.builder()
-                            .userPoolId(cognitoProperties.userPoolId())
-                            .username(email)
-                            .build()
-            );
-            syncLocalUser(cognitoUser, resolveRoleName(email), email);
+            if (ChallengeNameType.NEW_PASSWORD_REQUIRED.equals(response.challengeName())) {
+                return AuthResponse.builder()
+                        .challengeName(response.challengeNameAsString())
+                        .session(response.session())
+                        .build();
+            }
 
-            return AuthResponse.builder()
-                    .accessToken(response.authenticationResult().accessToken())
-                    .idToken(response.authenticationResult().idToken())
-                    .refreshToken(response.authenticationResult().refreshToken())
-                    .expiresIn(response.authenticationResult().expiresIn())
-                    .tokenType(response.authenticationResult().tokenType())
-                    .build();
+            syncLocalUserByEmail(email);
+            return toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (UserNotConfirmedException ex) {
@@ -165,6 +163,57 @@ public class AuthService {
         } catch (CognitoIdentityProviderException ex) {
             throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
         }
+    }
+
+    @Transactional
+    public AuthResponse completeNewPassword(CompleteNewPasswordRequest request) {
+        String email = request.email().trim().toLowerCase();
+
+        try {
+            Map<String, String> challengeResponses = new HashMap<>();
+            challengeResponses.put("USERNAME", email);
+            challengeResponses.put("NEW_PASSWORD", request.newPassword());
+            putSecretHashIfNeeded(challengeResponses, email);
+
+            AdminRespondToAuthChallengeResponse response = cognitoClient.adminRespondToAuthChallenge(
+                    AdminRespondToAuthChallengeRequest.builder()
+                            .userPoolId(cognitoProperties.userPoolId())
+                            .clientId(cognitoProperties.clientId())
+                            .challengeName(ChallengeNameType.NEW_PASSWORD_REQUIRED)
+                            .challengeResponses(challengeResponses)
+                            .session(request.session())
+                            .build()
+            );
+
+            syncLocalUserByEmail(email);
+            return toAuthResponse(response.authenticationResult());
+        } catch (NotAuthorizedException | UserNotFoundException ex) {
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+        }
+    }
+
+    private void syncLocalUserByEmail(String email) {
+        AdminGetUserResponse cognitoUser = cognitoClient.adminGetUser(
+                AdminGetUserRequest.builder()
+                        .userPoolId(cognitoProperties.userPoolId())
+                        .username(email)
+                        .build()
+        );
+        syncLocalUser(cognitoUser, resolveRoleName(email), email);
+    }
+
+    private AuthResponse toAuthResponse(
+            software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType result
+    ) {
+        return AuthResponse.builder()
+                .accessToken(result.accessToken())
+                .idToken(result.idToken())
+                .refreshToken(result.refreshToken())
+                .expiresIn(result.expiresIn())
+                .tokenType(result.tokenType())
+                .build();
     }
 
     private void syncLocalUser(AdminGetUserResponse cognitoUser, RoleName roleName, String fallbackEmail) {

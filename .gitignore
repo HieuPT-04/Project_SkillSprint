@@ -3,6 +3,7 @@ TASKS.md
 target/
 .DS_Store
 .env
+*.postman_collection.json
 
 .idea/
 *.iml
