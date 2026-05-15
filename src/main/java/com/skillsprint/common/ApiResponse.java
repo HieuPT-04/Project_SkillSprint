@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -15,24 +16,28 @@ import lombok.Getter;
 public class ApiResponse<T> {
 
     boolean success;
-    String code;
+    Integer code;
     String message;
     T data;
     String path;
     List<FieldErrorDetail> errors;
 
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, null, "Success", data, null, null);
+        return success("Success", data);
     }
 
     public static <T> ApiResponse<T> success(String message, T data) {
-        return new ApiResponse<>(true, null, message, data, null, null);
+        return new ApiResponse<>(true, HttpStatus.OK.value(), message, data, null, null);
+    }
+
+    public static <T> ApiResponse<T> created(String message, T data) {
+        return new ApiResponse<>(true, HttpStatus.CREATED.value(), message, data, null, null);
     }
 
     public static <T> ApiResponse<T> error(ErrorCode errorCode, String path) {
         return new ApiResponse<>(
                 false,
-                errorCode.getCode(),
+                errorCode.getStatus().value(),
                 errorCode.getMessage(),
                 null,
                 path,
@@ -43,7 +48,7 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(ErrorCode errorCode, String message, String path) {
         return new ApiResponse<>(
                 false,
-                errorCode.getCode(),
+                errorCode.getStatus().value(),
                 message,
                 null,
                 path,
@@ -54,7 +59,7 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(ErrorCode errorCode, String path, List<FieldErrorDetail> errors) {
         return new ApiResponse<>(
                 false,
-                errorCode.getCode(),
+                errorCode.getStatus().value(),
                 errorCode.getMessage(),
                 null,
                 path,
