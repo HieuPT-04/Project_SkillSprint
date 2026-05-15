@@ -12,3 +12,4 @@ spring:
 server:
   # Default HTTP port for the backend application.
   port: 8080
+

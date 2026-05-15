@@ -10,6 +10,23 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
-    show-sql: true
+    show-sql: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.${COGNITO_REGION:ap-southeast-1}.amazonaws.com/${COGNITO_USER_POOL_ID:ap-southeast-1_zyLksLSqU}}
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  cognito:
+    region: ${COGNITO_REGION:ap-southeast-1}
+    user-pool-id: ${COGNITO_USER_POOL_ID:ap-southeast-1_zyLksLSqU}
+    client-id: ${COGNITO_CLIENT_ID}
+    client-secret: ${COGNITO_CLIENT_SECRET:}
+    default-group: ${COGNITO_DEFAULT_GROUP:LEARNER}
+    access-key-id: ${AWS_ACCESS_KEY_ID:}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}

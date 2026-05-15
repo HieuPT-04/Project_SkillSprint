@@ -1,132 +1,328 @@
-# SkillSprint MVP Overview
+# SkillSprint MVP
 
-## 1. Mục Tiêu Dự Án
+## 1. Mục Tiêu
 
-SkillSprint là hệ thống học tập cá nhân hóa theo workspace. Người dùng tạo workspace cho một mục tiêu học tập, upload tài liệu, hệ thống xử lý nội dung, AI hoặc rule-based engine phân tích tài liệu và tạo roadmap học tập có thể thực hiện được.
+SkillSprint là backend cho hệ thống học tập cá nhân hóa theo workspace.
 
-Giá trị chính của sản phẩm là biến tài liệu thô thành lộ trình học rõ ràng:
+Người dùng tạo một workspace cho mục tiêu học tập, upload tài liệu, hệ thống xử lý nội dung và tạo ra roadmap học tập có thể theo dõi bằng lịch học.
+
+Giá trị chính:
 
 ```text
 Tài liệu thô -> Cấu trúc học tập -> Roadmap -> Lịch học -> Tiến độ
 ```
 
-MVP cần chứng minh core learning flow chạy được end-to-end, nhưng vẫn giữ bức tranh sản phẩm đủ đầy để schema và kiến trúc không bị cụt khi mở rộng.
+MVP cần chứng minh một vòng học tập chạy thật từ đăng nhập đến tạo workspace, xử lý tài liệu, sinh roadmap và sinh lịch học cơ bản.
 
-## 2. Định Hướng Sản Phẩm
+## 2. Core Flow
 
-Sản phẩm đi theo mô hình `workspace-centered`.
-
-Mỗi workspace đại diện cho một mục tiêu học tập riêng, ví dụ:
-
-- Ôn thi một môn học.
-- Học kỹ năng mới.
-- Chuẩn bị chứng chỉ.
-- Tự học theo tài liệu cá nhân.
-
-Core flow đầy đủ:
+Flow sản phẩm đầy đủ:
 
 ```text
 Login bằng Cognito
--> Sync user vào database
+-> Sync user vào DB SkillSprint
 -> Tạo workspace
 -> Nhập onboarding profile
 -> Upload tài liệu
--> Lưu file gốc bằng S3 object key
--> Tạo material processing job
--> Extract text bằng Apache Tika
+-> Lưu metadata/file key
+-> Tạo processing job
+-> Extract text
 -> Clean/chunk tài liệu
--> AI/rule-based engine tạo learning structure
+-> Sinh learning structure
 -> User review/confirm structure
 -> Sinh chapters/topics
--> Sinh roadmap và roadmap steps
+-> Sinh roadmap/roadmap steps
 -> Gợi ý tài nguyên học
--> Sinh calendar tasks
--> User học và hoàn thành task
--> Hệ thống cập nhật progress
+-> Sinh calendar tasks từ roadmap
+-> User học và complete task
+-> Cập nhật progress
 ```
 
-Core flow ưu tiên cho MVP đầu:
+Flow ưu tiên hiện tại:
 
 ```text
-Login -> Workspace -> Upload Material -> Review Structure -> Generate Roadmap
+Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar
 ```
 
-## 3. Core MVP Bắt Buộc
+## 3. Trạng Thái Hiện Tại
 
-Đây là các phần cần làm để MVP có giá trị thật:
+Đã có nền tảng:
 
+- Spring Boot project baseline.
+- PostgreSQL cho dev/prod, H2 cho test.
+- Common API response bằng `ApiResponse`.
+- Exception flow bằng `ErrorCode`, `AppException`, `GlobalExceptionHandler`.
 - AWS Cognito authentication.
-- Sync current user vào database.
-- RBAC cơ bản với 2 role: `LEARNER`, `ADMIN`.
-- User profile và `/api/me`.
-- Workspace CRUD.
-- Onboarding profile cho workspace.
-- Upload tài liệu và lưu metadata.
-- Lưu file gốc bằng S3 bucket/object key.
-- File extraction bằng Apache Tika.
-- Material processing job để tracking pipeline.
-- Extracted document và material chunks.
-- AI hoặc rule-based learning structure generation.
-- Review/confirm learning structure.
-- Chapter/topic structure.
-- Roadmap generation theo `roadmap_steps`.
-- Resource suggestion cơ bản cho roadmap step.
-- Calendar task generation cơ bản.
-- Progress tracking cơ bản.
+- Register, confirm register, resend confirmation code.
+- Login Cognito.
+- Complete new password cho user Cognito bị `NEW_PASSWORD_REQUIRED`.
+- Spring Security Resource Server.
+- Public `/health` và `/api/auth/**`.
+- API nghiệp vụ còn lại cần JWT.
+- Cognito groups map thành Spring roles.
+- Sync user Cognito vào DB nội bộ.
+- RBAC đơn giản bằng `roles` và `user_roles`.
+- `RoleSeeder` tự tạo `ADMIN`, `LEARNER`.
+- Flyway đã gỡ khỏi project.
+- Permission-based access đã tạm bỏ khỏi MVP.
 
-## 4. MVP-supported Skeleton
+Chưa làm:
 
-Các phần này có schema hoặc entity từ đầu để tránh thiết kế cụt, nhưng không triển khai logic đầy đủ trong vòng đầu:
+- `/api/me`.
+- Workspace API.
+- Onboarding API.
+- Material upload/extraction/chunking.
+- Roadmap API.
+- Calendar generation API.
+- Progress API.
 
-- `reminders`: chuẩn bị cho nhắc nhở task/deadline/progress.
-- `notifications`, `notification_logs`: chuẩn bị notification center và dispatch log.
-- `business_activity_logs`: chuẩn bị audit/activity log nghiệp vụ.
-- `study_sessions`, `pomodoro_sessions`: chuẩn bị tracking phiên học và Pomodoro.
-- `service_plans`, `subscriptions`: chuẩn bị feature gating/quota/monetization sau này.
+## 4. Kiến Trúc Kỹ Thuật
 
-Nguyên tắc:
+Backend dùng Modular Monolith theo Layered Architecture.
+
+Stack hiện tại:
+
+- Java 17.
+- Spring Boot 3.3.5.
+- Maven.
+- Spring Web.
+- Spring Data JPA / Hibernate.
+- Spring Validation.
+- Spring Security.
+- OAuth2 Resource Server.
+- AWS Cognito User Pool.
+- AWS SDK Cognito Identity Provider.
+- PostgreSQL.
+- H2 cho test.
+- Lombok.
+
+Schema strategy:
+
+- Dev dùng Hibernate `ddl-auto: update`.
+- Test dùng H2 `create-drop`.
+- Project hiện tại không dùng Flyway.
+- Production sau này nên chuyển sang migration có kiểm soát hoặc ít nhất `ddl-auto: validate`.
+
+Layering:
 
 ```text
-Schema có thể chuẩn bị trước.
-Service/API chỉ làm khi core flow đã ổn định.
+controller -> service -> repository -> entity
+dto/request và dto/response nằm ở API boundary
+common chứa ApiResponse và shared DTO nhỏ
+exception chứa ErrorCode/AppException/GlobalExceptionHandler
+configuration chứa Spring/Cognito/Security/seeder config
 ```
 
-## 5. Phase Later
+Quy tắc:
 
-Chưa triển khai sâu trong MVP đầu:
+- Không trả entity trực tiếp ra API.
+- DTO chỉ tạo khi có API/use case thật.
+- Không tạo abstraction nếu chưa có nhu cầu thật.
+- Ưu tiên role-based access trước, chưa dùng permission-based access.
 
-- Payment/subscription lifecycle đầy đủ.
-- Quota enforcement nâng cao theo gói.
-- Notification đa kênh: email, push, SMS.
-- WebSocket realtime notification đầy đủ.
-- Pomodoro nâng cao.
-- Business activity analytics nâng cao.
-- AI tutor nâng cao.
-- Quiz generator nâng cao.
-- RAG/ChromaDB sâu.
-- Kafka/event streaming.
-- ELK/observability production đầy đủ.
+## 5. Authentication Và Authorization
 
-Chỉ chuyển sang các phần này sau khi flow user -> workspace -> material -> structure -> roadmap chạy ổn định.
+Cognito là nơi quản lý identity/authentication.
 
-## 6. Learning Structure Review Flow
+DB SkillSprint là nơi quản lý user profile nội bộ, role nội bộ và dữ liệu học tập.
 
-AI không quyết định kết quả cuối cùng. AI chỉ đề xuất cấu trúc học tập, user review trước khi roadmap được tạo.
+Quy ước:
+
+```text
+users.user_id = Cognito sub
+Cognito group ADMIN -> ROLE_ADMIN
+Cognito group LEARNER -> ROLE_LEARNER
+```
+
+Auth endpoints:
+
+```text
+POST /api/auth/register
+POST /api/auth/resend-confirmation-code
+POST /api/auth/confirm-register
+POST /api/auth/login
+POST /api/auth/complete-new-password
+```
+
+Register flow:
+
+```text
+Register
+-> Cognito gửi code email
+-> Confirm register
+-> Add user vào group LEARNER
+-> Sync user về DB
+```
+
+Login flow:
+
+```text
+Login
+-> Cognito verify username/password
+-> Backend đọc user + groups từ Cognito
+-> Sync user về DB
+-> Gán role nội bộ
+-> Trả token
+```
+
+Manual Cognito user flow:
+
+```text
+Admin tạo user trên Cognito
+-> User login bằng temporary password
+-> Cognito trả NEW_PASSWORD_REQUIRED + session
+-> complete-new-password
+-> Cognito đổi password thành permanent
+-> Backend sync user về DB
+```
+
+RBAC hiện tại:
+
+- `ADMIN`.
+- `LEARNER`.
+- `roles`.
+- `user_roles`.
+
+Không dùng trong MVP hiện tại:
+
+- `permissions`.
+- `role_permissions`.
+
+## 6. API Response Chuẩn
+
+Success:
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Success",
+  "data": {}
+}
+```
+
+Created:
+
+```json
+{
+  "success": true,
+  "code": 201,
+  "message": "Created successfully"
+}
+```
+
+Error:
+
+```json
+{
+  "success": false,
+  "code": 409,
+  "message": "Email này đã được đăng ký",
+  "path": "/api/auth/register"
+}
+```
+
+Validation error:
+
+```json
+{
+  "success": false,
+  "code": 400,
+  "message": "Dữ liệu không hợp lệ",
+  "path": "/api/auth/register",
+  "errors": [
+    {
+      "field": "email",
+      "message": "must not be blank"
+    }
+  ]
+}
+```
+
+`code` là HTTP status dạng số:
+
+```text
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+500 Internal Server Error
+502 Bad Gateway
+```
+
+## 7. Dữ Liệu Chính
+
+Nhóm identity/RBAC:
+
+- `users`: user nội bộ, `user_id` là Cognito `sub`.
+- `roles`: role hệ thống.
+- `user_roles`: user được gán role nào, có thể scoped theo workspace sau này.
+
+Nhóm workspace:
+
+- `study_workspaces`: workspace học tập.
+- `onboarding_profiles`: mục tiêu học, deadline, lịch rảnh, confidence.
+
+Nhóm material:
+
+- `uploaded_materials`: metadata tài liệu upload.
+- `material_processing_jobs`: trạng thái pipeline xử lý tài liệu.
+- `extracted_documents`: text đã extract/clean.
+- `material_chunks`: chunks phục vụ AI/rule-based generation.
+
+Nhóm learning structure:
+
+- `learning_structure_versions`: bản cấu trúc học tập.
+- `chapters`: chapter trong structure.
+- `topics`: topic trong chapter.
+
+Nhóm roadmap:
+
+- `roadmaps`: roadmap tổng của workspace.
+- `roadmap_steps`: từng bước học.
+- `roadmap_step_resources`: tài nguyên học gợi ý.
+- `roadmap_progress_logs`: lịch sử thay đổi trạng thái step/roadmap.
+
+Nhóm calendar/progress:
+
+- `calendar_schedule_runs`: mỗi lần sinh lịch học từ roadmap.
+- `calendar_tasks`: task học theo ngày/giờ.
+- `workspace_progress`: tiến độ tổng của workspace.
+
+Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
+
+- `reminders`.
+- `notifications`.
+- `study_sessions`.
+- `pomodoro_sessions`.
+
+Nhóm tạm chưa cần cho MVP hiện tại:
+
+- `business_activity_logs`.
+- `notification_logs`.
+- `progress_logs`.
+- `service_plans`.
+- `subscriptions`.
+
+## 8. Learning Structure Review
+
+AI/rule-based engine chỉ đề xuất. User phải review trước khi roadmap được tạo.
 
 Flow:
 
 ```text
 Material chunks
--> AI/rule-based structure generation
--> learning_structure_versions status = REVIEW_REQUIRED
--> User review structure tree
--> User chỉnh nội dung cơ bản nếu cần
+-> Generate learning_structure_versions status REVIEW_REQUIRED
+-> Generate chapters/topics
+-> User review
+-> User chỉnh phần được phép
 -> User confirm
--> learning_structure_versions status = CONFIRMED
--> Roadmap generation dùng bản CONFIRMED
+-> status CONFIRMED
+-> Generate roadmap từ bản CONFIRMED
 ```
 
-Trong MVP, user được sửa:
+User được sửa trong MVP:
 
 - Chapter title.
 - Topic title.
@@ -136,124 +332,59 @@ Trong MVP, user được sửa:
 - Xóa topic.
 - Confirm structure.
 
-Trong MVP, user chưa sửa:
+User không được sửa trực tiếp:
 
-- Metadata hệ thống như `status`, `generated_by`, `version_no`.
-- `source_chunk_ids`.
-- `is_ai_generated`.
-- Difficulty/estimated minutes nếu chưa cần.
-- JSONB sâu như `key_concepts`, `learning_outcomes`, `recommended_focus`.
+- `structureVersionId`.
+- `workspaceId`.
+- `materialId`.
+- `generatedBy`.
+- `status`.
+- `versionNo`.
+- `sourceChunkIds`.
+- `aiGenerated`.
+- `createdAt`.
+- `updatedAt`.
+- `confirmedAt`.
 
-Version rule cho MVP:
+Rule version:
 
-- Không tạo version mới cho mỗi lần user sửa nhỏ.
+- Không tạo version mới cho mỗi chỉnh sửa nhỏ.
 - User sửa draft trong bản `REVIEW_REQUIRED`.
 - Khi confirm thì set bản đó thành `CONFIRMED`.
-- `version_no` dùng cho regenerate hoặc major revision sau này.
-- Roadmap chỉ sinh từ bản `CONFIRMED`.
+- `version_no` dùng cho regenerate hoặc major revision sau.
 
-## 7. Production-ready Baseline
+## 9. Roadmap Và Calendar
 
-Các nền tảng nên giữ từ đầu:
-
-- PostgreSQL là database chính.
-- Flyway là source of truth cho schema.
-- Hibernate dùng `ddl-auto: validate`.
-- AWS Cognito làm identity provider.
-- `users.user_id` lưu Cognito `sub`.
-- RBAC lưu trong database.
-- AWS S3 private bucket/object key cho file gốc.
-- Business-critical data lưu trong PostgreSQL.
-- System log bằng SLF4J/Logback.
-- API documentation bằng Swagger/OpenAPI.
-
-Các phần production nâng cao nên để sau:
-
-- Spring Scheduler phức tạp.
-- WebSocket realtime đầy đủ.
-- Spring AOP tracking cho request/service/business event.
-- ELK/observability production đầy đủ.
-
-## 8. Dữ Liệu Chính
-
-Schema chính nằm ở:
+Roadmap sinh từ learning structure đã confirm.
 
 ```text
-src/main/resources/db/migration/V1__init_schema.sql
+Confirmed structure
+-> Roadmap
+-> Roadmap steps
+-> Roadmap step resources
 ```
 
-Nhóm identity/RBAC:
-
-- `users`: user nội bộ, dùng Cognito sub làm `user_id`.
-- `roles`: role hệ thống, trước mắt gồm `LEARNER`, `ADMIN`.
-- `permissions`: quyền cụ thể theo resource/action.
-- `role_permissions`: role có những permissions nào.
-- `user_roles`: user được gán role nào, có thể scoped theo workspace.
-
-Nhóm workspace/onboarding:
-
-- `study_workspaces`: workspace học tập.
-- `onboarding_profiles`: mục tiêu học, deadline, lịch rảnh, confidence.
-
-Nhóm material processing:
-
-- `uploaded_materials`: metadata file upload và S3 object key.
-- `extracted_documents`: nội dung đã extract/clean.
-- `material_chunks`: các đoạn tài liệu đã chunk.
-- `material_processing_jobs`: trạng thái pipeline xử lý tài liệu.
-
-Nhóm learning structure:
-
-- `learning_structure_versions`: phiên bản cấu trúc học tập do AI/user/system tạo.
-- `chapters`: chapter trong structure version.
-- `topics`: topic trong chapter.
-
-Nhóm roadmap:
-
-- `roadmaps`: roadmap tổng của workspace.
-- `roadmap_steps`: từng bước học trong roadmap.
-- `roadmap_step_resources`: tài nguyên học gợi ý cho step.
-- `roadmap_progress_logs`: lịch sử thay đổi trạng thái roadmap step.
-
-Nhóm calendar/progress:
-
-- `calendar_tasks`: task/lịch học cụ thể.
-- `calendar_schedule_runs`: lần sinh lịch học từ roadmap.
-- `workspace_progress`: tiến độ tổng theo workspace.
-- `progress_logs`: lịch sử tiến độ theo ngày.
-
-Nhóm skeleton/phase later:
-
-- `reminders`
-- `notifications`, `notification_logs`
-- `business_activity_logs`
-- `study_sessions`, `pomodoro_sessions`
-- `service_plans`, `subscriptions`
-
-## 9. Trạng Thái Quan Trọng
-
-Material upload:
+Calendar sinh từ roadmap:
 
 ```text
-UPLOADED | FAILED
+Roadmap steps
+-> CalendarScheduleRun
+-> CalendarTask theo ngày/giờ học
 ```
 
-Material processing:
+`CalendarScheduleRun` cần giữ vì nó lưu lịch sử mỗi lần sinh lịch, giúp:
+
+- Preview lịch trước khi confirm.
+- Regenerate lịch.
+- Debug vì sao lịch được tạo như vậy.
+- Theo dõi input như ngày rảnh, thời lượng học, số session mỗi ngày.
+
+## 10. Trạng Thái Quan Trọng
+
+User:
 
 ```text
-PENDING -> EXTRACTING -> EXTRACTED -> CLEANING -> CHUNKING -> ANALYZING -> COMPLETED
-```
-
-Nếu cần user review:
-
-```text
-REVIEW_REQUIRED
-```
-
-Nếu lỗi:
-
-```text
-FAILED
+ACTIVE | DISABLED
 ```
 
 Learning structure:
@@ -280,129 +411,93 @@ Calendar task:
 TODO -> COMPLETED
 ```
 
-Notification/reminder:
+Material processing:
+
+```text
+PENDING -> EXTRACTING -> EXTRACTED -> CLEANING -> CHUNKING -> ANALYZING -> COMPLETED
+FAILED
+```
+
+Reminder/notification:
 
 ```text
 PENDING -> SENT
-```
-
-Nếu lỗi hoặc hủy:
-
-```text
 FAILED | CANCELLED
 ```
 
-## 10. Kiến Trúc Kỹ Thuật
+## 11. Thứ Tự Triển Khai
 
-Backend dùng Modular Monolith kết hợp Layered Architecture.
+Đã làm:
 
-Stack chính:
+1. Project baseline.
+2. Common response/exception.
+3. Cognito auth.
+4. Security config.
+5. User sync.
+6. RoleSeeder.
+7. Bỏ Flyway.
+8. Bỏ permission-based tables khỏi MVP.
 
-- Backend: Spring Boot.
-- Language: Java 17.
-- Database: PostgreSQL.
-- ORM: Spring Data JPA / Hibernate.
-- Migration: Flyway.
-- Authentication: AWS Cognito.
-- Authorization: RBAC trong database.
-- Object storage: AWS S3.
-- Document extraction: Apache Tika.
-- AI orchestration: LangChain4j hoặc provider tương đương.
-- API docs: Swagger/OpenAPI.
+Làm tiếp:
 
-Layering:
+1. `/api/me`.
+2. Workspace CRUD.
+3. Onboarding profile.
+4. Material upload metadata.
+5. Material processing job.
+6. Document extraction/chunking.
+7. Learning structure generation.
+8. Learning structure review/confirm.
+9. Roadmap generation.
+10. Calendar task generation.
+11. Progress tracking.
 
-```text
-controller -> service -> repository -> entity
-dto/request, dto/response dùng ở API boundary
-mapper dùng khi API shape khác entity shape
-```
-
-Entity không trả thẳng ra API. DTO chỉ tạo khi bắt đầu làm use case/API cụ thể.
-
-## 11. Package Convention
-
-Khi codebase lớn hơn, package nên chia theo domain nhẹ:
+Thứ tự API trước mắt:
 
 ```text
-entity.auth
-entity.workspace
-entity.material
-entity.learningstructure
-entity.roadmap
-entity.calendar
-entity.progress
-
-repository.auth
-repository.workspace
-repository.material
-repository.learningstructure
-repository.roadmap
-repository.calendar
-repository.progress
-
-controller.workspace
-controller.material
-controller.learningstructure
-controller.roadmap
-controller.calendar
-
-service.auth
-service.rbac
-service.workspace
-service.material
-service.learningstructure
-service.roadmap
-service.calendar
+GET /api/me
+POST /api/workspaces
+GET /api/workspaces/my
+GET /api/workspaces/{workspaceId}
+PUT/PATCH /api/workspaces/{workspaceId}
+DELETE /api/workspaces/{workspaceId}
 ```
 
-Không tạo package rỗng. Chỉ tạo khi có class thật.
+## 12. Nguyên Tắc Ra Quyết Định
 
-## 12. Thứ Tự Triển Khai Ưu Tiên
+Giữ:
 
-1. Foundation project.
-2. Flyway schema.
-3. Entity/repository baseline theo schema.
-4. Validate entity baseline bằng `mvn test`.
-5. Validate Flyway + Hibernate với PostgreSQL thật.
-6. Cognito Resource Server.
-7. Current user sync và `/api/me`.
-8. RBAC baseline.
-9. Workspace CRUD.
-10. Onboarding profile.
-11. Material upload metadata và S3 flow.
-12. Material processing job.
-13. Document extraction và chunking.
-14. Learning structure generation.
-15. Learning structure review/confirm.
-16. Roadmap và roadmap steps.
-17. Calendar task generation cơ bản.
-18. Progress tracking cơ bản.
+- Những bảng phục vụ trực tiếp core learning flow.
+- Những abstraction đã có use case thật.
+- Những config giúp người khác clone code chạy được.
 
-Sau đó mới mở rộng:
+Tạm bỏ hoặc chưa làm:
+
+- Permission-based access khi chỉ có `ADMIN`/`LEARNER`.
+- Payment/subscription khi chưa có quota/payment API.
+- Business logs khi chưa có business event thật.
+- Notification dispatch log khi chỉ cần in-app notification cơ bản.
+
+Ưu tiên:
 
 ```text
-reminder -> notification -> websocket -> pomodoro -> analytics -> payment/quota
+Ít bảng nhưng dùng thật
+Ít API nhưng chạy end-to-end
+Code dễ hiểu trước, mở rộng sau
 ```
 
-## 13. Ưu Tiên Hiện Tại
+## 13. Kết Luận
 
-Hiện tại nên tập trung:
-
-1. Giữ `V1__init_schema.sql` làm source of truth.
-2. Hoàn thành Phase 2 entity/repository baseline.
-3. Chạy test với H2.
-4. Chạy app với PostgreSQL thật để validate Flyway + Hibernate.
-5. Setup Cognito Resource Server.
-6. Làm `/api/me`.
-7. Làm Workspace CRUD.
-
-## 14. Kết Luận
-
-MVP của SkillSprint nên giữ đầy đủ product vision nhưng implementation phải đi từng lát nhỏ, test được và có API contract rõ ràng.
-
-Mục tiêu đầu tiên không phải làm hết mọi feature trong schema, mà là tạo được một vòng học tập chạy thật:
+MVP không cần làm hết mọi module ngay. Mục tiêu đầu tiên là tạo một vòng học tập thật sự chạy được:
 
 ```text
-Login -> Workspace -> Upload Material -> Review Structure -> Generate Roadmap
+Login
+-> Workspace
+-> Upload Material
+-> Generate/Review Structure
+-> Generate Roadmap
+-> Generate Calendar
+-> Track Progress
 ```
+
+Khi vòng này ổn, mới mở rộng sang reminder, notification realtime, Pomodoro, payment/quota và analytics.
