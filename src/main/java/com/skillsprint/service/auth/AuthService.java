@@ -11,6 +11,7 @@ import com.skillsprint.dto.response.auth.AuthResponse;
 import com.skillsprint.enums.auth.RoleName;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
+import com.skillsprint.mapper.AuthMapper;
 import com.skillsprint.service.user.UserSyncService;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,37 +22,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthResponse;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminListGroupsForUserRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminRespondToAuthChallengeRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminRespondToAuthChallengeResponse;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.ChallengeNameType;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIdentityProviderException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmSignUpRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.ExpiredCodeException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.GroupType;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.NotAuthorizedException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.SignUpRequest;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.UsernameExistsException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotConfirmedException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class AuthService {
+public class    AuthService {
 
     CognitoIdentityProviderClient cognitoClient;
     CognitoProperties cognitoProperties;
     UserSyncService userSyncService;
+    AuthMapper authMapper;
 
     public void register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase();
@@ -148,14 +130,11 @@ public class AuthService {
             );
 
             if (ChallengeNameType.NEW_PASSWORD_REQUIRED.equals(response.challengeName())) {
-                return AuthResponse.builder()
-                        .challengeName(response.challengeNameAsString())
-                        .session(response.session())
-                        .build();
+                return authMapper.toNewPasswordRequiredResponse(response);
             }
 
             syncLocalUserByEmail(email);
-            return toAuthResponse(response.authenticationResult());
+            return authMapper.toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (UserNotConfirmedException ex) {
@@ -186,7 +165,7 @@ public class AuthService {
             );
 
             syncLocalUserByEmail(email);
-            return toAuthResponse(response.authenticationResult());
+            return authMapper.toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
@@ -204,24 +183,15 @@ public class AuthService {
         syncLocalUser(cognitoUser, resolveRoleName(email), email);
     }
 
-    private AuthResponse toAuthResponse(
-            software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType result
-    ) {
-        return AuthResponse.builder()
-                .accessToken(result.accessToken())
-                .idToken(result.idToken())
-                .refreshToken(result.refreshToken())
-                .expiresIn(result.expiresIn())
-                .tokenType(result.tokenType())
-                .build();
-    }
-
     private void syncLocalUser(AdminGetUserResponse cognitoUser, RoleName roleName, String fallbackEmail) {
-        String userId = getAttribute(cognitoUser.userAttributes(), "sub");
-        String email = getAttributeOrDefault(cognitoUser.userAttributes(), "email", fallbackEmail);
-        String fullName = getAttributeOrDefault(cognitoUser.userAttributes(), "name", email);
-        String avatarUrl = getAttributeOrDefault(cognitoUser.userAttributes(), "picture", null);
-        userSyncService.syncWithRole(userId, email, fullName, avatarUrl, roleName);
+        AuthMapper.CognitoUserProfile profile = authMapper.toCognitoUserProfile(cognitoUser, fallbackEmail);
+        userSyncService.syncWithRole(
+                profile.userId(),
+                profile.email(),
+                profile.fullName(),
+                profile.avatarUrl(),
+                roleName
+        );
     }
 
     private void putSecretHashIfNeeded(Map<String, String> authParams, String username) {
@@ -281,24 +251,6 @@ public class AuthService {
                 .findFirst()
                 .map(group -> RoleName.ADMIN)
                 .orElse(RoleName.LEARNER);
-    }
-
-    private String getAttribute(Iterable<AttributeType> attributes, String name) {
-        for (AttributeType attribute : attributes) {
-            if (name.equals(attribute.name())) {
-                return attribute.value();
-            }
-        }
-        throw new AppException(ErrorCode.COGNITO_ERROR, "Cognito user attribute is missing: " + name);
-    }
-
-    private String getAttributeOrDefault(Iterable<AttributeType> attributes, String name, String defaultValue) {
-        for (AttributeType attribute : attributes) {
-            if (name.equals(attribute.name())) {
-                return attribute.value();
-            }
-        }
-        return defaultValue;
     }
 
 }
