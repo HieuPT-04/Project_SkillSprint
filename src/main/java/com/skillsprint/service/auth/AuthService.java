@@ -28,7 +28,9 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class    AuthService {
+public class AuthService {
+
+    private static final String BEARER_PREFIX = "Bearer ";
 
     CognitoIdentityProviderClient cognitoClient;
     CognitoProperties cognitoProperties;
@@ -171,6 +173,34 @@ public class    AuthService {
         } catch (CognitoIdentityProviderException ex) {
             throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
         }
+    }
+
+    public void logout(String authorizationHeader) {
+        String accessToken = extractAccessToken(authorizationHeader);
+
+        try {
+            cognitoClient.globalSignOut(
+                    GlobalSignOutRequest.builder()
+                            .accessToken(accessToken)
+                            .build()
+            );
+        } catch (NotAuthorizedException ex) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+        }
+    }
+
+    private String extractAccessToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        String accessToken = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+        if (accessToken.isBlank()) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        return accessToken;
     }
 
     private void syncLocalUserByEmail(String email) {
