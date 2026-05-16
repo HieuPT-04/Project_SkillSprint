@@ -27,6 +27,9 @@ public class User extends BaseAuditEntity {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
     @Column(name = "full_name", nullable = false)
     private String fullName;
 

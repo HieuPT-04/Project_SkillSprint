@@ -13,6 +13,7 @@ public class AuthMapper {
 
     private static final String ATTRIBUTE_SUB = "sub";
     private static final String ATTRIBUTE_EMAIL = "email";
+    private static final String ATTRIBUTE_EMAIL_VERIFIED = "email_verified";
     private static final String ATTRIBUTE_NAME = "name";
     private static final String ATTRIBUTE_PICTURE = "picture";
 
@@ -40,6 +41,7 @@ public class AuthMapper {
         return new CognitoUserProfile(
                 getRequiredAttribute(attributes, ATTRIBUTE_SUB),
                 email,
+                Boolean.parseBoolean(attributes.getOrDefault(ATTRIBUTE_EMAIL_VERIFIED, "false")),
                 attributes.getOrDefault(ATTRIBUTE_NAME, email),
                 attributes.get(ATTRIBUTE_PICTURE)
         );
@@ -62,6 +64,7 @@ public class AuthMapper {
     public record CognitoUserProfile(
             String userId,
             String email,
+            boolean emailVerified,
             String fullName,
             String avatarUrl
     ) {
