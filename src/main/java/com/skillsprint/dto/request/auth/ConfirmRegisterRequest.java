@@ -2,13 +2,22 @@ package com.skillsprint.dto.request.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
-public record ConfirmRegisterRequest(
-        @NotBlank
-        @Email
-        String email,
+@Getter
+@Setter
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ConfirmRegisterRequest {
 
-        @NotBlank
-        String confirmationCode
-) {
+    @NotBlank
+    @Email
+    String email;
+
+    @NotBlank
+    String confirmationCode;
 }

@@ -3,18 +3,27 @@ package com.skillsprint.dto.request.auth;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
-public record RegisterRequest(
-        @NotBlank
-        @Email
-        String email,
+@Getter
+@Setter
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class RegisterRequest {
 
-        @NotBlank
-        @Size(min = 8, max = 128)
-        String password,
+    @NotBlank
+    @Email
+    String email;
 
-        @NotBlank
-        @Size(max = 255)
-        String fullName
-) {
+    @NotBlank
+    @Size(min = 8, max = 128)
+    String password;
+
+    @NotBlank
+    @Size(max = 255)
+    String fullName;
 }

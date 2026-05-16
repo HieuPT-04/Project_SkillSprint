@@ -36,16 +36,16 @@ public class    AuthService {
     AuthMapper authMapper;
 
     public void register(RegisterRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.getEmail().trim().toLowerCase();
 
         try {
             SignUpRequest.Builder signUpRequest = SignUpRequest.builder()
                     .clientId(cognitoProperties.clientId())
                     .username(email)
-                    .password(request.password())
+                    .password(request.getPassword())
                     .userAttributes(
                             AttributeType.builder().name("email").value(email).build(),
-                            AttributeType.builder().name("name").value(request.fullName()).build()
+                            AttributeType.builder().name("name").value(request.getFullName()).build()
                     );
             putSecretHashIfNeeded(signUpRequest, email);
 
@@ -58,7 +58,7 @@ public class    AuthService {
     }
 
     public void resendConfirmationCode(ResendConfirmationCodeRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.getEmail().trim().toLowerCase();
 
         try {
             software.amazon.awssdk.services.cognitoidentityprovider.model.ResendConfirmationCodeRequest.Builder resendRequest =
@@ -77,13 +77,13 @@ public class    AuthService {
 
     @Transactional
     public void confirmRegister(ConfirmRegisterRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.getEmail().trim().toLowerCase();
 
         try {
             ConfirmSignUpRequest.Builder confirmRequest = ConfirmSignUpRequest.builder()
                     .clientId(cognitoProperties.clientId())
                     .username(email)
-                    .confirmationCode(request.confirmationCode());
+                    .confirmationCode(request.getConfirmationCode());
             putSecretHashIfNeeded(confirmRequest, email);
 
             cognitoClient.confirmSignUp(confirmRequest.build());
@@ -112,12 +112,12 @@ public class    AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.getEmail().trim().toLowerCase();
 
         try {
             Map<String, String> authParams = new HashMap<>();
             authParams.put("USERNAME", email);
-            authParams.put("PASSWORD", request.password());
+            authParams.put("PASSWORD", request.getPassword());
             putSecretHashIfNeeded(authParams, email);
 
             AdminInitiateAuthResponse response = cognitoClient.adminInitiateAuth(
@@ -146,12 +146,12 @@ public class    AuthService {
 
     @Transactional
     public AuthResponse completeNewPassword(CompleteNewPasswordRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.getEmail().trim().toLowerCase();
 
         try {
             Map<String, String> challengeResponses = new HashMap<>();
             challengeResponses.put("USERNAME", email);
-            challengeResponses.put("NEW_PASSWORD", request.newPassword());
+            challengeResponses.put("NEW_PASSWORD", request.getNewPassword());
             putSecretHashIfNeeded(challengeResponses, email);
 
             AdminRespondToAuthChallengeResponse response = cognitoClient.adminRespondToAuthChallenge(
@@ -160,7 +160,7 @@ public class    AuthService {
                             .clientId(cognitoProperties.clientId())
                             .challengeName(ChallengeNameType.NEW_PASSWORD_REQUIRED)
                             .challengeResponses(challengeResponses)
-                            .session(request.session())
+                            .session(request.getSession())
                             .build()
             );
 
