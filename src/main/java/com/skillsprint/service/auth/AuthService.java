@@ -188,6 +188,7 @@ public class    AuthService {
         userSyncService.syncWithRole(
                 profile.userId(),
                 profile.email(),
+                profile.emailVerified(),
                 profile.fullName(),
                 profile.avatarUrl(),
                 roleName

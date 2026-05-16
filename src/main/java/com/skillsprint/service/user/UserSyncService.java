@@ -26,17 +26,25 @@ public class UserSyncService {
     UserRoleRepository userRoleRepository;
 
     @Transactional
-    public User syncLearner(String userId, String email, String fullName, String avatarUrl) {
-        return syncWithRole(userId, email, fullName, avatarUrl, RoleName.LEARNER);
+    public User syncLearner(String userId, String email, boolean emailVerified, String fullName, String avatarUrl) {
+        return syncWithRole(userId, email, emailVerified, fullName, avatarUrl, RoleName.LEARNER);
     }
 
     @Transactional
-    public User syncWithRole(String userId, String email, String fullName, String avatarUrl, RoleName roleName) {
+    public User syncWithRole(
+            String userId,
+            String email,
+            boolean emailVerified,
+            String fullName,
+            String avatarUrl,
+            RoleName roleName
+    ) {
         User user = userRepository.findById(userId)
                 .orElseGet(User::new);
 
         user.setUserId(userId);
         user.setEmail(email);
+        user.setEmailVerified(emailVerified);
         user.setFullName(fullName);
         user.setAvatarUrl(avatarUrl);
         user.setLastLoginAt(Instant.now());
