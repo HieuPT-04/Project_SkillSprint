@@ -2,8 +2,10 @@ package com.skillsprint.service.auth;
 
 import com.skillsprint.configuration.cognito.CognitoProperties;
 import com.skillsprint.configuration.cognito.CognitoSecretHashUtil;
+import com.skillsprint.dto.request.auth.ConfirmForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.ConfirmRegisterRequest;
 import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
+import com.skillsprint.dto.request.auth.ForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
@@ -71,6 +73,44 @@ public class AuthService {
 
             cognitoClient.resendConfirmationCode(resendRequest.build());
         } catch (UserNotFoundException ex) {
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+        }
+    }
+
+    public void forgotPassword(ForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+
+        try {
+            software.amazon.awssdk.services.cognitoidentityprovider.model.ForgotPasswordRequest.Builder forgotRequest =
+                    software.amazon.awssdk.services.cognitoidentityprovider.model.ForgotPasswordRequest.builder()
+                            .clientId(cognitoProperties.clientId())
+                            .username(email);
+            putSecretHashIfNeeded(forgotRequest, email);
+
+            cognitoClient.forgotPassword(forgotRequest.build());
+        } catch (UserNotFoundException ex) {
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+        }
+    }
+
+    public void confirmForgotPassword(ConfirmForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+
+        try {
+            software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmForgotPasswordRequest.Builder confirmRequest =
+                    software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmForgotPasswordRequest.builder()
+                            .clientId(cognitoProperties.clientId())
+                            .username(email)
+                            .confirmationCode(request.getConfirmationCode())
+                            .password(request.getNewPassword());
+            putSecretHashIfNeeded(confirmRequest, email);
+
+            cognitoClient.confirmForgotPassword(confirmRequest.build());
+        } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
             throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
@@ -252,6 +292,24 @@ public class AuthService {
 
     private void putSecretHashIfNeeded(
             software.amazon.awssdk.services.cognitoidentityprovider.model.ResendConfirmationCodeRequest.Builder builder,
+            String username
+    ) {
+        if (cognitoProperties.hasClientSecret()) {
+            builder.secretHash(calculateSecretHash(username));
+        }
+    }
+
+    private void putSecretHashIfNeeded(
+            software.amazon.awssdk.services.cognitoidentityprovider.model.ForgotPasswordRequest.Builder builder,
+            String username
+    ) {
+        if (cognitoProperties.hasClientSecret()) {
+            builder.secretHash(calculateSecretHash(username));
+        }
+    }
+
+    private void putSecretHashIfNeeded(
+            software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmForgotPasswordRequest.Builder builder,
             String username
     ) {
         if (cognitoProperties.hasClientSecret()) {

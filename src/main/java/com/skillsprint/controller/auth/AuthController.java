@@ -1,7 +1,9 @@
 package com.skillsprint.controller.auth;
 
 import com.skillsprint.dto.request.auth.ConfirmRegisterRequest;
+import com.skillsprint.dto.request.auth.ConfirmForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
+import com.skillsprint.dto.request.auth.ForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
@@ -47,6 +49,20 @@ public class AuthController {
     ) {
         authService.resendConfirmationCode(request);
         return ResponseEntity.ok(ApiResponse.success("Confirmation code has been sent again", null));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Reset code has been sent to your email", null));
+    }
+
+    @PostMapping("/confirm-forgot-password")
+    public ResponseEntity<ApiResponse<Void>> confirmForgotPassword(
+            @Valid @RequestBody ConfirmForgotPasswordRequest request
+    ) {
+        authService.confirmForgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password has been reset successfully", null));
     }
 
     @PostMapping("/login")
