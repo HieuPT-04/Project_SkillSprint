@@ -11,6 +11,7 @@ public enum ErrorCode {
     UNAUTHORIZED("Bạn cần đăng nhập hoặc cung cấp token hợp lệ", HttpStatus.UNAUTHORIZED),
     INVALID_CREDENTIALS("Email hoặc mật khẩu không đúng", HttpStatus.UNAUTHORIZED),
     ACCOUNT_NOT_CONFIRMED("Tài khoản chưa xác thực email", HttpStatus.FORBIDDEN),
+    ACCOUNT_DISABLED("Tài khoản đã bị khóa", HttpStatus.FORBIDDEN),
     INVALID_CONFIRMATION_CODE("Mã xác thực không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
     USER_ALREADY_EXISTS("Email này đã được đăng ký", HttpStatus.CONFLICT),
     RESOURCE_NOT_FOUND("Không tìm thấy dữ liệu", HttpStatus.NOT_FOUND),
