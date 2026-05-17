@@ -11,6 +11,8 @@ import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
 import com.skillsprint.dto.response.auth.AuthResponse;
 import com.skillsprint.enums.auth.RoleName;
+import com.skillsprint.entity.User;
+import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.AuthMapper;
@@ -175,7 +177,8 @@ public class AuthService {
                 return authMapper.toNewPasswordRequiredResponse(response);
             }
 
-            syncLocalUserByEmail(email);
+            User user = syncLocalUserByEmail(email);
+            ensureActiveUser(user);
             return authMapper.toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
@@ -206,7 +209,8 @@ public class AuthService {
                             .build()
             );
 
-            syncLocalUserByEmail(email);
+            User user = syncLocalUserByEmail(email);
+            ensureActiveUser(user);
             return authMapper.toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
@@ -243,19 +247,19 @@ public class AuthService {
         return accessToken;
     }
 
-    private void syncLocalUserByEmail(String email) {
+    private User syncLocalUserByEmail(String email) {
         AdminGetUserResponse cognitoUser = cognitoClient.adminGetUser(
                 AdminGetUserRequest.builder()
                         .userPoolId(cognitoProperties.userPoolId())
                         .username(email)
                         .build()
         );
-        syncLocalUser(cognitoUser, resolveRoleName(email), email);
+        return syncLocalUser(cognitoUser, resolveRoleName(email), email);
     }
 
-    private void syncLocalUser(AdminGetUserResponse cognitoUser, RoleName roleName, String fallbackEmail) {
+    private User syncLocalUser(AdminGetUserResponse cognitoUser, RoleName roleName, String fallbackEmail) {
         AuthMapper.CognitoUserProfile profile = authMapper.toCognitoUserProfile(cognitoUser, fallbackEmail);
-        userSyncService.syncWithRole(
+        return userSyncService.syncWithRole(
                 profile.userId(),
                 profile.email(),
                 profile.emailVerified(),
@@ -263,6 +267,12 @@ public class AuthService {
                 profile.avatarUrl(),
                 roleName
         );
+    }
+
+    private void ensureActiveUser(User user) {
+        if (UserStatus.DISABLED.equals(user.getStatus())) {
+            throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+        }
     }
 
     private void putSecretHashIfNeeded(Map<String, String> authParams, String username) {

@@ -4,6 +4,7 @@ import com.skillsprint.dto.request.user.UpdateMeRequest;
 import com.skillsprint.dto.response.user.MeResponse;
 import com.skillsprint.entity.User;
 import com.skillsprint.entity.UserRole;
+import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.UserMapper;
@@ -54,8 +55,12 @@ public class UserQueryService {
     }
 
     private User findUser(String userId) {
-        return userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hồ sơ người dùng"));
+        if (UserStatus.DISABLED.equals(user.getStatus())) {
+            throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        return user;
     }
 
     private List<String> getGlobalRoles(String userId) {

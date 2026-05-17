@@ -22,4 +22,6 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UUID> {
     boolean existsByUserUserIdAndRoleRoleIdAndWorkspaceWorkspaceId(String userId, UUID roleId, UUID workspaceId);
 
     boolean existsByUserUserIdAndRoleRoleIdAndWorkspaceIsNull(String userId, UUID roleId);
+
+    void deleteByUserUserIdAndWorkspaceIsNull(String userId);
 }
