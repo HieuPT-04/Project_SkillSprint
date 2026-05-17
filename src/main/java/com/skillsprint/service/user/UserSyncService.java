@@ -10,6 +10,7 @@ import com.skillsprint.repository.RoleRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserRoleRepository;
 import java.time.Instant;
+import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -39,14 +40,16 @@ public class UserSyncService {
             String avatarUrl,
             RoleName roleName
     ) {
-        User user = userRepository.findById(userId)
-                .orElseGet(User::new);
+        Optional<User> existingUser = userRepository.findById(userId);
+        User user = existingUser.orElseGet(User::new);
 
         user.setUserId(userId);
         user.setEmail(email);
         user.setEmailVerified(emailVerified);
-        user.setFullName(fullName);
-        user.setAvatarUrl(avatarUrl);
+        if (existingUser.isEmpty()) {
+            user.setFullName(fullName);
+            user.setAvatarUrl(avatarUrl);
+        }
         user.setLastLoginAt(Instant.now());
 
         User savedUser = userRepository.save(user);

@@ -4,6 +4,8 @@ import java.util.Optional;
 
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, String> {
@@ -13,4 +15,10 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
 
     long countByStatus(UserStatus status);
+
+    Page<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
+            String email,
+            String fullName,
+            Pageable pageable
+    );
 }
