@@ -56,7 +56,14 @@ public class AdminUserService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<User> users = userRepository.searchUsers(normalizeSearch(search), pageable);
+        String normalizedSearch = normalizeSearch(search);
+        Page<User> users = normalizedSearch == null
+                ? userRepository.findAll(pageable)
+                : userRepository.findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
+                        normalizedSearch,
+                        normalizedSearch,
+                        pageable
+                );
         Map<String, List<String>> rolesByUserId = getRolesByUserId(users.getContent());
 
         Page<AdminUserResponse> response = users.map(user -> userMapper.toAdminUserResponse(
@@ -77,6 +84,10 @@ public class AdminUserService {
     @Transactional
     public AdminUserResponse updateUserStatus(String userId, UpdateUserStatusRequest request) {
         User user = findUser(userId);
+        if (!request.getStatus().canBeManagedByAdmin()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Chỉ hỗ trợ cập nhật trạng thái ACTIVE hoặc DISABLED");
+        }
+
         user.setStatus(request.getStatus());
 
         User savedUser = userRepository.save(user);
