@@ -26,3 +26,10 @@ app:
     default-group: LEARNER
     access-key-id:
     secret-access-key:
+  s3:
+    region: ap-southeast-1
+    bucket: test-bucket
+    public-base-url: https://test-bucket.s3.ap-southeast-1.amazonaws.com
+    access-key-id:
+    secret-access-key:
+    upload-url-expiration-minutes: 10

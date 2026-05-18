@@ -53,21 +53,15 @@ public class UserSyncService {
         user.setLastLoginAt(Instant.now());
 
         User savedUser = userRepository.save(user);
-        assignRoleIfMissing(savedUser, roleName);
+        replaceGlobalRole(savedUser, roleName);
         return savedUser;
     }
 
-    private void assignRoleIfMissing(User user, RoleName roleName) {
+    private void replaceGlobalRole(User user, RoleName roleName) {
         Role role = roleRepository.findByRoleName(roleName)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Role " + roleName + " chưa được seed"));
 
-        boolean alreadyAssigned = userRoleRepository.existsByUserUserIdAndRoleRoleIdAndWorkspaceIsNull(
-                user.getUserId(),
-                role.getRoleId()
-        );
-        if (alreadyAssigned) {
-            return;
-        }
+        userRoleRepository.deleteByUserUserIdAndWorkspaceIsNull(user.getUserId());
 
         UserRole userRole = new UserRole();
         userRole.setUser(user);
