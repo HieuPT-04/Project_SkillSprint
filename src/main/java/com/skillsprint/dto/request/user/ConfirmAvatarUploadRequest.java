@@ -1,5 +1,6 @@
 package com.skillsprint.dto.request.user;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -11,8 +12,9 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class UpdateMeRequest {
+public class ConfirmAvatarUploadRequest {
 
-    @Size(max = 255)
-    String fullName;
+    @NotBlank
+    @Size(max = 512)
+    String objectKey;
 }

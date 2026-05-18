@@ -45,10 +45,14 @@ public class UserQueryService {
             user.setFullName(fullName);
         }
 
-        if (request.getAvatarUrl() != null) {
-            String avatarUrl = request.getAvatarUrl().trim();
-            user.setAvatarUrl(avatarUrl.isBlank() ? null : avatarUrl);
-        }
+        User savedUser = userRepository.save(user);
+        return userMapper.toMeResponse(savedUser, getGlobalRoles(userId));
+    }
+
+    @Transactional
+    public MeResponse updateAvatar(String userId, String avatarUrl) {
+        User user = findUser(userId);
+        user.setAvatarUrl(avatarUrl);
 
         User savedUser = userRepository.save(user);
         return userMapper.toMeResponse(savedUser, getGlobalRoles(userId));
