@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.dto.response.workspace.OnboardingProfileResponse;
 import com.skillsprint.entity.OnboardingProfile;
+import com.skillsprint.enums.calendar.WeekDay;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import java.util.Collections;
@@ -19,6 +20,9 @@ import org.springframework.stereotype.Component;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class OnboardingProfileMapper {
 
+    static TypeReference<List<WeekDay>> WEEK_DAY_LIST_TYPE = new TypeReference<>() {};
+    static TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
+
     ObjectMapper objectMapper;
 
     public OnboardingProfileResponse toOnboardingProfileResponse(OnboardingProfile profile) {
@@ -30,8 +34,8 @@ public class OnboardingProfileMapper {
                 .targetDeadline(profile.getTargetDeadline())
                 .confidence(profile.getConfidence())
                 .preferredLanguage(profile.getPreferredLanguage())
-                .preferredDays(readList(profile.getPreferredDays(), new TypeReference<>() {}))
-                .preferredTimeSlots(readList(profile.getPreferredTimeSlots(), new TypeReference<>() {}))
+                .preferredDays(readList(profile.getPreferredDays(), WEEK_DAY_LIST_TYPE))
+                .preferredTimeSlots(readList(profile.getPreferredTimeSlots(), STRING_LIST_TYPE))
                 .createdAt(profile.getCreatedAt())
                 .updatedAt(profile.getUpdatedAt())
                 .build();

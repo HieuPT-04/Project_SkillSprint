@@ -161,6 +161,17 @@ DELETE /api/workspaces/{workspaceId}
 
 Delete workspace là soft delete bằng status `DELETED`.
 
+## Onboarding Endpoints
+
+Yêu cầu token hợp lệ. Onboarding luôn thuộc một workspace của current user.
+
+```text
+PUT /api/workspaces/{workspaceId}/onboarding
+GET /api/workspaces/{workspaceId}/onboarding
+```
+
+`PUT` là upsert: chưa có thì tạo mới, có rồi thì cập nhật.
+
 ## API Response
 
 Success:
@@ -190,8 +201,7 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Onboarding Profile
--> Material Upload Metadata
+Material Upload Metadata
 -> Material Processing Job
 -> Extract/Chunk Material
 -> Learning Structure
