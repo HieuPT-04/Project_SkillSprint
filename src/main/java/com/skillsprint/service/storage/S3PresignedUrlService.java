@@ -85,7 +85,7 @@ public class S3PresignedUrlService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Ảnh chưa được upload thành công lên S3");
         }
 
-        return buildFileUrl(objectKey);
+        return objectKey;
     }
 
     private String buildAvatarObjectKey(String userId, String fileName, String contentType) {

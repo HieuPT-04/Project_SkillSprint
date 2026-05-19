@@ -60,8 +60,8 @@ public class MeController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody ConfirmAvatarUploadRequest request
     ) {
-        String avatarUrl = s3PresignedUrlService.confirmAvatarUpload(jwt.getSubject(), request);
-        MeResponse response = userQueryService.updateAvatar(jwt.getSubject(), avatarUrl);
+        String avatarObjectKey = s3PresignedUrlService.confirmAvatarUpload(jwt.getSubject(), request);
+        MeResponse response = userQueryService.updateAvatar(jwt.getSubject(), avatarObjectKey);
         return ResponseEntity.ok(ApiResponse.success("Update avatar successfully", response));
     }
 }

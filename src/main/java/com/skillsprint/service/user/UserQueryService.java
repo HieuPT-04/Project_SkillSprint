@@ -50,9 +50,9 @@ public class UserQueryService {
     }
 
     @Transactional
-    public MeResponse updateAvatar(String userId, String avatarUrl) {
+    public MeResponse updateAvatar(String userId, String avatarObjectKey) {
         User user = findUser(userId);
-        user.setAvatarUrl(avatarUrl);
+        user.setAvatarObjectKey(avatarObjectKey);
 
         User savedUser = userRepository.save(user);
         return userMapper.toMeResponse(savedUser, getGlobalRoles(userId));
