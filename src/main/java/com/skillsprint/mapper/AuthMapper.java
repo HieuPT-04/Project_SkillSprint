@@ -15,7 +15,6 @@ public class AuthMapper {
     private static final String ATTRIBUTE_EMAIL = "email";
     private static final String ATTRIBUTE_EMAIL_VERIFIED = "email_verified";
     private static final String ATTRIBUTE_NAME = "name";
-    private static final String ATTRIBUTE_PICTURE = "picture";
 
     public AuthResponse toAuthResponse(AuthenticationResultType result) {
         return AuthResponse.builder()
@@ -42,8 +41,7 @@ public class AuthMapper {
                 getRequiredAttribute(attributes, ATTRIBUTE_SUB),
                 email,
                 Boolean.parseBoolean(attributes.getOrDefault(ATTRIBUTE_EMAIL_VERIFIED, "false")),
-                attributes.getOrDefault(ATTRIBUTE_NAME, email),
-                attributes.get(ATTRIBUTE_PICTURE)
+                attributes.getOrDefault(ATTRIBUTE_NAME, email)
         );
     }
 
@@ -65,8 +63,7 @@ public class AuthMapper {
             String userId,
             String email,
             boolean emailVerified,
-            String fullName,
-            String avatarUrl
+            String fullName
     ) {
     }
 }

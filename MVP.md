@@ -65,10 +65,14 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - `RoleSeeder` tự tạo `ADMIN`, `LEARNER`.
 - Flyway đã gỡ khỏi project.
 - Permission-based access đã tạm bỏ khỏi MVP.
+- `/api/me` lấy profile user hiện tại.
+- `PATCH /api/me` cập nhật tên hiển thị.
+- Avatar upload bằng S3 presigned URL.
+- Admin user APIs: danh sách user, xem user, đổi status, đổi role.
+- Docker Postgres local dùng port ngoài `5434`.
 
 Chưa làm:
 
-- `/api/me`.
 - Workspace API.
 - Onboarding API.
 - Material upload/extraction/chunking.
@@ -142,6 +146,9 @@ POST /api/auth/resend-confirmation-code
 POST /api/auth/confirm-register
 POST /api/auth/login
 POST /api/auth/complete-new-password
+POST /api/auth/forgot-password
+POST /api/auth/confirm-forgot-password
+POST /api/auth/logout
 ```
 
 Register flow:
@@ -187,6 +194,24 @@ Không dùng trong MVP hiện tại:
 
 - `permissions`.
 - `role_permissions`.
+
+Current user endpoints:
+
+```text
+GET /api/me
+PATCH /api/me
+POST /api/me/avatar/upload-url
+POST /api/me/avatar/confirm
+```
+
+Admin user endpoints:
+
+```text
+GET /api/admin/users
+GET /api/admin/users/{userId}
+PATCH /api/admin/users/{userId}/status
+PATCH /api/admin/users/{userId}/roles
+```
 
 ## 6. API Response Chuẩn
 
@@ -270,6 +295,17 @@ Nhóm material:
 - `material_processing_jobs`: trạng thái pipeline xử lý tài liệu.
 - `extracted_documents`: text đã extract/clean.
 - `material_chunks`: chunks phục vụ AI/rule-based generation.
+
+Avatar hiện tại đã dùng S3 riêng:
+
+```text
+POST /api/me/avatar/upload-url
+-> Frontend PUT file lên S3 bằng presigned URL
+-> POST /api/me/avatar/confirm
+-> Backend kiểm tra object tồn tại trên S3
+-> Lưu users.avatar_object_key
+-> Response build avatarUrl từ public base URL + object key
+```
 
 Nhóm learning structure:
 
@@ -437,25 +473,27 @@ FAILED | CANCELLED
 6. RoleSeeder.
 7. Bỏ Flyway.
 8. Bỏ permission-based tables khỏi MVP.
+9. Current user APIs.
+10. Admin user APIs.
+11. S3 presigned avatar upload.
+12. Docker Postgres local.
 
 Làm tiếp:
 
-1. `/api/me`.
-2. Workspace CRUD.
-3. Onboarding profile.
-4. Material upload metadata.
-5. Material processing job.
-6. Document extraction/chunking.
-7. Learning structure generation.
-8. Learning structure review/confirm.
-9. Roadmap generation.
-10. Calendar task generation.
-11. Progress tracking.
+1. Workspace CRUD.
+2. Onboarding profile.
+3. Material upload metadata theo workspace.
+4. Material processing job.
+5. Document extraction/chunking.
+6. Learning structure generation.
+7. Learning structure review/confirm.
+8. Roadmap generation.
+9. Calendar task generation.
+10. Progress tracking.
 
 Thứ tự API trước mắt:
 
 ```text
-GET /api/me
 POST /api/workspaces
 GET /api/workspaces/my
 GET /api/workspaces/{workspaceId}

@@ -27,8 +27,8 @@ public class UserSyncService {
     UserRoleRepository userRoleRepository;
 
     @Transactional
-    public User syncLearner(String userId, String email, boolean emailVerified, String fullName, String avatarUrl) {
-        return syncWithRole(userId, email, emailVerified, fullName, avatarUrl, RoleName.LEARNER);
+    public User syncLearner(String userId, String email, boolean emailVerified, String fullName) {
+        return syncWithRole(userId, email, emailVerified, fullName, RoleName.LEARNER);
     }
 
     @Transactional
@@ -37,7 +37,6 @@ public class UserSyncService {
             String email,
             boolean emailVerified,
             String fullName,
-            String avatarUrl,
             RoleName roleName
     ) {
         Optional<User> existingUser = userRepository.findById(userId);
@@ -48,7 +47,6 @@ public class UserSyncService {
         user.setEmailVerified(emailVerified);
         if (existingUser.isEmpty()) {
             user.setFullName(fullName);
-            user.setAvatarUrl(avatarUrl);
         }
         user.setLastLoginAt(Instant.now());
 

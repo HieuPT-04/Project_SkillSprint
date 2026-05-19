@@ -33,8 +33,8 @@ public class User extends BaseAuditEntity {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
-    @Column(name = "avatar_url")
-    private String avatarUrl;
+    @Column(name = "avatar_object_key")
+    private String avatarObjectKey;
 
     @Column(name = "timezone")
     private String timeZone = "Asia/Ho_Chi_Minh";

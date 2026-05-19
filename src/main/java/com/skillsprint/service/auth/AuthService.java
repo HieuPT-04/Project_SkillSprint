@@ -264,7 +264,6 @@ public class AuthService {
                 profile.email(),
                 profile.emailVerified(),
                 profile.fullName(),
-                profile.avatarUrl(),
                 roleName
         );
     }
