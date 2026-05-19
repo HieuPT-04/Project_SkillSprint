@@ -147,6 +147,31 @@ PATCH /api/admin/users/{userId}/status
 PATCH /api/admin/users/{userId}/roles
 ```
 
+## Workspace Endpoints
+
+Yêu cầu token hợp lệ. User chỉ thao tác được workspace của chính mình.
+
+```text
+POST /api/workspaces
+GET /api/workspaces
+GET /api/workspaces/{workspaceId}
+PATCH /api/workspaces/{workspaceId}
+DELETE /api/workspaces/{workspaceId}
+```
+
+Delete workspace là soft delete bằng status `DELETED`.
+
+## Onboarding Endpoints
+
+Yêu cầu token hợp lệ. Onboarding luôn thuộc một workspace của current user.
+
+```text
+PUT /api/workspaces/{workspaceId}/onboarding
+GET /api/workspaces/{workspaceId}/onboarding
+```
+
+`PUT` là upsert: chưa có thì tạo mới, có rồi thì cập nhật.
+
 ## API Response
 
 Success:
@@ -176,9 +201,7 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Workspace CRUD
--> Onboarding Profile
--> Material Upload Metadata
+Material Upload Metadata
 -> Material Processing Job
 -> Extract/Chunk Material
 -> Learning Structure

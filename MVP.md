@@ -69,12 +69,12 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - `PATCH /api/me` cập nhật tên hiển thị.
 - Avatar upload bằng S3 presigned URL.
 - Admin user APIs: danh sách user, xem user, đổi status, đổi role.
+- Workspace CRUD.
+- Onboarding API.
 - Docker Postgres local dùng port ngoài `5434`.
 
 Chưa làm:
 
-- Workspace API.
-- Onboarding API.
 - Material upload/extraction/chunking.
 - Roadmap API.
 - Calendar generation API.
@@ -477,28 +477,26 @@ FAILED | CANCELLED
 10. Admin user APIs.
 11. S3 presigned avatar upload.
 12. Docker Postgres local.
+13. Workspace CRUD.
+14. Onboarding profile.
 
 Làm tiếp:
 
-1. Workspace CRUD.
-2. Onboarding profile.
-3. Material upload metadata theo workspace.
-4. Material processing job.
-5. Document extraction/chunking.
-6. Learning structure generation.
-7. Learning structure review/confirm.
-8. Roadmap generation.
-9. Calendar task generation.
-10. Progress tracking.
+1. Material upload metadata theo workspace.
+2. Material processing job.
+3. Document extraction/chunking.
+4. Learning structure generation.
+5. Learning structure review/confirm.
+6. Roadmap generation.
+7. Calendar task generation.
+8. Progress tracking.
 
 Thứ tự API trước mắt:
 
 ```text
-POST /api/workspaces
-GET /api/workspaces/my
-GET /api/workspaces/{workspaceId}
-PUT/PATCH /api/workspaces/{workspaceId}
-DELETE /api/workspaces/{workspaceId}
+POST /api/workspaces/{workspaceId}/materials/upload-url
+POST /api/workspaces/{workspaceId}/materials/confirm
+GET /api/workspaces/{workspaceId}/materials
 ```
 
 ## 12. Nguyên Tắc Ra Quyết Định
