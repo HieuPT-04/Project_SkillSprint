@@ -12,6 +12,8 @@ public interface MaterialProcessingJobRepository extends JpaRepository<MaterialP
 
     Optional<MaterialProcessingJob> findTopByMaterialMaterialIdOrderByCreatedAtDesc(UUID materialId);
 
+    Optional<MaterialProcessingJob> findFirstByStatusOrderByCreatedAtAsc(ProcessingJobStatus status);
+
     List<MaterialProcessingJob> findByWorkspaceWorkspaceId(UUID workspaceId);
 
     List<MaterialProcessingJob> findByUserUserId(String userId);

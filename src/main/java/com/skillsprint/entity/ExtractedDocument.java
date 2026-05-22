@@ -38,10 +38,10 @@ public class ExtractedDocument extends BaseAuditEntity {
     @JoinColumn(name = "workspace_id", nullable = false)
     private StudyWorkspace workspace;
 
-    @Column(name = "extracted_text")
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
     private String extractedText;
 
-    @Column(name = "cleaned_text")
+    @Column(name = "cleaned_text", columnDefinition = "TEXT")
     private String cleanedText;
 
     @Column(name = "text_length")
@@ -57,6 +57,6 @@ public class ExtractedDocument extends BaseAuditEntity {
     @Column(name = "extraction_status", nullable = false, length = 30)
     private ExtractionStatus extractionStatus = ExtractionStatus.PENDING;
 
-    @Column(name = "extraction_error")
+    @Column(name = "extraction_error", columnDefinition = "TEXT")
     private String extractionError;
 }
