@@ -85,7 +85,7 @@ public class AdminUserService {
     public AdminUserResponse updateUserStatus(String userId, UpdateUserStatusRequest request) {
         User user = findUser(userId);
         if (!request.getStatus().canBeManagedByAdmin()) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Chỉ hỗ trợ cập nhật trạng thái ACTIVE hoặc DISABLED");
+            throw new AppException(ErrorCode.INVALID_USER_STATUS);
         }
 
         user.setStatus(request.getStatus());
@@ -98,7 +98,7 @@ public class AdminUserService {
     public AdminUserResponse updateUserRole(String userId, UpdateUserRoleRequest request) {
         User user = findUser(userId);
         Role role = roleRepository.findByRoleName(request.getRole())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Role " + request.getRole() + " chưa được seed"));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
         syncCognitoGroup(user, request.getRole());
 
@@ -114,7 +114,7 @@ public class AdminUserService {
 
     private User findUser(String userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy người dùng"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 
     private List<String> getGlobalRoles(String userId) {
@@ -169,7 +169,7 @@ public class AdminUserService {
                 }
             }
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 

@@ -57,7 +57,7 @@ public class UserSyncService {
 
     private void replaceGlobalRole(User user, RoleName roleName) {
         Role role = roleRepository.findByRoleName(roleName)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Role " + roleName + " chưa được seed"));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
         userRoleRepository.deleteByUserUserIdAndWorkspaceIsNull(user.getUserId());
 

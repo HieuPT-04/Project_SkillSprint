@@ -31,11 +31,11 @@ public class WorkspaceService {
     @Transactional
     public WorkspaceResponse createWorkspace(String userId, CreateWorkspaceRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hồ sơ người dùng"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
 
         StudyWorkspace workspace = new StudyWorkspace();
         workspace.setUser(user);
-        workspace.setName(normalizeRequiredText(request.getName(), "Tên workspace không được để trống"));
+        workspace.setName(normalizeRequiredText(request.getName(), ErrorCode.WORKSPACE_NAME_REQUIRED));
         workspace.setDescription(normalizeOptionalText(request.getDescription()));
         workspace.setStatus(WorkspaceStatus.ACTIVE);
 
@@ -60,7 +60,7 @@ public class WorkspaceService {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
 
         if (request.getName() != null) {
-            workspace.setName(normalizeRequiredText(request.getName(), "Tên workspace không được để trống"));
+            workspace.setName(normalizeRequiredText(request.getName(), ErrorCode.WORKSPACE_NAME_REQUIRED));
         }
         if (request.getDescription() != null) {
             workspace.setDescription(normalizeOptionalText(request.getDescription()));
@@ -85,13 +85,13 @@ public class WorkspaceService {
                         userId,
                         WorkspaceStatus.DELETED
                 )
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy workspace"));
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSPACE_NOT_FOUND));
     }
 
-    private String normalizeRequiredText(String value, String errorMessage) {
+    private String normalizeRequiredText(String value, ErrorCode errorCode) {
         String normalized = value.trim();
         if (normalized.isBlank()) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, errorMessage);
+            throw new AppException(errorCode);
         }
         return normalized;
     }

@@ -54,7 +54,7 @@ public class AuthMapper {
     private String getRequiredAttribute(Map<String, String> attributes, String name) {
         String value = attributes.get(name);
         if (value == null || value.isBlank()) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, "Cognito user attribute is missing: " + name);
+            throw new AppException(ErrorCode.COGNITO_ATTRIBUTE_MISSING);
         }
         return value;
     }

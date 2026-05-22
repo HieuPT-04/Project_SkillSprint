@@ -40,7 +40,7 @@ public class UserQueryService {
         if (request.getFullName() != null) {
             String fullName = request.getFullName().trim();
             if (fullName.isBlank()) {
-                throw new AppException(ErrorCode.VALIDATION_ERROR, "Tên người dùng không được để trống");
+                throw new AppException(ErrorCode.USER_FULL_NAME_REQUIRED);
             }
             user.setFullName(fullName);
         }
@@ -60,7 +60,7 @@ public class UserQueryService {
 
     private User findUser(String userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hồ sơ người dùng"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
         if (UserStatus.DISABLED.equals(user.getStatus())) {
             throw new AppException(ErrorCode.ACCOUNT_DISABLED);
         }

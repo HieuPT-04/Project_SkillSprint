@@ -37,7 +37,7 @@ public class OnboardingProfileService {
                 .orElseGet(OnboardingProfile::new);
 
         profile.setWorkspace(workspace);
-        profile.setTargetGoal(normalizeRequiredText(request.getTargetGoal(), "Mục tiêu học tập không được để trống"));
+        profile.setTargetGoal(normalizeRequiredText(request.getTargetGoal(), ErrorCode.ONBOARDING_TARGET_GOAL_REQUIRED));
         profile.setStudyHoursPerWeek(request.getStudyHoursPerWeek());
         profile.setTargetDeadline(request.getTargetDeadline());
         profile.setConfidence(request.getConfidence());
@@ -54,7 +54,7 @@ public class OnboardingProfileService {
     public OnboardingProfileResponse getOnboardingProfile(String userId, UUID workspaceId) {
         findOwnedWorkspace(userId, workspaceId);
         OnboardingProfile profile = onboardingProfileRepository.findByWorkspaceWorkspaceId(workspaceId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy onboarding profile"));
+                .orElseThrow(() -> new AppException(ErrorCode.ONBOARDING_PROFILE_NOT_FOUND));
 
         return onboardingProfileMapper.toOnboardingProfileResponse(profile);
     }
@@ -65,13 +65,13 @@ public class OnboardingProfileService {
                         userId,
                         WorkspaceStatus.DELETED
                 )
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy workspace"));
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSPACE_NOT_FOUND));
     }
 
-    private String normalizeRequiredText(String value, String errorMessage) {
+    private String normalizeRequiredText(String value, ErrorCode errorCode) {
         String normalized = value.trim();
         if (normalized.isBlank()) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, errorMessage);
+            throw new AppException(errorCode);
         }
         return normalized;
     }
