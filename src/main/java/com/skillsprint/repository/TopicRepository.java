@@ -15,5 +15,7 @@ public interface TopicRepository extends JpaRepository<Topic, UUID> {
 
     List<Topic> findByStructureVersionStructureVersionId(UUID structureVersionId);
 
+    List<Topic> findByStructureVersionStructureVersionIdOrderByChapterSequenceNoAscSequenceNoAsc(UUID structureVersionId);
+
     Optional<Topic> findByChapterChapterIdAndSequenceNo(UUID chapterId, Integer sequenceNo);
 }

@@ -33,6 +33,12 @@ public enum ErrorCode {
     ONBOARDING_WRITE_FAILED("Không thể xử lý dữ liệu onboarding", HttpStatus.INTERNAL_SERVER_ERROR),
     ONBOARDING_READ_FAILED("Không thể đọc dữ liệu onboarding", HttpStatus.INTERNAL_SERVER_ERROR),
 
+    // Learning structure
+    LEARNING_STRUCTURE_NOT_FOUND("Không tìm thấy learning structure", HttpStatus.NOT_FOUND),
+    LEARNING_STRUCTURE_ALREADY_CONFIRMED("Learning structure đã được xác nhận", HttpStatus.BAD_REQUEST),
+    MATERIAL_CHUNKS_NOT_READY("Chưa có material chunks đã xử lý để tạo learning structure", HttpStatus.BAD_REQUEST),
+    LEARNING_STRUCTURE_GENERATION_FAILED("Không thể tạo learning structure", HttpStatus.INTERNAL_SERVER_ERROR),
+
     // Avatar / S3
     INVALID_AVATAR_CONTENT_TYPE("Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),
     INVALID_AVATAR_FILE_EXTENSION("Tên file ảnh phải có đuôi JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),

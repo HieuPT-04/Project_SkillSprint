@@ -197,6 +197,18 @@ Material upload flow:
 
 Nếu PDF là ảnh scan hoặc file không có text, job sẽ chuyển sang `FAILED` và trả `errorMessage` rõ ràng để FE hiển thị.
 
+## Learning Structure Endpoints
+
+Yêu cầu token hợp lệ. User chỉ tạo/xem/confirm learning structure trong workspace của chính mình.
+
+```text
+POST /api/workspaces/{workspaceId}/learning-structure/generate
+GET /api/workspaces/{workspaceId}/learning-structure
+POST /api/workspaces/{workspaceId}/learning-structure/confirm
+```
+
+MVP hiện tại tạo learning structure bằng rule-based generator từ `material_chunks`, chưa gọi AI thật.
+
 ## API Response
 
 Success:
@@ -226,9 +238,7 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Material Processing Job Runner
--> Extract/Chunk Material
--> Learning Structure
+Learning Structure
 -> Roadmap
 -> Calendar
 -> Progress
