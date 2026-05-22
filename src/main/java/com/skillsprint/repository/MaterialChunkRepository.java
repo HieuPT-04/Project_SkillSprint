@@ -15,6 +15,8 @@ public interface MaterialChunkRepository extends JpaRepository<MaterialChunk, UU
 
     List<MaterialChunk> findByWorkspaceWorkspaceId(UUID workspaceId);
 
+    List<MaterialChunk> findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(UUID workspaceId);
+
     Optional<MaterialChunk> findByMaterialMaterialIdAndChunkIndex(UUID materialId, Integer chunkIndex);
 
     void deleteByMaterialMaterialId(UUID materialId);

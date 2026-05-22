@@ -6,6 +6,8 @@ import com.skillsprint.exception.ErrorCode;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +19,19 @@ import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.poi.xwpf.usermodel.BodyElementType;
+import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MaterialTextExtractor {
+
+    private static final Pattern DOCX_HEADING_STYLE_PATTERN =
+            Pattern.compile("(?i).*heading\\s*([1-5]).*");
 
     public ExtractedText extract(byte[] fileBytes, FileType fileType) {
         try {
@@ -52,10 +62,16 @@ public class MaterialTextExtractor {
     private ExtractedText extractDocx(byte[] fileBytes) throws IOException {
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(fileBytes))) {
             StringBuilder text = new StringBuilder();
-            document.getParagraphs().forEach(paragraph -> appendLine(text, paragraph.getText()));
-            document.getTables().forEach(table -> table.getRows().forEach(row ->
-                    row.getTableCells().forEach(cell -> appendLine(text, cell.getText()))
-            ));
+            for (IBodyElement bodyElement : document.getBodyElements()) {
+                if (bodyElement.getElementType() == BodyElementType.PARAGRAPH
+                        && bodyElement instanceof XWPFParagraph paragraph) {
+                    appendParagraph(text, paragraph);
+                }
+                if (bodyElement.getElementType() == BodyElementType.TABLE
+                        && bodyElement instanceof XWPFTable table) {
+                    appendTable(text, table);
+                }
+            }
             return new ExtractedText(text.toString(), null);
         }
     }
@@ -78,6 +94,53 @@ public class MaterialTextExtractor {
         if (value != null && !value.isBlank()) {
             builder.append(value.trim()).append(System.lineSeparator());
         }
+    }
+
+    private void appendParagraph(StringBuilder builder, XWPFParagraph paragraph) {
+        String value = paragraph.getText();
+        if (value == null || value.isBlank()) {
+            return;
+        }
+
+        int headingLevel = resolveHeadingLevel(paragraph);
+        if (headingLevel > 0) {
+            appendLine(builder, "#".repeat(headingLevel) + " " + value);
+            return;
+        }
+
+        appendLine(builder, value);
+    }
+
+    private void appendTable(StringBuilder builder, XWPFTable table) {
+        for (XWPFTableRow row : table.getRows()) {
+            String rowText = row.getTableCells().stream()
+                    .map(cell -> cell.getText() == null ? "" : cell.getText().trim())
+                    .filter(value -> !value.isBlank())
+                    .reduce((left, right) -> left + " | " + right)
+                    .orElse("");
+            appendLine(builder, rowText);
+        }
+    }
+
+    private int resolveHeadingLevel(XWPFParagraph paragraph) {
+        int styleLevel = resolveHeadingLevel(paragraph.getStyle());
+        if (styleLevel > 0) {
+            return styleLevel;
+        }
+        return resolveHeadingLevel(paragraph.getStyleID());
+    }
+
+    private int resolveHeadingLevel(String style) {
+        if (style == null || style.isBlank()) {
+            return 0;
+        }
+
+        Matcher matcher = DOCX_HEADING_STYLE_PATTERN.matcher(style);
+        if (!matcher.matches()) {
+            return 0;
+        }
+
+        return Integer.parseInt(matcher.group(1));
     }
 
     @Getter

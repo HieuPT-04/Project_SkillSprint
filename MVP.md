@@ -481,14 +481,13 @@ FAILED | CANCELLED
 14. Onboarding profile.
 15. Material presigned upload URL, confirm upload, metadata list.
 16. Material processing job runner, text extraction, chunking.
+17. Rule-based learning structure generation, get latest, confirm.
 
 Làm tiếp:
 
-1. Learning structure generation.
-2. Learning structure review/confirm.
-3. Roadmap generation.
-4. Calendar task generation.
-5. Progress tracking.
+1. Roadmap generation.
+2. Calendar task generation.
+3. Progress tracking.
 
 Thứ tự API trước mắt:
 

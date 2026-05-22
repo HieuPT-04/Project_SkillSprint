@@ -48,7 +48,7 @@ public class Topic extends BaseAuditEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
-    @Column(name = "summary_content")
+    @Column(name = "summary_content", columnDefinition = "TEXT")
     private String summaryContent;
 
     @JdbcTypeCode(SqlTypes.JSON)
