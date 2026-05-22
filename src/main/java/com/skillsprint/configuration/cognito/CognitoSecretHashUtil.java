@@ -1,5 +1,7 @@
 package com.skillsprint.configuration.cognito;
 
+import com.skillsprint.exception.AppException;
+import com.skillsprint.exception.ErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import javax.crypto.Mac;
@@ -23,7 +25,7 @@ public class CognitoSecretHashUtil {
             byte[] rawHmac = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(rawHmac);
         } catch (Exception ex) {
-            throw new IllegalStateException("Cannot calculate Cognito secret hash", ex);
+            throw new AppException(ErrorCode.COGNITO_SECRET_HASH_FAILED);
         }
     }
 }

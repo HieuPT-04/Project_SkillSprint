@@ -39,7 +39,7 @@ public class S3PresignedUrlService {
     public AvatarUploadUrlResponse createAvatarUploadUrl(String userId, CreateAvatarUploadUrlRequest request) {
         String contentType = request.getContentType().trim().toLowerCase();
         if (!ALLOWED_AVATAR_CONTENT_TYPES.contains(contentType)) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WEBP");
+            throw new AppException(ErrorCode.INVALID_AVATAR_CONTENT_TYPE);
         }
 
         String objectKey = buildAvatarObjectKey(userId, request.getFileName(), contentType);
@@ -71,7 +71,7 @@ public class S3PresignedUrlService {
         String objectKey = request.getObjectKey().trim();
         String expectedPrefix = "users/%s/avatar/".formatted(userId);
         if (!objectKey.startsWith(expectedPrefix)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xác nhận ảnh này");
+            throw new AppException(ErrorCode.INVALID_AVATAR_OBJECT_KEY);
         }
 
         try {
@@ -82,7 +82,7 @@ public class S3PresignedUrlService {
                             .build()
             );
         } catch (S3Exception ex) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Ảnh chưa được upload thành công lên S3");
+            throw new AppException(ErrorCode.AVATAR_NOT_UPLOADED);
         }
 
         return objectKey;
@@ -103,7 +103,7 @@ public class S3PresignedUrlService {
             case "image/jpeg" -> "jpg";
             case "image/png" -> "png";
             case "image/webp" -> "webp";
-            default -> throw new AppException(ErrorCode.VALIDATION_ERROR, "Định dạng ảnh không hợp lệ");
+            default -> throw new AppException(ErrorCode.INVALID_AVATAR_CONTENT_TYPE);
         };
     }
 
@@ -122,7 +122,7 @@ public class S3PresignedUrlService {
             return extension;
         }
 
-        throw new AppException(ErrorCode.VALIDATION_ERROR, "Tên file ảnh phải có đuôi JPG, PNG hoặc WEBP");
+        throw new AppException(ErrorCode.INVALID_AVATAR_FILE_EXTENSION);
     }
 
     private String buildFileUrl(String objectKey) {

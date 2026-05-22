@@ -48,7 +48,7 @@ public class OnboardingProfileMapper {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
-            throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể xử lý dữ liệu onboarding");
+            throw new AppException(ErrorCode.ONBOARDING_WRITE_FAILED);
         }
     }
 
@@ -59,7 +59,7 @@ public class OnboardingProfileMapper {
         try {
             return objectMapper.readValue(json, typeReference);
         } catch (JsonProcessingException ex) {
-            throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể đọc dữ liệu onboarding");
+            throw new AppException(ErrorCode.ONBOARDING_READ_FAILED);
         }
     }
 }

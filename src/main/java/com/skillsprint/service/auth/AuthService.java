@@ -59,7 +59,7 @@ public class AuthService {
         } catch (UsernameExistsException ex) {
             throw new AppException(ErrorCode.USER_ALREADY_EXISTS);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -77,7 +77,7 @@ public class AuthService {
         } catch (UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -95,7 +95,7 @@ public class AuthService {
         } catch (UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -115,7 +115,7 @@ public class AuthService {
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -150,7 +150,7 @@ public class AuthService {
         } catch (CodeMismatchException | ExpiredCodeException ex) {
             throw new AppException(ErrorCode.INVALID_CONFIRMATION_CODE);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -185,7 +185,7 @@ public class AuthService {
         } catch (UserNotConfirmedException ex) {
             throw new AppException(ErrorCode.ACCOUNT_NOT_CONFIRMED);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -215,7 +215,7 @@ public class AuthService {
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
@@ -231,7 +231,7 @@ public class AuthService {
         } catch (NotAuthorizedException ex) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         } catch (CognitoIdentityProviderException ex) {
-            throw new AppException(ErrorCode.COGNITO_ERROR, ex.awsErrorDetails().errorMessage());
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }
     }
 
