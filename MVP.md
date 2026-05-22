@@ -75,7 +75,7 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 
 Chưa làm:
 
-- Material upload/extraction/chunking.
+- Material extraction/chunking.
 - Roadmap API.
 - Calendar generation API.
 - Progress API.
@@ -479,24 +479,24 @@ FAILED | CANCELLED
 12. Docker Postgres local.
 13. Workspace CRUD.
 14. Onboarding profile.
+15. Material presigned upload URL, confirm upload, metadata list.
 
 Làm tiếp:
 
-1. Material upload metadata theo workspace.
-2. Material processing job.
-3. Document extraction/chunking.
-4. Learning structure generation.
-5. Learning structure review/confirm.
-6. Roadmap generation.
-7. Calendar task generation.
-8. Progress tracking.
+1. Material processing job runner.
+2. Document extraction/chunking.
+3. Learning structure generation.
+4. Learning structure review/confirm.
+5. Roadmap generation.
+6. Calendar task generation.
+7. Progress tracking.
 
 Thứ tự API trước mắt:
 
 ```text
-POST /api/workspaces/{workspaceId}/materials/upload-url
-POST /api/workspaces/{workspaceId}/materials/confirm
-GET /api/workspaces/{workspaceId}/materials
+Process pending material_processing_jobs
+Extract text from uploaded material
+Create extracted_documents and material_chunks
 ```
 
 ## 12. Nguyên Tắc Ra Quyết Định

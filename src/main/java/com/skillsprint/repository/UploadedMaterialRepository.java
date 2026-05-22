@@ -12,6 +12,11 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
 
     List<UploadedMaterial> findByWorkspaceWorkspaceId(UUID workspaceId);
 
+    List<UploadedMaterial> findByWorkspaceWorkspaceIdAndUserUserIdOrderByUploadedAtDesc(
+            UUID workspaceId,
+            String userId
+    );
+
     List<UploadedMaterial> findByUserUserId(String userId);
 
     List<UploadedMaterial> findByWorkspaceWorkspaceIdAndProcessingStatus(

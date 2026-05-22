@@ -172,6 +172,27 @@ GET /api/workspaces/{workspaceId}/onboarding
 
 `PUT` là upsert: chưa có thì tạo mới, có rồi thì cập nhật.
 
+## Material Endpoints
+
+Yêu cầu token hợp lệ. User chỉ thao tác được material trong workspace của chính mình.
+
+```text
+POST /api/workspaces/{workspaceId}/materials/upload-url
+POST /api/workspaces/{workspaceId}/materials/confirm
+GET /api/workspaces/{workspaceId}/materials
+```
+
+Material upload flow:
+
+```text
+1. Frontend gọi POST /api/workspaces/{workspaceId}/materials/upload-url
+2. Backend trả uploadUrl, objectKey, fileUrl
+3. Frontend PUT binary file lên uploadUrl
+4. Frontend gọi POST /api/workspaces/{workspaceId}/materials/confirm
+5. Backend kiểm tra object tồn tại trên S3
+6. Backend lưu uploaded_materials và tạo material_processing_jobs status PENDING
+```
+
 ## API Response
 
 Success:
@@ -201,8 +222,7 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Material Upload Metadata
--> Material Processing Job
+Material Processing Job Runner
 -> Extract/Chunk Material
 -> Learning Structure
 -> Roadmap
