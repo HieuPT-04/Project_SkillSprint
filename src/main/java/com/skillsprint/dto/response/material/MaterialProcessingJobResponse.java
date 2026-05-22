@@ -18,6 +18,8 @@ public class MaterialProcessingJobResponse {
     ProcessingJobStatus status;
     ProcessingStep currentStep;
     Integer progressPercent;
+    String errorCode;
+    String errorMessage;
     boolean retryable;
     Instant createdAt;
     Instant updatedAt;

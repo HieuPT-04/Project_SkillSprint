@@ -1,6 +1,7 @@
 package com.skillsprint.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.skillsprint.entity.UploadedMaterial;
@@ -13,6 +14,12 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
     List<UploadedMaterial> findByWorkspaceWorkspaceId(UUID workspaceId);
 
     List<UploadedMaterial> findByWorkspaceWorkspaceIdAndUserUserIdOrderByUploadedAtDesc(
+            UUID workspaceId,
+            String userId
+    );
+
+    Optional<UploadedMaterial> findByMaterialIdAndWorkspaceWorkspaceIdAndUserUserId(
+            UUID materialId,
             UUID workspaceId,
             String userId
     );

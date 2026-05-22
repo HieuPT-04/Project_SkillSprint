@@ -480,16 +480,15 @@ FAILED | CANCELLED
 13. Workspace CRUD.
 14. Onboarding profile.
 15. Material presigned upload URL, confirm upload, metadata list.
+16. Material processing job runner, text extraction, chunking.
 
 Làm tiếp:
 
-1. Material processing job runner.
-2. Document extraction/chunking.
-3. Learning structure generation.
-4. Learning structure review/confirm.
-5. Roadmap generation.
-6. Calendar task generation.
-7. Progress tracking.
+1. Learning structure generation.
+2. Learning structure review/confirm.
+3. Roadmap generation.
+4. Calendar task generation.
+5. Progress tracking.
 
 Thứ tự API trước mắt:
 

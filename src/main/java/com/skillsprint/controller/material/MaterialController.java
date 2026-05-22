@@ -3,8 +3,10 @@ package com.skillsprint.controller.material;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.material.ConfirmMaterialUploadRequest;
 import com.skillsprint.dto.request.material.CreateMaterialUploadUrlRequest;
+import com.skillsprint.dto.response.material.MaterialProcessingJobResponse;
 import com.skillsprint.dto.response.material.MaterialUploadUrlResponse;
 import com.skillsprint.dto.response.material.UploadedMaterialResponse;
+import com.skillsprint.service.material.MaterialProcessingService;
 import com.skillsprint.service.material.MaterialService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MaterialController {
 
     MaterialService materialService;
+    MaterialProcessingService materialProcessingService;
 
     @PostMapping("/upload-url")
     public ResponseEntity<ApiResponse<MaterialUploadUrlResponse>> createUploadUrl(
@@ -66,6 +69,20 @@ public class MaterialController {
         List<UploadedMaterialResponse> response = materialService.getWorkspaceMaterials(
                 jwt.getSubject(),
                 workspaceId
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{materialId}/processing-job")
+    public ResponseEntity<ApiResponse<MaterialProcessingJobResponse>> getProcessingJob(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID materialId
+    ) {
+        MaterialProcessingJobResponse response = materialProcessingService.getLatestJob(
+                jwt.getSubject(),
+                workspaceId,
+                materialId
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }

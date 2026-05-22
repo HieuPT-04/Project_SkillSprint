@@ -37,7 +37,7 @@ public class MaterialMapper {
                 .build();
     }
 
-    private MaterialProcessingJobResponse toMaterialProcessingJobResponse(MaterialProcessingJob job) {
+    public MaterialProcessingJobResponse toMaterialProcessingJobResponse(MaterialProcessingJob job) {
         if (job == null) {
             return null;
         }
@@ -47,6 +47,8 @@ public class MaterialMapper {
                 .status(job.getStatus())
                 .currentStep(job.getCurrentStep())
                 .progressPercent(job.getProgressPercent())
+                .errorCode(job.getErrorCode())
+                .errorMessage(job.getErrorMessage())
                 .retryable(job.isRetryable())
                 .createdAt(job.getCreatedAt())
                 .updatedAt(job.getUpdatedAt())

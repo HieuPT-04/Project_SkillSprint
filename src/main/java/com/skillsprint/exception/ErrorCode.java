@@ -44,6 +44,10 @@ public enum ErrorCode {
     INVALID_MATERIAL_FILE_EXTENSION("Tên file tài liệu phải có đuôi PDF, DOCX, PPTX, TXT hoặc ZIP", HttpStatus.BAD_REQUEST),
     INVALID_MATERIAL_OBJECT_KEY("Bạn không có quyền xác nhận tài liệu này", HttpStatus.FORBIDDEN),
     MATERIAL_NOT_UPLOADED("Tài liệu chưa được upload thành công lên S3", HttpStatus.BAD_REQUEST),
+    MATERIAL_NOT_FOUND("Không tìm thấy tài liệu", HttpStatus.NOT_FOUND),
+    MATERIAL_PROCESSING_JOB_NOT_FOUND("Không tìm thấy job xử lý tài liệu", HttpStatus.NOT_FOUND),
+    MATERIAL_TEXT_EMPTY("Không đọc được nội dung tài liệu. File có thể là ảnh scan hoặc không chứa văn bản", HttpStatus.BAD_REQUEST),
+    MATERIAL_PROCESSING_FAILED("Không thể xử lý tài liệu", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Cognito
     COGNITO_ATTRIBUTE_MISSING("Thiếu thông tin người dùng từ Cognito", HttpStatus.BAD_GATEWAY),

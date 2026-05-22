@@ -180,6 +180,7 @@ Yêu cầu token hợp lệ. User chỉ thao tác được material trong worksp
 POST /api/workspaces/{workspaceId}/materials/upload-url
 POST /api/workspaces/{workspaceId}/materials/confirm
 GET /api/workspaces/{workspaceId}/materials
+GET /api/workspaces/{workspaceId}/materials/{materialId}/processing-job
 ```
 
 Material upload flow:
@@ -191,7 +192,10 @@ Material upload flow:
 4. Frontend gọi POST /api/workspaces/{workspaceId}/materials/confirm
 5. Backend kiểm tra object tồn tại trên S3
 6. Backend lưu uploaded_materials và tạo material_processing_jobs status PENDING
+7. Background runner đọc file từ S3, extract text, tách chunk và lưu material_chunks
 ```
+
+Nếu PDF là ảnh scan hoặc file không có text, job sẽ chuyển sang `FAILED` và trả `errorMessage` rõ ràng để FE hiển thị.
 
 ## API Response
 
