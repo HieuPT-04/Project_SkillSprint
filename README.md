@@ -46,6 +46,12 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_S3_BUCKET=your-bucket-name
 AWS_S3_PUBLIC_BASE_URL=https://your-bucket-name.s3.ap-southeast-1.amazonaws.com
 AWS_S3_UPLOAD_URL_EXPIRATION_MINUTES=10
+
+GEMINI_ENABLED=true
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+GEMINI_MAX_INPUT_CHARS=18000
 ```
 
 Không commit `.env`.
@@ -207,7 +213,7 @@ GET /api/workspaces/{workspaceId}/learning-structure
 POST /api/workspaces/{workspaceId}/learning-structure/confirm
 ```
 
-MVP hiện tại tạo learning structure bằng rule-based generator từ `material_chunks`, chưa gọi AI thật.
+Learning structure ưu tiên dùng Gemini nếu có `GEMINI_API_KEY`. Nếu thiếu key, AI lỗi hoặc trả dữ liệu không hợp lệ, backend tự fallback về rule-based generator từ `material_chunks` để flow vẫn chạy được.
 
 ## API Response
 

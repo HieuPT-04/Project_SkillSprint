@@ -30,3 +30,17 @@ app:
     default-group: ${COGNITO_DEFAULT_GROUP:LEARNER}
     access-key-id: ${AWS_ACCESS_KEY_ID:}
     secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+  s3:
+    region: ${AWS_REGION}
+    bucket: ${AWS_S3_BUCKET}
+    public-base-url: ${AWS_S3_PUBLIC_BASE_URL}
+    access-key-id: ${AWS_ACCESS_KEY_ID:}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+    upload-url-expiration-minutes: ${AWS_S3_UPLOAD_URL_EXPIRATION_MINUTES:10}
+  ai:
+    gemini:
+      enabled: ${GEMINI_ENABLED:true}
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+      max-input-chars: ${GEMINI_MAX_INPUT_CHARS:18000}

@@ -72,10 +72,12 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Workspace CRUD.
 - Onboarding API.
 - Docker Postgres local dùng port ngoài `5434`.
+- Material presigned upload URL, confirm upload, metadata list.
+- Material processing job runner, text extraction, chunking.
+- Learning structure generation bằng Gemini AI, fallback rule-based nếu AI chưa sẵn sàng.
 
 Chưa làm:
 
-- Material extraction/chunking.
 - Roadmap API.
 - Calendar generation API.
 - Progress API.
@@ -345,6 +347,8 @@ Nhóm tạm chưa cần cho MVP hiện tại:
 
 AI/rule-based engine chỉ đề xuất. User phải review trước khi roadmap được tạo.
 
+Hiện tại backend ưu tiên Gemini AI khi có `GEMINI_API_KEY`. Nếu thiếu key, AI lỗi, response rỗng hoặc JSON không đạt validation tối thiểu, backend tự fallback về rule-based generator để flow vẫn chạy.
+
 Flow:
 
 ```text
@@ -482,6 +486,7 @@ FAILED | CANCELLED
 15. Material presigned upload URL, confirm upload, metadata list.
 16. Material processing job runner, text extraction, chunking.
 17. Rule-based learning structure generation, get latest, confirm.
+18. Gemini AI learning structure generation với rule-based fallback.
 
 Làm tiếp:
 
