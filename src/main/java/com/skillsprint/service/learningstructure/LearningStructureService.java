@@ -18,10 +18,15 @@ import com.skillsprint.repository.LearningStructureVersionRepository;
 import com.skillsprint.repository.MaterialChunkRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.TopicRepository;
+import com.skillsprint.service.learningstructure.ai.AiChapterDraft;
+import com.skillsprint.service.learningstructure.ai.AiLearningStructureDraft;
+import com.skillsprint.service.learningstructure.ai.AiTopicDraft;
+import com.skillsprint.service.learningstructure.ai.GeminiLearningStructureClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +52,7 @@ public class LearningStructureService {
     ChapterRepository chapterRepository;
     TopicRepository topicRepository;
     LearningStructureMapper learningStructureMapper;
+    GeminiLearningStructureClient geminiLearningStructureClient;
 
     @Transactional
     public LearningStructureResponse generate(String userId, UUID workspaceId) {
@@ -58,21 +64,37 @@ public class LearningStructureService {
             throw new AppException(ErrorCode.MATERIAL_CHUNKS_NOT_READY);
         }
 
+        AiLearningStructureDraft aiDraft = geminiLearningStructureClient.generate(chunks);
+        boolean useAi = isValidAiDraft(aiDraft, chunks);
+
         LearningStructureVersion structureVersion = new LearningStructureVersion();
         structureVersion.setWorkspace(workspace);
         structureVersion.setVersionNo(nextVersionNo(workspaceId));
         structureVersion.setStatus(LearningStructureStatus.REVIEW_REQUIRED);
-        structureVersion.setGeneratedBy(GeneratedBy.SYSTEM);
-        structureVersion.setAiModel("rule-based-mvp");
-        structureVersion.setConfidenceScore(BigDecimal.valueOf(0.70));
         structureVersion.setInputSummary(buildInputSummary(chunks));
-        structureVersion.setWarnings(List.of("MVP rule-based generation, chưa gọi AI thật"));
+
+        if (useAi) {
+            structureVersion.setGeneratedBy(GeneratedBy.AI);
+            structureVersion.setAiModel("gemini");
+            structureVersion.setConfidenceScore(normalizeConfidence(aiDraft.confidenceScore()));
+            structureVersion.setWarnings(safeList(aiDraft.warnings()));
+        } else {
+            structureVersion.setGeneratedBy(GeneratedBy.SYSTEM);
+            structureVersion.setAiModel("rule-based-mvp");
+            structureVersion.setConfidenceScore(BigDecimal.valueOf(0.70));
+            structureVersion.setWarnings(List.of("AI chưa sẵn sàng hoặc dữ liệu AI không hợp lệ, đã dùng rule-based fallback"));
+        }
 
         LearningStructureVersion savedVersion = structureVersionRepository.saveAndFlush(structureVersion);
-        List<HeadingSection> headingSections = detectHeadingSections(chunks);
-        GeneratedStructure generatedStructure = headingSections.isEmpty()
-                ? createFallbackStructure(savedVersion, workspace, chunks)
-                : createHeadingBasedStructure(savedVersion, workspace, headingSections);
+        GeneratedStructure generatedStructure;
+        if (useAi) {
+            generatedStructure = createAiStructure(savedVersion, workspace, aiDraft, chunks);
+        } else {
+            List<HeadingSection> headingSections = detectHeadingSections(chunks);
+            generatedStructure = headingSections.isEmpty()
+                    ? createFallbackStructure(savedVersion, workspace, chunks)
+                    : createHeadingBasedStructure(savedVersion, workspace, headingSections);
+        }
 
         return learningStructureMapper.toResponse(
                 savedVersion,
@@ -141,6 +163,66 @@ public class LearningStructureService {
         List<Chapter> chapters = createChapters(structureVersion, workspace, chunks);
         List<Topic> topics = createTopics(structureVersion, workspace, chapters, chunks);
         return new GeneratedStructure(chapters, topics);
+    }
+
+    private GeneratedStructure createAiStructure(
+            LearningStructureVersion structureVersion,
+            StudyWorkspace workspace,
+            AiLearningStructureDraft aiDraft,
+            List<MaterialChunk> chunks
+    ) {
+        List<AiChapterDraft> chapterDrafts = aiDraft.chapters();
+        List<Chapter> chapters = new ArrayList<>();
+
+        for (int i = 0; i < chapterDrafts.size(); i++) {
+            AiChapterDraft draft = chapterDrafts.get(i);
+            Chapter chapter = new Chapter();
+            chapter.setWorkspace(workspace);
+            chapter.setStructureVersion(structureVersion);
+            chapter.setTitle(truncate(defaultText(draft.title(), "Chương " + (i + 1)), 90));
+            chapter.setSummary(truncate(defaultText(draft.summary(), chapter.getTitle()), 1200));
+            chapter.setWhatToLearn(safeList(draft.whatToLearn()));
+            chapter.setKeyConcepts(safeList(draft.keyConcepts()));
+            chapter.setLearningOutcomes(safeList(draft.learningOutcomes()));
+            chapter.setRecommendedFocus(safeList(draft.recommendedFocus()));
+            chapter.setDifficulty(defaultDifficulty(draft.difficulty(), i));
+            chapter.setEstimatedMinutes(defaultMinutes(draft.estimatedMinutes(), 30));
+            chapter.setSequenceNo(i + 1);
+            chapter.setSourceChunkIds(collectAiChapterSourceChunkIds(draft, chunks));
+            chapter.setAiGenerated(true);
+            chapters.add(chapter);
+        }
+
+        List<Chapter> savedChapters = chapterRepository.saveAllAndFlush(chapters);
+        List<Topic> topics = new ArrayList<>();
+
+        for (int chapterIndex = 0; chapterIndex < chapterDrafts.size(); chapterIndex++) {
+            Chapter chapter = savedChapters.get(chapterIndex);
+            AiChapterDraft chapterDraft = chapterDrafts.get(chapterIndex);
+            List<AiTopicDraft> topicDrafts = chapterDraft.topics();
+
+            for (int topicIndex = 0; topicIndex < topicDrafts.size(); topicIndex++) {
+                AiTopicDraft draft = topicDrafts.get(topicIndex);
+                Topic topic = new Topic();
+                topic.setChapter(chapter);
+                topic.setWorkspace(workspace);
+                topic.setStructureVersion(structureVersion);
+                topic.setTitle(truncate(defaultText(draft.title(), "Topic " + (topicIndex + 1)), 90));
+                topic.setSummaryContent(truncate(defaultText(draft.summaryContent(), topic.getTitle()), 1200));
+                topic.setWhatToLearn(safeList(draft.whatToLearn()));
+                topic.setKeyConcepts(safeList(draft.keyConcepts()));
+                topic.setLearningOutcomes(safeList(draft.learningOutcomes()));
+                topic.setRecommendedFocus(safeList(draft.recommendedFocus()));
+                topic.setDifficulty(draft.difficulty() == null ? chapter.getDifficulty() : draft.difficulty());
+                topic.setEstimatedMinutes(defaultMinutes(draft.estimatedMinutes(), 15));
+                topic.setSequenceNo(topicIndex + 1);
+                topic.setSourceChunkIds(validSourceChunkIds(draft.sourceChunkIds(), chunks));
+                topic.setAiGenerated(true);
+                topics.add(topic);
+            }
+        }
+
+        return new GeneratedStructure(savedChapters, topicRepository.saveAllAndFlush(topics));
     }
 
     private GeneratedStructure createHeadingBasedStructure(
@@ -299,6 +381,96 @@ public class LearningStructureService {
                 .mapToInt(Integer::intValue)
                 .sum();
         return "Generated from " + chunks.size() + " material chunks, estimated " + tokenCount + " tokens.";
+    }
+
+    private boolean isValidAiDraft(AiLearningStructureDraft draft, List<MaterialChunk> chunks) {
+        if (draft == null || chunks == null || chunks.isEmpty()) {
+            return false;
+        }
+        if (draft.chapters() == null || draft.chapters().isEmpty()) {
+            return false;
+        }
+
+        for (AiChapterDraft chapter : draft.chapters()) {
+            if (chapter == null || defaultText(chapter.title(), "").isBlank()) {
+                return false;
+            }
+            if (chapter.topics() == null || chapter.topics().isEmpty()) {
+                return false;
+            }
+            for (AiTopicDraft topic : chapter.topics()) {
+                if (topic == null || defaultText(topic.title(), "").isBlank()) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private BigDecimal normalizeConfidence(BigDecimal confidenceScore) {
+        if (confidenceScore == null) {
+            return BigDecimal.valueOf(0.80);
+        }
+        if (confidenceScore.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO;
+        }
+        if (confidenceScore.compareTo(BigDecimal.ONE) > 0) {
+            return BigDecimal.ONE;
+        }
+        return confidenceScore;
+    }
+
+    private DifficultyLevel defaultDifficulty(DifficultyLevel difficulty, int chapterIndex) {
+        return difficulty == null ? resolveDifficulty(chapterIndex) : difficulty;
+    }
+
+    private int defaultMinutes(Integer minutes, int minimumMinutes) {
+        return minutes == null || minutes < minimumMinutes ? minimumMinutes : minutes;
+    }
+
+    private String defaultText(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private List<String> safeList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .limit(10)
+                .toList();
+    }
+
+    private List<String> collectAiChapterSourceChunkIds(AiChapterDraft chapterDraft, List<MaterialChunk> chunks) {
+        List<String> sourceChunkIds = chapterDraft.topics().stream()
+                .flatMap(topic -> safeList(topic.sourceChunkIds()).stream())
+                .distinct()
+                .toList();
+
+        List<String> validIds = validSourceChunkIds(sourceChunkIds, chunks);
+        if (!validIds.isEmpty()) {
+            return validIds;
+        }
+
+        return chunks.stream()
+                .map(chunk -> chunk.getChunkId().toString())
+                .limit(5)
+                .toList();
+    }
+
+    private List<String> validSourceChunkIds(List<String> sourceChunkIds, List<MaterialChunk> chunks) {
+        List<String> validIds = chunks.stream()
+                .map(chunk -> chunk.getChunkId().toString())
+                .toList();
+
+        return safeList(sourceChunkIds).stream()
+                .filter(validIds::contains)
+                .toList();
     }
 
     private String buildSummary(List<MaterialChunk> chunks) {
