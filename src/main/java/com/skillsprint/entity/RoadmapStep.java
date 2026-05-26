@@ -57,7 +57,7 @@ public class RoadmapStep extends BaseAuditEntity {
     @Column(name = "subtitle", length = 500)
     private String subtitle;
 
-    @Column(name = "summary")
+    @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -91,7 +91,7 @@ public class RoadmapStep extends BaseAuditEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
-    private RoadmapStepStatus status = RoadmapStepStatus.LOCKED;
+    private RoadmapStepStatus status = RoadmapStepStatus.UPCOMING;
 
     @Column(name = "completed_at")
     private Instant completedAt;
