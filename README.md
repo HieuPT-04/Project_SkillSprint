@@ -244,8 +244,6 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Learning Structure
--> Roadmap
--> Calendar
+Calendar
 -> Progress
 ```

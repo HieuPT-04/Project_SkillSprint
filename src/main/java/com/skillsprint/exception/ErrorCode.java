@@ -36,8 +36,15 @@ public enum ErrorCode {
     // Learning structure
     LEARNING_STRUCTURE_NOT_FOUND("Không tìm thấy learning structure", HttpStatus.NOT_FOUND),
     LEARNING_STRUCTURE_ALREADY_CONFIRMED("Learning structure đã được xác nhận", HttpStatus.BAD_REQUEST),
+    LEARNING_STRUCTURE_NOT_CONFIRMED("Learning structure chưa được xác nhận", HttpStatus.BAD_REQUEST),
     MATERIAL_CHUNKS_NOT_READY("Chưa có material chunks đã xử lý để tạo learning structure", HttpStatus.BAD_REQUEST),
     LEARNING_STRUCTURE_GENERATION_FAILED("Không thể tạo learning structure", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Roadmap
+    ROADMAP_NOT_FOUND("Không tìm thấy roadmap", HttpStatus.NOT_FOUND),
+    ROADMAP_CONFIRMED_STRUCTURE_REQUIRED("Cần xác nhận learning structure trước khi tạo roadmap", HttpStatus.BAD_REQUEST),
+    ROADMAP_TOPICS_NOT_READY("Learning structure chưa có topic để tạo roadmap", HttpStatus.BAD_REQUEST),
+    ROADMAP_GENERATION_FAILED("Không thể tạo roadmap", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Avatar / S3
     INVALID_AVATAR_CONTENT_TYPE("Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),

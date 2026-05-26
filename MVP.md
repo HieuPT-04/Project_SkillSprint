@@ -442,7 +442,7 @@ DRAFT -> ACTIVE -> COMPLETED
 Roadmap step:
 
 ```text
-LOCKED -> CURRENT -> COMPLETED
+UPCOMING -> CURRENT -> COMPLETED
 ```
 
 Calendar task:
