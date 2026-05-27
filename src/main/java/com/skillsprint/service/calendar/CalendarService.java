@@ -66,6 +66,8 @@ public class CalendarService {
     static int DEFAULT_SESSION_MINUTES = 60;
     static int DEFAULT_SESSIONS_PER_DAY = 1;
     static int MAX_SESSIONS_PER_DAY = 8;
+    static int TITLE_LENGTH = 90;
+    static int SAFE_VARCHAR_LENGTH = 250;
 
     StudyWorkspaceRepository workspaceRepository;
     RoadmapRepository roadmapRepository;
@@ -227,13 +229,10 @@ public class CalendarService {
             int parts = calculateSessionParts(step, sessionMinutes);
 
             for (int part = 1; part <= parts; part++) {
-                String title = parts == 1
-                        ? "Học: " + step.getTitle()
-                        : "Học: " + step.getTitle() + " (" + part + "/" + parts + ")";
                 drafts.add(new TaskDraft(
                         step,
-                        title,
-                        step.getSummary(),
+                        buildLearningTaskTitle(step, part, parts),
+                        buildLearningTaskDescription(step, part, parts),
                         CalendarTaskCategory.DEEP_STUDY,
                         step.getDifficulty() == DifficultyLevel.HARD
                                 ? CalendarTaskPriority.HIGH
@@ -245,8 +244,8 @@ public class CalendarService {
             if (includeReviewSessions && isLastStepOfChapter(steps, i)) {
                 drafts.add(new TaskDraft(
                         null,
-                        "Ôn tập: " + resolveChapterTitle(step),
-                        "Ôn lại nội dung chính sau khi hoàn thành chapter này",
+                        buildReviewTaskTitle(step),
+                        buildReviewTaskDescription(step),
                         CalendarTaskCategory.REVIEW,
                         CalendarTaskPriority.MEDIUM,
                         5
@@ -255,6 +254,37 @@ public class CalendarService {
         }
 
         return drafts;
+    }
+
+    private String buildLearningTaskTitle(RoadmapStep step, int part, int totalParts) {
+        String suffix = totalParts == 1 ? "" : " (" + part + "/" + totalParts + ")";
+        int maxBaseLength = TITLE_LENGTH - "Học: ".length() - suffix.length();
+        return "Học: " + truncate(step.getTitle(), Math.max(20, maxBaseLength)) + suffix;
+    }
+
+    private String buildLearningTaskDescription(RoadmapStep step, int part, int totalParts) {
+        List<String> details = new ArrayList<>();
+        if (totalParts > 1) {
+            details.add("Buổi " + part + "/" + totalParts + ".");
+        }
+        if (step.getSummary() != null && !step.getSummary().isBlank()) {
+            details.add(step.getSummary());
+        }
+        if (step.getKeyConcepts() != null && !step.getKeyConcepts().isEmpty()) {
+            details.add("Khái niệm chính: " + String.join(", ", step.getKeyConcepts()));
+        }
+        return truncate(String.join(" ", details), SAFE_VARCHAR_LENGTH);
+    }
+
+    private String buildReviewTaskTitle(RoadmapStep step) {
+        return "Ôn tập: " + truncate(resolveChapterTitle(step), TITLE_LENGTH - "Ôn tập: ".length());
+    }
+
+    private String buildReviewTaskDescription(RoadmapStep step) {
+        return truncate(
+                "Ôn lại nội dung chính của chapter: " + resolveChapterTitle(step),
+                SAFE_VARCHAR_LENGTH
+        );
     }
 
     private int calculateSessionParts(RoadmapStep step, int sessionMinutes) {
@@ -341,8 +371,8 @@ public class CalendarService {
         task.setRoadmap(roadmap);
         task.setRoadmapStep(draft.step());
         task.setUser(workspace.getUser());
-        task.setTitle(draft.title());
-        task.setDescription(draft.description());
+        task.setTitle(truncate(draft.title(), TITLE_LENGTH));
+        task.setDescription(truncate(draft.description(), SAFE_VARCHAR_LENGTH));
         task.setTaskDate(taskDate);
         task.setStartTime(startTime);
         task.setEndTime(endTime);
@@ -560,6 +590,13 @@ public class CalendarService {
         } catch (JsonProcessingException ex) {
             throw new AppException(ErrorCode.ONBOARDING_READ_FAILED);
         }
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3) + "...";
     }
 
     private record TimeWindow(LocalTime startTime, LocalTime endTime) {
