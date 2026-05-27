@@ -215,6 +215,47 @@ POST /api/workspaces/{workspaceId}/learning-structure/confirm
 
 Learning structure ưu tiên dùng Gemini nếu có `GEMINI_API_KEY`. Nếu thiếu key, AI lỗi hoặc trả dữ liệu không hợp lệ, backend tự fallback về rule-based generator từ `material_chunks` để flow vẫn chạy được.
 
+## Roadmap Endpoints
+
+Yêu cầu token hợp lệ. Roadmap được tạo sau khi learning structure đã confirm.
+
+```text
+POST /api/workspaces/{workspaceId}/roadmaps/generate
+GET /api/workspaces/{workspaceId}/roadmaps/current
+```
+
+Roadmap step đầu tiên có status `CURRENT`, các step sau là `UPCOMING`. User vẫn có thể xem toàn bộ step, status chỉ dùng để biết tiến độ hiện tại.
+
+## Calendar Endpoints
+
+Yêu cầu token hợp lệ. Calendar được tạo một lần từ roadmap hiện tại.
+
+```text
+POST /api/workspaces/{workspaceId}/calendar/generate
+GET /api/workspaces/{workspaceId}/calendar/tasks
+PATCH /api/calendar/tasks/{taskId}
+PATCH /api/calendar/tasks/{taskId}/complete
+```
+
+Calendar generate có thể nhận body rỗng `{}`. Khi đó backend lấy setup từ onboarding:
+
+```text
+preferredDays -> ngày học trong tuần
+preferredTimeSlots -> giờ bắt đầu và độ dài buổi học
+studyHoursPerWeek -> số buổi học mỗi ngày mặc định
+targetDeadline -> nếu deadline gần thì tăng số buổi/ngày trong các ngày đã chọn
+```
+
+Luật chia lịch hiện tại:
+
+```text
+estimatedMinutes lớn -> tách thành nhiều calendar task
+difficulty HARD -> cộng thêm thời lượng học
+includeReviewSessions=true -> thêm task ôn tập sau mỗi chapter
+complete task -> nếu toàn bộ task của step đã xong thì roadmap step chuyển COMPLETED
+CURRENT step hoàn thành -> step tiếp theo chuyển CURRENT
+```
+
 ## API Response
 
 Success:
@@ -244,6 +285,25 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Calendar
--> Progress
+Progress dashboard / overdue task handling
+```
+
+Calendar hiện chỉ generate một lần từ roadmap. Sau khi đã có lịch, user chỉnh lịch bằng cách dời từng calendar task.
+
+## Progress Endpoint
+
+Yêu cầu token hợp lệ. API này gom dữ liệu để FE làm màn hình dashboard học tập.
+
+```text
+GET /api/workspaces/{workspaceId}/progress
+```
+
+Response gồm:
+
+```text
+roadmap progress
+current step
+today tasks
+overdue tasks
+total/completed task count
 ```

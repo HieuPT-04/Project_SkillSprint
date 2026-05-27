@@ -16,5 +16,10 @@ public interface RoadmapStepRepository extends JpaRepository<RoadmapStep, UUID> 
 
     List<RoadmapStep> findByRoadmapRoadmapIdAndStatus(UUID roadmapId, RoadmapStepStatus status);
 
+    List<RoadmapStep> findByRoadmapRoadmapIdAndStatusOrderBySequenceNoAsc(
+            UUID roadmapId,
+            RoadmapStepStatus status
+    );
+
     Optional<RoadmapStep> findByRoadmapRoadmapIdAndSequenceNo(UUID roadmapId, Integer sequenceNo);
 }
