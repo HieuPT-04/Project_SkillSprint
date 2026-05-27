@@ -58,7 +58,7 @@ public class CalendarTask extends BaseAuditEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "task_date", nullable = false)
@@ -101,7 +101,7 @@ public class CalendarTask extends BaseAuditEntity {
     @Column(name = "eisenhower_quadrant", length = 30)
     private EisenhowerQuadrant eisenhowerQuadrant;
 
-    @Column(name = "classification_reason")
+    @Column(name = "classification_reason", columnDefinition = "TEXT")
     private String classificationReason;
 
     @Enumerated(EnumType.STRING)

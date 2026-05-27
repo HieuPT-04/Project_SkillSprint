@@ -46,6 +46,15 @@ public enum ErrorCode {
     ROADMAP_TOPICS_NOT_READY("Learning structure chưa có topic để tạo roadmap", HttpStatus.BAD_REQUEST),
     ROADMAP_GENERATION_FAILED("Không thể tạo roadmap", HttpStatus.INTERNAL_SERVER_ERROR),
 
+    // Calendar
+    CALENDAR_ROADMAP_REQUIRED("Cần tạo roadmap trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+    CALENDAR_ALREADY_GENERATED("Lịch học đã được tạo, vui lòng dời từng buổi học thay vì tạo lại", HttpStatus.CONFLICT),
+    CALENDAR_TASK_NOT_FOUND("Không tìm thấy calendar task", HttpStatus.NOT_FOUND),
+    CALENDAR_INVALID_TIME_RANGE("Giờ kết thúc phải sau giờ bắt đầu", HttpStatus.BAD_REQUEST),
+    CALENDAR_STUDY_DAYS_REQUIRED("Cần chọn ít nhất một ngày học trong tuần", HttpStatus.BAD_REQUEST),
+    CALENDAR_TIME_SLOT_REQUIRED("Cần chọn khung giờ học trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+    CALENDAR_ONBOARDING_REQUIRED("Cần setup onboarding trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+
     // Avatar / S3
     INVALID_AVATAR_CONTENT_TYPE("Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),
     INVALID_AVATAR_FILE_EXTENSION("Tên file ảnh phải có đuôi JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),
