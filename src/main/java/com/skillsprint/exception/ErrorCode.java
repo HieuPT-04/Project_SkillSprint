@@ -71,6 +71,10 @@ public enum ErrorCode {
     MATERIAL_TEXT_EMPTY("Không đọc được nội dung tài liệu. File có thể là ảnh scan hoặc không chứa văn bản", HttpStatus.BAD_REQUEST),
     MATERIAL_PROCESSING_FAILED("Không thể xử lý tài liệu", HttpStatus.INTERNAL_SERVER_ERROR),
 
+    // Study session
+    STUDY_SESSION_NOT_FOUND("Không tìm thấy phiên học", HttpStatus.NOT_FOUND),
+    STUDY_SESSION_TASK_ALREADY_COMPLETED("Task học này đã hoàn thành", HttpStatus.CONFLICT),
+
     // Cognito
     COGNITO_ATTRIBUTE_MISSING("Thiếu thông tin người dùng từ Cognito", HttpStatus.BAD_GATEWAY),
     COGNITO_SECRET_HASH_FAILED("Không thể tạo Cognito secret hash", HttpStatus.INTERNAL_SERVER_ERROR),
