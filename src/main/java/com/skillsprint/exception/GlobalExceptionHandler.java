@@ -56,7 +56,7 @@ public class GlobalExceptionHandler {
     ) {
         ApiResponse<Object> response = ApiResponse.error(
                 ErrorCode.VALIDATION_ERROR,
-                "Request validation failed",
+                ErrorCode.VALIDATION_ERROR.getMessage(),
                 request.getRequestURI()
         );
         return ResponseEntity.badRequest().body(response);

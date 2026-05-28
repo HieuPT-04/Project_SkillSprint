@@ -30,7 +30,7 @@ public class RoadmapController {
             @PathVariable UUID workspaceId
     ) {
         RoadmapResponse response = roadmapService.generate(jwt.getSubject(), workspaceId);
-        return ResponseEntity.ok(ApiResponse.success("Generate roadmap successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Tạo roadmap thành công", response));
     }
 
     @GetMapping("/current")

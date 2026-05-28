@@ -38,7 +38,7 @@ public class CalendarController {
             @Valid @RequestBody GenerateCalendarRequest request
     ) {
         CalendarScheduleRunResponse response = calendarService.generate(jwt.getSubject(), workspaceId, request);
-        return ResponseEntity.ok(ApiResponse.success("Generate calendar successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Tạo lịch học thành công", response));
     }
 
     @GetMapping("/workspaces/{workspaceId}/calendar/tasks")
@@ -57,7 +57,7 @@ public class CalendarController {
             @Valid @RequestBody UpdateCalendarTaskRequest request
     ) {
         CalendarTaskResponse response = calendarService.updateTask(jwt.getSubject(), taskId, request);
-        return ResponseEntity.ok(ApiResponse.success("Update calendar task successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật lịch học thành công", response));
     }
 
     @PatchMapping("/calendar/tasks/{taskId}/complete")
@@ -66,6 +66,6 @@ public class CalendarController {
             @PathVariable UUID taskId
     ) {
         CalendarTaskResponse response = calendarService.completeTask(jwt.getSubject(), taskId);
-        return ResponseEntity.ok(ApiResponse.success("Complete calendar task successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Hoàn thành task học thành công", response));
     }
 }

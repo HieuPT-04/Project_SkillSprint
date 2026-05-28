@@ -38,7 +38,7 @@ public class OnboardingProfileController {
                 workspaceId,
                 request
         );
-        return ResponseEntity.ok(ApiResponse.success("Save onboarding profile successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Lưu thiết lập học tập thành công", response));
     }
 
     @GetMapping

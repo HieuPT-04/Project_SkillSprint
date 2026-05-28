@@ -39,7 +39,7 @@ public class WorkspaceController {
     ) {
         WorkspaceResponse response = workspaceService.createWorkspace(jwt.getSubject(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created("Create workspace successfully", response));
+                .body(ApiResponse.created("Tạo workspace thành công", response));
     }
 
     @GetMapping
@@ -64,7 +64,7 @@ public class WorkspaceController {
             @Valid @RequestBody UpdateWorkspaceRequest request
     ) {
         WorkspaceResponse response = workspaceService.updateWorkspace(jwt.getSubject(), workspaceId, request);
-        return ResponseEntity.ok(ApiResponse.success("Update workspace successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật workspace thành công", response));
     }
 
     @DeleteMapping("/{workspaceId}")
@@ -73,6 +73,6 @@ public class WorkspaceController {
             @PathVariable UUID workspaceId
     ) {
         workspaceService.deleteWorkspace(jwt.getSubject(), workspaceId);
-        return ResponseEntity.ok(ApiResponse.success("Delete workspace successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Xóa workspace thành công", null));
     }
 }

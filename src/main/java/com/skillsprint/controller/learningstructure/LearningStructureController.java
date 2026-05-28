@@ -30,7 +30,7 @@ public class LearningStructureController {
             @PathVariable UUID workspaceId
     ) {
         LearningStructureResponse response = learningStructureService.generate(jwt.getSubject(), workspaceId);
-        return ResponseEntity.ok(ApiResponse.success("Generate learning structure successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Tạo cấu trúc học tập thành công", response));
     }
 
     @GetMapping
@@ -48,6 +48,6 @@ public class LearningStructureController {
             @PathVariable UUID workspaceId
     ) {
         LearningStructureResponse response = learningStructureService.confirm(jwt.getSubject(), workspaceId);
-        return ResponseEntity.ok(ApiResponse.success("Confirm learning structure successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Xác nhận cấu trúc học tập thành công", response));
     }
 }
