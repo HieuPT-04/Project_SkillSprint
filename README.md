@@ -256,6 +256,27 @@ complete task -> nếu toàn bộ task của step đã xong thì roadmap step ch
 CURRENT step hoàn thành -> step tiếp theo chuyển CURRENT
 ```
 
+## Study Session Endpoints
+
+Yêu cầu token hợp lệ. Study session dùng để tracking phiên học thật của user từ một calendar task.
+
+```text
+POST /api/calendar/tasks/{taskId}/sessions/start
+POST /api/study-sessions/{sessionId}/finish
+```
+
+Flow:
+
+```text
+User bấm Start Learning
+-> backend tạo study_sessions status IN_PROGRESS
+-> user học
+-> user bấm Finish
+-> backend lưu endedAt, durationMinutes, notes, focusScore
+-> backend tự complete calendar task
+-> roadmap progress được cập nhật theo calendar task
+```
+
 ## API Response
 
 Success:

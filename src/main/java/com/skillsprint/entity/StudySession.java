@@ -3,8 +3,11 @@ package com.skillsprint.entity;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.skillsprint.enums.session.StudySessionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -55,6 +58,13 @@ public class StudySession {
     @Column(name = "duration_minutes")
     private Integer durationMinutes;
 
-    @Column(name = "notes")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private StudySessionStatus status = StudySessionStatus.IN_PROGRESS;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "focus_score")
+    private Integer focusScore;
 }
