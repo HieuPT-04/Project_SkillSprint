@@ -58,7 +58,7 @@ public class MaterialController {
                 workspaceId,
                 request
         );
-        return ResponseEntity.ok(ApiResponse.success("Confirm material upload successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Xác nhận tải tài liệu thành công", response));
     }
 
     @GetMapping

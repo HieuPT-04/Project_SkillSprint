@@ -32,7 +32,7 @@ public class StudySessionController {
             @PathVariable UUID taskId
     ) {
         StudySessionResponse response = studySessionService.startSession(jwt.getSubject(), taskId);
-        return ResponseEntity.ok(ApiResponse.success("Start study session successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Bắt đầu phiên học thành công", response));
     }
 
     @PostMapping("/study-sessions/{sessionId}/finish")
@@ -42,6 +42,6 @@ public class StudySessionController {
             @Valid @RequestBody(required = false) FinishStudySessionRequest request
     ) {
         StudySessionResponse response = studySessionService.finishSession(jwt.getSubject(), sessionId, request);
-        return ResponseEntity.ok(ApiResponse.success("Finish study session successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Kết thúc phiên học thành công", response));
     }
 }
