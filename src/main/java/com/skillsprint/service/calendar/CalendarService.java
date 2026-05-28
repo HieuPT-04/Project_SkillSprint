@@ -36,6 +36,10 @@ import com.skillsprint.repository.RoadmapProgressLogRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
+import com.skillsprint.service.calendar.ai.AiCalendarPlanDraft;
+import com.skillsprint.service.calendar.ai.AiCalendarTaskInput;
+import com.skillsprint.service.calendar.ai.AiCalendarTaskSuggestion;
+import com.skillsprint.service.calendar.ai.GeminiCalendarPlannerClient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -46,6 +50,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -77,6 +82,7 @@ public class CalendarService {
     CalendarScheduleRunRepository scheduleRunRepository;
     CalendarTaskRepository calendarTaskRepository;
     CalendarMapper calendarMapper;
+    GeminiCalendarPlannerClient geminiCalendarPlannerClient;
     ObjectMapper objectMapper;
 
     @Transactional
@@ -101,14 +107,15 @@ public class CalendarService {
         List<TaskDraft> drafts = buildTaskDrafts(steps, config.sessionMinutes(), config.includeReviewSessions());
         int sessionsPerDay = resolveSessionsPerDay(config, drafts.size());
         ScheduleConfig finalConfig = config.withSessionsPerDay(sessionsPerDay);
+        List<PlannedTask> plannedTasks = buildRuleBasedPlan(drafts, finalConfig);
+        plannedTasks = optimizePlanWithAi(plannedTasks, finalConfig);
 
         CalendarScheduleRun run = createScheduleRun(workspace, roadmap, finalConfig);
         CalendarScheduleRun savedRun = scheduleRunRepository.saveAndFlush(run);
         List<CalendarTask> tasks = calendarTaskRepository.saveAllAndFlush(createTasks(
                 workspace,
                 roadmap,
-                drafts,
-                finalConfig
+                plannedTasks
         ));
 
         savedRun.setEndDate(tasks.get(tasks.size() - 1).getTaskDate());
@@ -256,6 +263,62 @@ public class CalendarService {
         return drafts;
     }
 
+    private List<PlannedTask> optimizePlanWithAi(List<PlannedTask> plannedTasks, ScheduleConfig config) {
+        if (plannedTasks == null || plannedTasks.isEmpty() || !geminiCalendarPlannerClient.isReady()) {
+            return plannedTasks;
+        }
+
+        List<AiCalendarTaskInput> inputs = new ArrayList<>();
+        for (int i = 0; i < plannedTasks.size(); i++) {
+            PlannedTask plannedTask = plannedTasks.get(i);
+            TaskDraft draft = plannedTask.draft();
+            inputs.add(new AiCalendarTaskInput(
+                    i,
+                    draft.title(),
+                    draft.description(),
+                    draft.step() == null ? null : resolveChapterTitle(draft.step()),
+                    draft.step() == null ? null : draft.step().getDifficulty(),
+                    draft.step() == null ? null : draft.step().getEstimatedMinutes(),
+                    draft.category(),
+                    draft.priority(),
+                    plannedTask.taskDate(),
+                    plannedTask.startTime(),
+                    plannedTask.durationMinutes()
+            ));
+        }
+
+        AiCalendarPlanDraft aiDraft = geminiCalendarPlannerClient.generate(inputs);
+        if (!isValidAiDraft(aiDraft, plannedTasks.size(), config)) {
+            return plannedTasks;
+        }
+
+        List<PlannedTask> optimized = new ArrayList<>(plannedTasks);
+        for (AiCalendarTaskSuggestion suggestion : aiDraft.tasks()) {
+            PlannedTask currentPlan = optimized.get(suggestion.taskIndex());
+            TaskDraft currentDraft = currentPlan.draft();
+            TaskDraft optimizedDraft = new TaskDraft(
+                    currentDraft.step(),
+                    truncate(defaultText(suggestion.title(), currentDraft.title()), TITLE_LENGTH),
+                    truncate(defaultText(suggestion.description(), currentDraft.description()), SAFE_VARCHAR_LENGTH),
+                    suggestion.category() == null ? currentDraft.category() : suggestion.category(),
+                    suggestion.priority() == null ? currentDraft.priority() : suggestion.priority(),
+                    currentDraft.xpReward()
+            );
+            int duration = defaultPositive(suggestion.durationMinutes(), currentPlan.durationMinutes());
+            LocalTime startTime = suggestion.startTime() == null ? currentPlan.startTime() : suggestion.startTime();
+            optimized.set(suggestion.taskIndex(), new PlannedTask(
+                    optimizedDraft,
+                    suggestion.taskDate(),
+                    startTime,
+                    startTime.plusMinutes(duration),
+                    duration,
+                    CalendarTaskSource.AI_GENERATED
+            ));
+        }
+
+        return optimized;
+    }
+
     private String buildLearningTaskTitle(RoadmapStep step, int part, int totalParts) {
         String suffix = totalParts == 1 ? "" : " (" + part + "/" + totalParts + ")";
         int maxBaseLength = TITLE_LENGTH - "Học: ".length() - suffix.length();
@@ -330,13 +393,8 @@ public class CalendarService {
         return run;
     }
 
-    private List<CalendarTask> createTasks(
-            StudyWorkspace workspace,
-            Roadmap roadmap,
-            List<TaskDraft> drafts,
-            ScheduleConfig config
-    ) {
-        List<CalendarTask> tasks = new ArrayList<>();
+    private List<PlannedTask> buildRuleBasedPlan(List<TaskDraft> drafts, ScheduleConfig config) {
+        List<PlannedTask> plannedTasks = new ArrayList<>();
         LocalDate currentDate = config.startDate();
         int sessionsUsedToday = 0;
 
@@ -350,22 +408,38 @@ public class CalendarService {
             LocalTime startTime = config.dailyStartTime().plusMinutes((long) sessionsUsedToday * config.sessionMinutes());
             LocalTime endTime = startTime.plusMinutes(config.sessionMinutes());
 
-            tasks.add(createTask(workspace, roadmap, draft, currentDate, startTime, endTime, config.sessionMinutes()));
+            plannedTasks.add(new PlannedTask(
+                    draft,
+                    currentDate,
+                    startTime,
+                    endTime,
+                    config.sessionMinutes(),
+                    CalendarTaskSource.SYSTEM_GENERATED
+            ));
             sessionsUsedToday++;
         }
 
+        return plannedTasks;
+    }
+
+    private List<CalendarTask> createTasks(
+            StudyWorkspace workspace,
+            Roadmap roadmap,
+            List<PlannedTask> plannedTasks
+    ) {
+        List<CalendarTask> tasks = new ArrayList<>();
+        for (PlannedTask plannedTask : plannedTasks) {
+            tasks.add(createTask(workspace, roadmap, plannedTask));
+        }
         return tasks;
     }
 
     private CalendarTask createTask(
             StudyWorkspace workspace,
             Roadmap roadmap,
-            TaskDraft draft,
-            LocalDate taskDate,
-            LocalTime startTime,
-            LocalTime endTime,
-            int duration
+            PlannedTask plannedTask
     ) {
+        TaskDraft draft = plannedTask.draft();
         CalendarTask task = new CalendarTask();
         task.setWorkspace(workspace);
         task.setRoadmap(roadmap);
@@ -373,14 +447,14 @@ public class CalendarService {
         task.setUser(workspace.getUser());
         task.setTitle(truncate(draft.title(), TITLE_LENGTH));
         task.setDescription(truncate(draft.description(), SAFE_VARCHAR_LENGTH));
-        task.setTaskDate(taskDate);
-        task.setStartTime(startTime);
-        task.setEndTime(endTime);
-        task.setDurationMinutes(duration);
+        task.setTaskDate(plannedTask.taskDate());
+        task.setStartTime(plannedTask.startTime());
+        task.setEndTime(plannedTask.endTime());
+        task.setDurationMinutes(plannedTask.durationMinutes());
         task.setCategory(draft.category());
         task.setPriority(draft.priority());
         task.setStatus(CalendarTaskStatus.TODO);
-        task.setSource(CalendarTaskSource.SYSTEM_GENERATED);
+        task.setSource(plannedTask.source());
         task.setXpReward(draft.xpReward());
         return task;
     }
@@ -550,6 +624,72 @@ public class CalendarService {
         return step.getTitle();
     }
 
+    private boolean isValidAiDraft(AiCalendarPlanDraft draft, int taskCount, ScheduleConfig config) {
+        if (draft == null || draft.tasks() == null || draft.tasks().size() != taskCount) {
+            return false;
+        }
+
+        Set<Integer> indexes = new HashSet<>();
+        for (AiCalendarTaskSuggestion suggestion : draft.tasks()) {
+            if (suggestion == null || suggestion.taskIndex() == null) {
+                return false;
+            }
+            int index = suggestion.taskIndex();
+            if (index < 0 || index >= taskCount || !indexes.add(index)) {
+                return false;
+            }
+            if (suggestion.taskDate() == null || suggestion.taskDate().isBefore(config.startDate())) {
+                return false;
+            }
+            if (!config.studyDays().contains(toWeekDay(suggestion.taskDate()))) {
+                return false;
+            }
+            if (suggestion.startTime() == null || suggestion.durationMinutes() == null || suggestion.durationMinutes() <= 0) {
+                return false;
+            }
+            LocalTime endTime = suggestion.startTime().plusMinutes(suggestion.durationMinutes());
+            if (!endTime.isAfter(suggestion.startTime())) {
+                return false;
+            }
+        }
+
+        LocalDate previousDate = null;
+        LocalTime previousEndTime = null;
+        for (int i = 0; i < taskCount; i++) {
+            AiCalendarTaskSuggestion suggestion = findSuggestionByIndex(draft.tasks(), i);
+            LocalTime endTime = suggestion.startTime().plusMinutes(suggestion.durationMinutes());
+
+            if (previousDate != null) {
+                boolean beforePrevious = suggestion.taskDate().isBefore(previousDate)
+                        || (suggestion.taskDate().equals(previousDate) && suggestion.startTime().isBefore(previousEndTime));
+                if (beforePrevious) {
+                    return false;
+                }
+            }
+
+            previousDate = suggestion.taskDate();
+            previousEndTime = endTime;
+        }
+
+        return hasValidDailyCapacity(draft.tasks(), config.sessionsPerDay());
+    }
+
+    private AiCalendarTaskSuggestion findSuggestionByIndex(List<AiCalendarTaskSuggestion> suggestions, int index) {
+        return suggestions.stream()
+                .filter(suggestion -> Objects.equals(suggestion.taskIndex(), index))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private boolean hasValidDailyCapacity(List<AiCalendarTaskSuggestion> suggestions, int sessionsPerDay) {
+        return suggestions.stream()
+                .map(AiCalendarTaskSuggestion::taskDate)
+                .distinct()
+                .allMatch(date -> suggestions.stream()
+                        .filter(suggestion -> date.equals(suggestion.taskDate()))
+                        .count() <= sessionsPerDay);
+    }
+
     private WeekDay toWeekDay(LocalDate date) {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
         return WeekDay.valueOf(dayOfWeek.name());
@@ -599,6 +739,13 @@ public class CalendarService {
         return value.substring(0, maxLength - 3) + "...";
     }
 
+    private String defaultText(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value.trim();
+    }
+
     private record TimeWindow(LocalTime startTime, LocalTime endTime) {
     }
 
@@ -634,6 +781,16 @@ public class CalendarService {
             CalendarTaskCategory category,
             CalendarTaskPriority priority,
             int xpReward
+    ) {
+    }
+
+    private record PlannedTask(
+            TaskDraft draft,
+            LocalDate taskDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            int durationMinutes,
+            CalendarTaskSource source
     ) {
     }
 }

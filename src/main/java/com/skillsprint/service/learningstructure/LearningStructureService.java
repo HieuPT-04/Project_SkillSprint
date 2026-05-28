@@ -42,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LearningStructureService {
 
     static int TOPICS_PER_CHAPTER = 3;
+    static int MAX_LIST_ITEMS = 6;
+    static int MAX_LIST_ITEM_LENGTH = 120;
     static Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("^(#{1,5})\\s+(.{3,160})$");
     static Pattern NUMBERED_HEADING_PATTERN = Pattern.compile("^(\\d+(?:\\.\\d+){0,4})[.)]?\\s+(.{3,160})$");
     static Pattern LIST_MARKER_PATTERN = Pattern.compile("^[-*•]\\s+.+$");
@@ -264,7 +266,7 @@ public class LearningStructureService {
             chapter.setEstimatedMinutes(estimateMinutes(chapterChunks, 30));
             chapter.setSequenceNo(i + 1);
             chapter.setSourceChunkIds(toChunkIds(chapterChunks));
-            chapter.setAiGenerated(true);
+            chapter.setAiGenerated(false);
             chapters.add(chapter);
         }
         List<Chapter> savedChapters = chapterRepository.saveAllAndFlush(chapters);
@@ -293,7 +295,7 @@ public class LearningStructureService {
                 topic.setEstimatedMinutes(estimateMinutes(section.chunks(), 15));
                 topic.setSequenceNo(topicIndex + 1);
                 topic.setSourceChunkIds(toChunkIds(section.chunks()));
-                topic.setAiGenerated(true);
+                topic.setAiGenerated(false);
                 topics.add(topic);
             }
         }
@@ -325,7 +327,7 @@ public class LearningStructureService {
             chapter.setEstimatedMinutes(Math.max(30, group.size() * 25));
             chapter.setSequenceNo(i + 1);
             chapter.setSourceChunkIds(toChunkIds(group));
-            chapter.setAiGenerated(true);
+            chapter.setAiGenerated(false);
             chapters.add(chapter);
         }
 
@@ -359,7 +361,7 @@ public class LearningStructureService {
             topic.setEstimatedMinutes(Math.max(15, chunk.getTokenCount() == null ? 20 : chunk.getTokenCount() / 8));
             topic.setSequenceNo(topicNo);
             topic.setSourceChunkIds(List.of(chunk.getChunkId().toString()));
-            topic.setAiGenerated(true);
+            topic.setAiGenerated(false);
             topics.add(topic);
         }
 
@@ -441,8 +443,9 @@ public class LearningStructureService {
                 .filter(Objects::nonNull)
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
+                .map(value -> truncate(value, MAX_LIST_ITEM_LENGTH))
                 .distinct()
-                .limit(10)
+                .limit(MAX_LIST_ITEMS)
                 .toList();
     }
 

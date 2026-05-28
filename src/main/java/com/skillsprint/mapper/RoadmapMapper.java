@@ -68,13 +68,14 @@ public class RoadmapMapper {
                 .build();
     }
 
-    private RoadmapResourceResponse toResourceResponse(RoadmapStepResource resource) {
+    public RoadmapResourceResponse toResourceResponse(RoadmapStepResource resource) {
         return RoadmapResourceResponse.builder()
                 .resourceId(resource.getResourceId())
                 .title(resource.getTitle())
                 .platform(resource.getPlatform())
                 .resourceType(resource.getResourceType())
                 .searchQuery(resource.getSearchQuery())
+                .content(resource.getContent())
                 .url(resource.getUrl())
                 .reason(resource.getReason())
                 .aiRecommended(resource.isAiRecommended())

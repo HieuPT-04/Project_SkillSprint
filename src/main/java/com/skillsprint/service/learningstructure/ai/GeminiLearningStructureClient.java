@@ -109,6 +109,13 @@ public class GeminiLearningStructureClient {
                 - Ưu tiên giữ cấu trúc heading nếu tài liệu có heading.
                 - Không bịa nội dung ngoài tài liệu.
                 - Mỗi chapter nên có ít nhất 1 topic.
+                - Title ngắn, rõ ý, tối đa 12 từ.
+                - Summary chỉ 1-2 câu ngắn.
+                - whatToLearn trả 2-4 ý ngắn.
+                - keyConcepts trả 3-6 khái niệm ngắn.
+                - learningOutcomes trả 2-4 kết quả học tập ngắn.
+                - recommendedFocus trả 2-3 gợi ý ngắn.
+                - Mỗi item trong array nên dưới 120 ký tự.
                 - sourceChunkIds chỉ dùng id có trong input.
                 - warnings là array, có thể rỗng.
 

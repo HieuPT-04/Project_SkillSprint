@@ -1,17 +1,26 @@
 package com.skillsprint.service.session;
 
 import com.skillsprint.dto.request.session.FinishStudySessionRequest;
+import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
+import com.skillsprint.dto.response.roadmap.RoadmapResourceResponse;
+import com.skillsprint.dto.response.session.StudySessionDetailResponse;
 import com.skillsprint.dto.response.session.StudySessionResponse;
 import com.skillsprint.entity.CalendarTask;
+import com.skillsprint.entity.RoadmapStep;
+import com.skillsprint.entity.RoadmapStepResource;
 import com.skillsprint.entity.StudySession;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import com.skillsprint.enums.session.StudySessionStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
+import com.skillsprint.mapper.CalendarMapper;
+import com.skillsprint.mapper.RoadmapMapper;
 import com.skillsprint.mapper.StudySessionMapper;
 import com.skillsprint.repository.CalendarTaskRepository;
+import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.service.calendar.CalendarService;
+import java.util.List;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -27,9 +36,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class StudySessionService {
 
     CalendarTaskRepository calendarTaskRepository;
+    RoadmapStepResourceRepository roadmapStepResourceRepository;
     StudySessionRepository studySessionRepository;
+    CalendarMapper calendarMapper;
+    RoadmapMapper roadmapMapper;
     StudySessionMapper studySessionMapper;
     CalendarService calendarService;
+
+    @Transactional(readOnly = true)
+    public StudySessionDetailResponse getStudySessionDetail(String userId, UUID taskId) {
+        CalendarTask task = findOwnedTask(userId, taskId);
+        RoadmapStep step = task.getRoadmapStep();
+        if (step == null) {
+            throw new AppException(ErrorCode.ROADMAP_NOT_FOUND);
+        }
+
+        List<RoadmapStepResource> resources = roadmapStepResourceRepository
+                .findByStepStepIdOrderBySequenceNoAsc(step.getStepId());
+        return StudySessionDetailResponse.builder()
+                .task(calendarMapper.toTaskResponse(task))
+                .roadmapStep(toRoadmapStepStudyResponse(step))
+                .practice(buildPracticePrompt(step))
+                .resources(resources.stream().map(roadmapMapper::toResourceResponse).toList())
+                .actions(buildActions(task))
+                .build();
+    }
 
     @Transactional
     public StudySessionResponse startSession(String userId, UUID taskId) {
@@ -74,6 +105,46 @@ public class StudySessionService {
         }
 
         return studySessionMapper.toResponse(session);
+    }
+
+    private StudySessionDetailResponse.RoadmapStepStudyResponse toRoadmapStepStudyResponse(RoadmapStep step) {
+        return StudySessionDetailResponse.RoadmapStepStudyResponse.builder()
+                .stepId(step.getStepId())
+                .chapterId(step.getChapter() == null ? null : step.getChapter().getChapterId())
+                .topicId(step.getTopic() == null ? null : step.getTopic().getTopicId())
+                .title(step.getTitle())
+                .subtitle(step.getSubtitle())
+                .summary(step.getSummary())
+                .whatToLearn(step.getWhatToLearn())
+                .keyConcepts(step.getKeyConcepts())
+                .learningOutcomes(step.getLearningOutcomes())
+                .recommendedFocus(step.getRecommendedFocus())
+                .difficulty(step.getDifficulty())
+                .estimatedMinutes(step.getEstimatedMinutes())
+                .sequenceNo(step.getSequenceNo())
+                .status(step.getStatus())
+                .build();
+    }
+
+    private StudySessionDetailResponse.PracticePromptResponse buildPracticePrompt(RoadmapStep step) {
+        String mainConcept = step.getKeyConcepts() == null || step.getKeyConcepts().isEmpty()
+                ? step.getTitle()
+                : step.getKeyConcepts().get(0);
+        return StudySessionDetailResponse.PracticePromptResponse.builder()
+                .prompt("Hãy học phần \"" + step.getTitle() + "\" và tự giải thích lại: " + mainConcept + ".")
+                .expectedOutput("Bạn nắm được ý chính và có thể trình bày lại bằng ví dụ ngắn.")
+                .build();
+    }
+
+    private StudySessionDetailResponse.StudySessionActionsResponse buildActions(CalendarTask task) {
+        boolean completed = task.getStatus() == CalendarTaskStatus.COMPLETED;
+        String taskId = task.getTaskId().toString();
+        return StudySessionDetailResponse.StudySessionActionsResponse.builder()
+                .canStart(!completed)
+                .canComplete(!completed)
+                .startEndpoint("/api/calendar/tasks/" + taskId + "/sessions/start")
+                .completeEndpoint("/api/calendar/tasks/" + taskId + "/complete")
+                .build();
     }
 
     private CalendarTask findOwnedTask(String userId, UUID taskId) {
