@@ -19,6 +19,7 @@ public class RoadmapResourceResponse {
     ResourcePlatform platform;
     ResourceType resourceType;
     String searchQuery;
+    String content;
     String url;
     String reason;
     boolean aiRecommended;

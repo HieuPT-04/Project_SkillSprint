@@ -51,6 +51,9 @@ public class RoadmapStepResource {
     @Column(name = "search_query", columnDefinition = "TEXT")
     private String searchQuery;
 
+    @Column(name = "content", columnDefinition = "TEXT")
+    private String content;
+
     @Column(name = "url", columnDefinition = "TEXT")
     private String url;
 

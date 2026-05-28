@@ -226,6 +226,14 @@ GET /api/workspaces/{workspaceId}/roadmaps/current
 
 Roadmap step đầu tiên có status `CURRENT`, các step sau là `UPCOMING`. User vẫn có thể xem toàn bộ step, status chỉ dùng để biết tiến độ hiện tại.
 
+Mỗi roadmap step hiện có 3 resource để FE render màn học:
+
+```text
+DOCUMENT_SECTION -> nội dung gốc liên quan từ topic/step
+SEARCH_QUERY     -> link tìm video YouTube
+PRACTICE_PROMPT  -> bài tập ngắn để tự luyện sau khi học
+```
+
 ## Calendar Endpoints
 
 Yêu cầu token hợp lệ. Calendar được tạo một lần từ roadmap hiện tại.
@@ -285,7 +293,7 @@ Success:
 {
   "success": true,
   "code": 200,
-  "message": "Success",
+  "message": "Thành công",
   "data": {}
 }
 ```
@@ -306,10 +314,13 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Progress dashboard / overdue task handling
+Full core flow E2E verification
 ```
 
-Calendar hiện chỉ generate một lần từ roadmap. Sau khi đã có lịch, user chỉnh lịch bằng cách dời từng calendar task.
+Core hiện đã có Auth, Workspace, Onboarding, Material, Learning Structure, Roadmap, Calendar, Study Session và Progress.
+Trước khi qua Phase Later, cần test lại full flow bằng Postman và chỉ sửa lỗi làm gãy core.
+
+Calendar hiện chỉ generate một lần từ roadmap. Sau khi đã có lịch, user chỉnh lịch bằng cách dời từng calendar task thay vì regenerate roadmap/lịch tùy tiện.
 
 ## Progress Endpoint
 

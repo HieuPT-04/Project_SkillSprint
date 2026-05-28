@@ -42,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LearningStructureService {
 
     static int TOPICS_PER_CHAPTER = 3;
+    static int MAX_LIST_ITEMS = 6;
+    static int MAX_LIST_ITEM_LENGTH = 120;
     static Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("^(#{1,5})\\s+(.{3,160})$");
     static Pattern NUMBERED_HEADING_PATTERN = Pattern.compile("^(\\d+(?:\\.\\d+){0,4})[.)]?\\s+(.{3,160})$");
     static Pattern LIST_MARKER_PATTERN = Pattern.compile("^[-*•]\\s+.+$");
@@ -441,8 +443,9 @@ public class LearningStructureService {
                 .filter(Objects::nonNull)
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
+                .map(value -> truncate(value, MAX_LIST_ITEM_LENGTH))
                 .distinct()
-                .limit(10)
+                .limit(MAX_LIST_ITEMS)
                 .toList();
     }
 

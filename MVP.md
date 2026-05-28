@@ -41,7 +41,7 @@ Login bằng Cognito
 Flow ưu tiên hiện tại:
 
 ```text
-Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar
+Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Study Session -> Progress
 ```
 
 ## 3. Trạng Thái Hiện Tại
@@ -75,12 +75,19 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Material presigned upload URL, confirm upload, metadata list.
 - Material processing job runner, text extraction, chunking.
 - Learning structure generation bằng Gemini AI, fallback rule-based nếu AI chưa sẵn sàng.
+- Roadmap generation API.
+- Roadmap resources cho document section, video search query và practice prompt.
+- Calendar generation API từ roadmap/onboarding.
+- Calendar task update/complete API.
+- Study session API để start/finish phiên học thật từ calendar task.
+- Progress dashboard API gồm roadmap progress, current step, today tasks và overdue tasks.
 
-Chưa làm:
+Cần rà soát tiếp:
 
-- Roadmap API.
-- Calendar generation API.
-- Progress API.
+- Test lại full core flow end-to-end bằng Postman.
+- Cập nhật Postman collection mỗi khi API/response đổi.
+- Chỉ sửa core nếu test phát hiện lỗi làm gãy flow.
+- Chưa ưu tiên Phase Later như notification realtime, pomodoro, subscription/quota.
 
 ## 4. Kiến Trúc Kỹ Thuật
 
@@ -487,19 +494,35 @@ FAILED | CANCELLED
 16. Material processing job runner, text extraction, chunking.
 17. Rule-based learning structure generation, get latest, confirm.
 18. Gemini AI learning structure generation với rule-based fallback.
+19. Roadmap generation từ confirmed learning structure.
+20. Roadmap step resources cho tài liệu, video search và bài luyện tập.
+21. Calendar task generation từ roadmap và onboarding setup.
+22. Calendar task update/complete.
+23. Study session start/finish từ calendar task.
+24. Progress dashboard cho workspace.
 
 Làm tiếp:
 
-1. Roadmap generation.
-2. Calendar task generation.
-3. Progress tracking.
+1. Rà soát full core flow end-to-end.
+2. Cập nhật Postman collection theo API hiện tại.
+3. Sửa lỗi core nếu phát hiện trong lúc test.
+4. Sau khi core ổn mới chọn Phase Later đầu tiên.
 
-Thứ tự API trước mắt:
+Thứ tự kiểm thử trước mắt:
 
 ```text
-Process pending material_processing_jobs
-Extract text from uploaded material
-Create extracted_documents and material_chunks
+Login
+-> Create workspace
+-> Upsert onboarding
+-> Upload material bằng presigned URL
+-> Confirm material upload
+-> Wait material processing completed
+-> Generate learning structure
+-> Confirm learning structure
+-> Generate roadmap
+-> Generate calendar
+-> Start/finish study session
+-> Check progress dashboard
 ```
 
 ## 12. Nguyên Tắc Ra Quyết Định

@@ -40,6 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class RoadmapService {
 
+    static int RESOURCE_TITLE_LENGTH = 120;
+    static int RESOURCE_CONTENT_LENGTH = 1_200;
+
     StudyWorkspaceRepository workspaceRepository;
     LearningStructureVersionRepository structureVersionRepository;
     TopicRepository topicRepository;
@@ -161,24 +164,96 @@ public class RoadmapService {
     }
 
     private List<RoadmapStepResource> createResources(List<RoadmapStep> steps) {
-        return steps.stream()
-                .map(this::createYoutubeSearchResource)
-                .toList();
+        List<RoadmapStepResource> resources = new ArrayList<>();
+        for (RoadmapStep step : steps) {
+            resources.add(createDocumentSectionResource(step));
+            resources.add(createYoutubeSearchResource(step));
+            resources.add(createPracticePromptResource(step));
+        }
+        return resources;
+    }
+
+    private RoadmapStepResource createDocumentSectionResource(RoadmapStep step) {
+        RoadmapStepResource resource = new RoadmapStepResource();
+        resource.setStep(step);
+        resource.setTitle("Tài liệu gốc liên quan");
+        resource.setPlatform(ResourcePlatform.SkillSprint);
+        resource.setResourceType(ResourceType.DOCUMENT_SECTION);
+        resource.setContent(buildDocumentSectionContent(step));
+        resource.setReason("Đoạn nội dung được dùng làm nền để tạo bài học này");
+        resource.setAiRecommended(false);
+        resource.setSequenceNo(1);
+        return resource;
     }
 
     private RoadmapStepResource createYoutubeSearchResource(RoadmapStep step) {
         String searchQuery = step.getTitle() + " tutorial";
         RoadmapStepResource resource = new RoadmapStepResource();
         resource.setStep(step);
-        resource.setTitle("Tìm video: " + step.getTitle());
+        resource.setTitle(truncate("Tìm video: " + step.getTitle(), RESOURCE_TITLE_LENGTH));
         resource.setPlatform(ResourcePlatform.YouTube);
         resource.setResourceType(ResourceType.SEARCH_QUERY);
         resource.setSearchQuery(searchQuery);
         resource.setUrl("https://www.youtube.com/results?search_query=" + encode(searchQuery));
         resource.setReason("Gợi ý video để học thêm về " + step.getTitle());
         resource.setAiRecommended(false);
-        resource.setSequenceNo(1);
+        resource.setSequenceNo(2);
         return resource;
+    }
+
+    private RoadmapStepResource createPracticePromptResource(RoadmapStep step) {
+        RoadmapStepResource resource = new RoadmapStepResource();
+        resource.setStep(step);
+        resource.setTitle("Bài tập thực hành");
+        resource.setPlatform(ResourcePlatform.SkillSprint);
+        resource.setResourceType(ResourceType.PRACTICE_PROMPT);
+        resource.setContent(buildPracticePrompt(step));
+        resource.setReason("Giúp bạn kiểm tra nhanh mức độ hiểu bài sau khi học xong step này");
+        resource.setAiRecommended(false);
+        resource.setSequenceNo(3);
+        return resource;
+    }
+
+    private String buildDocumentSectionContent(RoadmapStep step) {
+        List<String> parts = new ArrayList<>();
+        if (step.getSummary() != null && !step.getSummary().isBlank()) {
+            parts.add(step.getSummary());
+        }
+        if (step.getWhatToLearn() != null && !step.getWhatToLearn().isEmpty()) {
+            parts.add("Cần học: " + String.join("; ", step.getWhatToLearn()));
+        }
+        if (step.getKeyConcepts() != null && !step.getKeyConcepts().isEmpty()) {
+            parts.add("Khái niệm chính: " + String.join(", ", step.getKeyConcepts()));
+        }
+
+        String content = parts.isEmpty()
+                ? "Đọc lại phần tài liệu liên quan tới: " + step.getTitle()
+                : String.join(System.lineSeparator(), parts);
+        return truncate(content, RESOURCE_CONTENT_LENGTH);
+    }
+
+    private String buildPracticePrompt(RoadmapStep step) {
+        StringBuilder prompt = new StringBuilder()
+                .append("Sau khi học xong \"")
+                .append(step.getTitle())
+                .append("\", hãy tự làm một bài luyện tập ngắn:")
+                .append(System.lineSeparator())
+                .append("- Tóm tắt lại nội dung chính bằng 3-5 gạch đầu dòng.")
+                .append(System.lineSeparator())
+                .append("- Giải thích lại các khái niệm chính bằng lời của bạn.");
+
+        if (step.getLearningOutcomes() != null && !step.getLearningOutcomes().isEmpty()) {
+            prompt.append(System.lineSeparator())
+                    .append("- Kiểm tra kết quả: ")
+                    .append(String.join("; ", step.getLearningOutcomes()));
+        }
+        if (step.getRecommendedFocus() != null && !step.getRecommendedFocus().isEmpty()) {
+            prompt.append(System.lineSeparator())
+                    .append("- Tập trung vào: ")
+                    .append(String.join("; ", step.getRecommendedFocus()));
+        }
+
+        return truncate(prompt.toString(), RESOURCE_CONTENT_LENGTH);
     }
 
     private String toEstimatedStudyTime(Integer estimatedMinutes) {
@@ -190,6 +265,13 @@ public class RoadmapService {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3).trim() + "...";
     }
 
     private List<String> safeList(List<String> value) {
