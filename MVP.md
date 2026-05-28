@@ -9,7 +9,7 @@ Người dùng tạo một workspace cho mục tiêu học tập, upload tài li
 Giá trị chính:
 
 ```text
-Tài liệu thô -> Cấu trúc học tập -> Roadmap -> Lịch học -> Tiến độ
+Tài liệu thô -> Cấu trúc học tập -> Roadmap -> Lịch học -> Phiên học -> Tiến độ
 ```
 
 MVP cần chứng minh một vòng học tập chạy thật từ đăng nhập đến tạo workspace, xử lý tài liệu, sinh roadmap và sinh lịch học cơ bản.
@@ -34,6 +34,7 @@ Login bằng Cognito
 -> Sinh roadmap/roadmap steps
 -> Gợi ý tài nguyên học
 -> Sinh calendar tasks từ roadmap
+-> User mở study session từ calendar task
 -> User học và complete task
 -> Cập nhật progress
 ```
@@ -78,9 +79,12 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Roadmap generation API.
 - Roadmap resources cho document section, video search query và practice prompt.
 - Calendar generation API từ roadmap/onboarding.
+- Calendar AI planner dùng Gemini khi có key, fallback rule-based nếu AI lỗi hoặc dữ liệu không hợp lệ.
 - Calendar task update/complete API.
+- Calendar task response có `overdue` và `studySessionEndpoint` để FE mở màn học ngay.
+- Study session detail API để user bấm calendar task là vào màn học.
 - Study session API để start/finish phiên học thật từ calendar task.
-- Progress dashboard API gồm roadmap progress, current step, today tasks và overdue tasks.
+- Progress dashboard API gồm roadmap progress, current step, today/overdue tasks, study stats và current session.
 
 Cần rà soát tiếp:
 
@@ -333,13 +337,13 @@ Nhóm calendar/progress:
 
 - `calendar_schedule_runs`: mỗi lần sinh lịch học từ roadmap.
 - `calendar_tasks`: task học theo ngày/giờ.
+- `study_sessions`: phiên học thật của user từ calendar task.
 - `workspace_progress`: tiến độ tổng của workspace.
 
 Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
 
 - `reminders`.
 - `notifications`.
-- `study_sessions`.
 - `pomodoro_sessions`.
 
 Nhóm tạm chưa cần cho MVP hiện tại:
@@ -417,6 +421,21 @@ Calendar sinh từ roadmap:
 Roadmap steps
 -> CalendarScheduleRun
 -> CalendarTask theo ngày/giờ học
+```
+
+Nếu Gemini đã cấu hình, backend gửi draft calendar sang AI để sắp xếp ngày/giờ hợp lý hơn theo deadline, difficulty, thời lượng học và ngày rảnh. Nếu AI không sẵn sàng hoặc trả dữ liệu sai, backend dùng rule-based calendar để không làm gãy flow.
+
+Study session mở màn học từ calendar:
+
+```text
+CalendarTask
+-> Study Session Detail
+-> Roadmap step summary/key concepts/learning outcomes
+-> Practice prompt
+-> Resources
+-> Start/finish study session
+-> Complete calendar task
+-> Update progress
 ```
 
 `CalendarScheduleRun` cần giữ vì nó lưu lịch sử mỗi lần sinh lịch, giúp:
@@ -500,13 +519,16 @@ FAILED | CANCELLED
 22. Calendar task update/complete.
 23. Study session start/finish từ calendar task.
 24. Progress dashboard cho workspace.
+25. Study session detail API để mở màn học từ calendar task.
+26. Calendar AI planner với rule-based fallback.
+27. Roadmap/Calendar response rút gọn cho FE, có `overdue` và `studySessionEndpoint`.
+28. Progress dashboard có study stats, streak và current session.
 
 Làm tiếp:
 
 1. Rà soát full core flow end-to-end.
-2. Cập nhật Postman collection theo API hiện tại.
-3. Sửa lỗi core nếu phát hiện trong lúc test.
-4. Sau khi core ổn mới chọn Phase Later đầu tiên.
+2. Sửa lỗi core nếu phát hiện trong lúc test.
+3. Sau khi core ổn mới chọn Phase Later đầu tiên.
 
 Thứ tự kiểm thử trước mắt:
 
@@ -521,6 +543,7 @@ Login
 -> Confirm learning structure
 -> Generate roadmap
 -> Generate calendar
+-> Get study session detail từ calendar task
 -> Start/finish study session
 -> Check progress dashboard
 ```
@@ -559,6 +582,7 @@ Login
 -> Generate/Review Structure
 -> Generate Roadmap
 -> Generate Calendar
+-> Open Study Session
 -> Track Progress
 ```
 

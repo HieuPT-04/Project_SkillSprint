@@ -35,6 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class StudySessionService {
 
+    private static final int TITLE_LENGTH = 120;
+    private static final int SUMMARY_LENGTH = 700;
+    private static final int LIST_ITEM_LENGTH = 120;
+    private static final int MAX_LIST_ITEMS = 6;
+
     CalendarTaskRepository calendarTaskRepository;
     RoadmapStepResourceRepository roadmapStepResourceRepository;
     StudySessionRepository studySessionRepository;
@@ -112,13 +117,13 @@ public class StudySessionService {
                 .stepId(step.getStepId())
                 .chapterId(step.getChapter() == null ? null : step.getChapter().getChapterId())
                 .topicId(step.getTopic() == null ? null : step.getTopic().getTopicId())
-                .title(step.getTitle())
-                .subtitle(step.getSubtitle())
-                .summary(step.getSummary())
-                .whatToLearn(step.getWhatToLearn())
-                .keyConcepts(step.getKeyConcepts())
-                .learningOutcomes(step.getLearningOutcomes())
-                .recommendedFocus(step.getRecommendedFocus())
+                .title(truncate(step.getTitle(), TITLE_LENGTH))
+                .subtitle(truncate(step.getSubtitle(), TITLE_LENGTH))
+                .summary(truncate(step.getSummary(), SUMMARY_LENGTH))
+                .whatToLearn(compactList(step.getWhatToLearn()))
+                .keyConcepts(compactList(step.getKeyConcepts()))
+                .learningOutcomes(compactList(step.getLearningOutcomes()))
+                .recommendedFocus(compactList(step.getRecommendedFocus()))
                 .difficulty(step.getDifficulty())
                 .estimatedMinutes(step.getEstimatedMinutes())
                 .sequenceNo(step.getSequenceNo())
@@ -141,10 +146,30 @@ public class StudySessionService {
         String taskId = task.getTaskId().toString();
         return StudySessionDetailResponse.StudySessionActionsResponse.builder()
                 .canStart(!completed)
-                .canComplete(!completed)
+                .canFinish(!completed)
+                .canCompleteTask(!completed)
                 .startEndpoint("/api/calendar/tasks/" + taskId + "/sessions/start")
-                .completeEndpoint("/api/calendar/tasks/" + taskId + "/complete")
+                .finishEndpointTemplate("/api/study-sessions/{sessionId}/finish")
+                .completeTaskEndpoint("/api/calendar/tasks/" + taskId + "/complete")
                 .build();
+    }
+
+    private List<String> compactList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .limit(MAX_LIST_ITEMS)
+                .map(value -> truncate(value, LIST_ITEM_LENGTH))
+                .toList();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3).trim() + "...";
     }
 
     private CalendarTask findOwnedTask(String userId, UUID taskId) {

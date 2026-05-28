@@ -32,6 +32,8 @@ public class CalendarTaskResponse {
     CalendarTaskPriority priority;
     CalendarTaskStatus status;
     CalendarTaskSource source;
+    boolean overdue;
+    String studySessionEndpoint;
     Instant completedAt;
     Instant createdAt;
     Instant updatedAt;

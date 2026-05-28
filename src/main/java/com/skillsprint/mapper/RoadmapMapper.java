@@ -15,6 +15,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class RoadmapMapper {
 
+    static int SUMMARY_LENGTH = 700;
+    static int LIST_ITEM_LENGTH = 120;
+    static int MAX_LIST_ITEMS = 6;
+    static int RESOURCE_TEXT_LENGTH = 500;
+    static int RESOURCE_REASON_LENGTH = 220;
+    static int RESOURCE_TITLE_LENGTH = 120;
+    static int RESOURCE_QUERY_LENGTH = 180;
+
     public RoadmapResponse toResponse(
             Roadmap roadmap,
             List<RoadmapStep> steps,
@@ -29,7 +37,7 @@ public class RoadmapMapper {
                 .structureVersionId(roadmap.getStructureVersion().getStructureVersionId())
                 .currentStepId(roadmap.getCurrentStep() == null ? null : roadmap.getCurrentStep().getStepId())
                 .title(roadmap.getTitle())
-                .description(roadmap.getDescription())
+                .description(truncate(roadmap.getDescription(), SUMMARY_LENGTH))
                 .totalSteps(roadmap.getTotalSteps())
                 .completedSteps(roadmap.getCompletedSteps())
                 .progressPercent(roadmap.getProgressPercent())
@@ -51,13 +59,13 @@ public class RoadmapMapper {
                 .stepId(step.getStepId())
                 .chapterId(step.getChapter() == null ? null : step.getChapter().getChapterId())
                 .topicId(step.getTopic() == null ? null : step.getTopic().getTopicId())
-                .title(step.getTitle())
-                .subtitle(step.getSubtitle())
-                .summary(step.getSummary())
-                .whatToLearn(step.getWhatToLearn())
-                .keyConcepts(step.getKeyConcepts())
-                .learningOutcomes(step.getLearningOutcomes())
-                .recommendedFocus(step.getRecommendedFocus())
+                .title(truncate(step.getTitle(), RESOURCE_TITLE_LENGTH))
+                .subtitle(truncate(step.getSubtitle(), RESOURCE_TITLE_LENGTH))
+                .summary(truncate(step.getSummary(), SUMMARY_LENGTH))
+                .whatToLearn(compactList(step.getWhatToLearn()))
+                .keyConcepts(compactList(step.getKeyConcepts()))
+                .learningOutcomes(compactList(step.getLearningOutcomes()))
+                .recommendedFocus(compactList(step.getRecommendedFocus()))
                 .difficulty(step.getDifficulty())
                 .estimatedStudyTime(step.getEstimatedStudyTime())
                 .estimatedMinutes(step.getEstimatedMinutes())
@@ -71,16 +79,34 @@ public class RoadmapMapper {
     public RoadmapResourceResponse toResourceResponse(RoadmapStepResource resource) {
         return RoadmapResourceResponse.builder()
                 .resourceId(resource.getResourceId())
-                .title(resource.getTitle())
+                .title(truncate(resource.getTitle(), RESOURCE_TITLE_LENGTH))
                 .platform(resource.getPlatform())
                 .resourceType(resource.getResourceType())
-                .searchQuery(resource.getSearchQuery())
-                .content(resource.getContent())
+                .searchQuery(truncate(resource.getSearchQuery(), RESOURCE_QUERY_LENGTH))
+                .content(truncate(resource.getContent(), RESOURCE_TEXT_LENGTH))
                 .url(resource.getUrl())
-                .reason(resource.getReason())
+                .reason(truncate(resource.getReason(), RESOURCE_REASON_LENGTH))
                 .aiRecommended(resource.isAiRecommended())
                 .sequenceNo(resource.getSequenceNo())
                 .createdAt(resource.getCreatedAt())
                 .build();
+    }
+
+    private List<String> compactList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .limit(MAX_LIST_ITEMS)
+                .map(value -> truncate(value, LIST_ITEM_LENGTH))
+                .toList();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3).trim() + "...";
     }
 }
