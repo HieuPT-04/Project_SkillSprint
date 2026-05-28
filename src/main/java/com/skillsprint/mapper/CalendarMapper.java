@@ -4,6 +4,8 @@ import com.skillsprint.dto.response.calendar.CalendarScheduleRunResponse;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.entity.CalendarScheduleRun;
 import com.skillsprint.entity.CalendarTask;
+import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -48,9 +50,17 @@ public class CalendarMapper {
                 .priority(task.getPriority())
                 .status(task.getStatus())
                 .source(task.getSource())
+                .overdue(isOverdue(task))
+                .studySessionEndpoint("/api/calendar/tasks/" + task.getTaskId() + "/study-session")
                 .completedAt(task.getCompletedAt())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .build();
+    }
+
+    private boolean isOverdue(CalendarTask task) {
+        return task.getStatus() == CalendarTaskStatus.TODO
+                && task.getTaskDate() != null
+                && task.getTaskDate().isBefore(LocalDate.now());
     }
 }

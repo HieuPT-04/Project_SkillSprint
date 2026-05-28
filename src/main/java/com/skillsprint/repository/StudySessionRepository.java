@@ -14,8 +14,16 @@ public interface StudySessionRepository extends JpaRepository<StudySession, UUID
 
     List<StudySession> findByUserUserId(String userId);
 
+    List<StudySession> findByWorkspaceWorkspaceIdAndUserUserId(UUID workspaceId, String userId);
+
     Optional<StudySession> findFirstByCalendarTaskTaskIdAndUserUserIdAndStatus(
             UUID taskId,
+            String userId,
+            StudySessionStatus status
+    );
+
+    Optional<StudySession> findFirstByWorkspaceWorkspaceIdAndUserUserIdAndStatusOrderByStartedAtDesc(
+            UUID workspaceId,
             String userId,
             StudySessionStatus status
     );
