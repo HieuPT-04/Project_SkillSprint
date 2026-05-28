@@ -264,7 +264,7 @@ public class LearningStructureService {
             chapter.setEstimatedMinutes(estimateMinutes(chapterChunks, 30));
             chapter.setSequenceNo(i + 1);
             chapter.setSourceChunkIds(toChunkIds(chapterChunks));
-            chapter.setAiGenerated(true);
+            chapter.setAiGenerated(false);
             chapters.add(chapter);
         }
         List<Chapter> savedChapters = chapterRepository.saveAllAndFlush(chapters);
@@ -293,7 +293,7 @@ public class LearningStructureService {
                 topic.setEstimatedMinutes(estimateMinutes(section.chunks(), 15));
                 topic.setSequenceNo(topicIndex + 1);
                 topic.setSourceChunkIds(toChunkIds(section.chunks()));
-                topic.setAiGenerated(true);
+                topic.setAiGenerated(false);
                 topics.add(topic);
             }
         }
@@ -325,7 +325,7 @@ public class LearningStructureService {
             chapter.setEstimatedMinutes(Math.max(30, group.size() * 25));
             chapter.setSequenceNo(i + 1);
             chapter.setSourceChunkIds(toChunkIds(group));
-            chapter.setAiGenerated(true);
+            chapter.setAiGenerated(false);
             chapters.add(chapter);
         }
 
@@ -359,7 +359,7 @@ public class LearningStructureService {
             topic.setEstimatedMinutes(Math.max(15, chunk.getTokenCount() == null ? 20 : chunk.getTokenCount() / 8));
             topic.setSequenceNo(topicNo);
             topic.setSourceChunkIds(List.of(chunk.getChunkId().toString()));
-            topic.setAiGenerated(true);
+            topic.setAiGenerated(false);
             topics.add(topic);
         }
 
