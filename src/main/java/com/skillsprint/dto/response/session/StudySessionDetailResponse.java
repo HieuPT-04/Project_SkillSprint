@@ -55,8 +55,10 @@ public class StudySessionDetailResponse {
     @FieldDefaults(level = AccessLevel.PRIVATE)
     public static class StudySessionActionsResponse {
         boolean canStart;
-        boolean canComplete;
+        boolean canFinish;
+        boolean canCompleteTask;
         String startEndpoint;
-        String completeEndpoint;
+        String finishEndpointTemplate;
+        String completeTaskEndpoint;
     }
 }

@@ -5,7 +5,7 @@ Spring Boot backend cho SkillSprint, hệ thống học tập cá nhân hóa the
 Core MVP flow:
 
 ```text
-Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Progress
+Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Study Session -> Progress
 ```
 
 ## Stack
@@ -18,7 +18,8 @@ Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structur
 - Hibernate `ddl-auto: update` cho dev
 - AWS Cognito cho authentication
 - Cognito groups + DB roles cho authorization
-- AWS S3 presigned URL cho upload avatar/material sau này
+- AWS S3 presigned URL cho upload avatar/material
+- Gemini AI cho learning structure và calendar planning, có rule-based fallback
 
 ## Local Setup
 
@@ -236,7 +237,7 @@ PRACTICE_PROMPT  -> bài tập ngắn để tự luyện sau khi học
 
 ## Calendar Endpoints
 
-Yêu cầu token hợp lệ. Calendar được tạo một lần từ roadmap hiện tại.
+Yêu cầu token hợp lệ. Calendar được tạo một lần từ roadmap hiện tại, sau đó user chỉnh từng task thay vì regenerate tùy tiện.
 
 ```text
 POST /api/workspaces/{workspaceId}/calendar/generate
@@ -264,11 +265,21 @@ complete task -> nếu toàn bộ task của step đã xong thì roadmap step ch
 CURRENT step hoàn thành -> step tiếp theo chuyển CURRENT
 ```
 
-## Study Session Endpoints
+Nếu `GEMINI_ENABLED=true` và có `GEMINI_API_KEY`, backend sẽ dùng AI để sắp xếp lịch dựa trên roadmap + onboarding. Nếu AI lỗi hoặc trả dữ liệu không hợp lệ, backend tự dùng rule-based plan để flow vẫn chạy.
 
-Yêu cầu token hợp lệ. Study session dùng để tracking phiên học thật của user từ một calendar task.
+Một calendar task trả thêm field để FE dùng ngay:
 
 ```text
+overdue -> task TODO đã quá ngày học
+studySessionEndpoint -> URL mở màn học của task đó
+```
+
+## Study Session Endpoints
+
+Yêu cầu token hợp lệ. Study session dùng để mở màn học từ calendar task và tracking phiên học thật của user.
+
+```text
+GET /api/calendar/tasks/{taskId}/study-session
 POST /api/calendar/tasks/{taskId}/sessions/start
 POST /api/study-sessions/{sessionId}/finish
 ```
@@ -276,7 +287,11 @@ POST /api/study-sessions/{sessionId}/finish
 Flow:
 
 ```text
-User bấm Start Learning
+User bấm vào task trên Calendar
+-> backend trả study-session detail gồm task, roadmap step, summary, concepts, practice prompt, resources
+-> actions.startEndpoint dùng để bắt đầu học, actions.finishEndpointTemplate dùng sau khi start trả về sessionId
+-> FE mở màn học
+-> User bấm Start Learning
 -> backend tạo study_sessions status IN_PROGRESS
 -> user học
 -> user bấm Finish
@@ -338,4 +353,6 @@ current step
 today tasks
 overdue tasks
 total/completed task count
+study stats: totalStudyMinutes, completedSessions, currentStreakDays, lastStudyDate
+currentSession nếu user đang có phiên học IN_PROGRESS
 ```
