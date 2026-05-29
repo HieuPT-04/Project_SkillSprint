@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.skillsprint.service.subscription.QuotaService;
 
 @Service
 @RequiredArgsConstructor
@@ -27,11 +28,13 @@ public class WorkspaceService {
     StudyWorkspaceRepository workspaceRepository;
     UserRepository userRepository;
     WorkspaceMapper workspaceMapper;
+    QuotaService quotaService;
 
     @Transactional
     public WorkspaceResponse createWorkspace(String userId, CreateWorkspaceRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
+        quotaService.validateCanCreateWorkspace(userId);
 
         StudyWorkspace workspace = new StudyWorkspace();
         workspace.setUser(user);

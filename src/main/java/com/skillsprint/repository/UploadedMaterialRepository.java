@@ -8,6 +8,8 @@ import com.skillsprint.entity.UploadedMaterial;
 import com.skillsprint.enums.material.FileType;
 import com.skillsprint.enums.material.MaterialProcessingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface UploadedMaterialRepository extends JpaRepository<UploadedMaterial, UUID> {
 
@@ -32,4 +34,24 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
     );
 
     List<UploadedMaterial> findByWorkspaceWorkspaceIdAndFileType(UUID workspaceId, FileType fileType);
+
+    long countByUserUserId(String userId);
+
+    @Query("""
+        select coalesce(sum(m.fileSizeBytes), 0)
+        from UploadedMaterial m
+        where m.user.userId = :userId
+        """)
+    Long sumFileSizeByUserId(@Param("userId") String userId);
+
+    @Query("""
+        select coalesce(sum(m.fileSizeBytes), 0)
+        from UploadedMaterial m
+        where m.workspace.workspaceId = :workspaceId
+          and m.user.userId = :userId
+        """)
+    Long sumFileSizeByWorkspaceIdAndUserId(
+            @Param("workspaceId") UUID workspaceId,
+            @Param("userId") String userId
+    );
 }

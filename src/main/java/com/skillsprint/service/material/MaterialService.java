@@ -38,6 +38,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import com.skillsprint.service.subscription.QuotaService;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +61,7 @@ public class MaterialService {
     UploadedMaterialRepository uploadedMaterialRepository;
     MaterialProcessingJobRepository materialProcessingJobRepository;
     MaterialMapper materialMapper;
+    QuotaService quotaService;
 
     @Transactional(readOnly = true)
     public MaterialUploadUrlResponse createUploadUrl(
@@ -68,6 +70,7 @@ public class MaterialService {
             CreateMaterialUploadUrlRequest request
     ) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        quotaService.validateCanStartMaterialUpload(userId);
         String contentType = normalizeContentType(request.getContentType());
         FileType fileType = resolveFileType(contentType);
         String objectKey = buildMaterialObjectKey(workspace, request.getFileName(), fileType);
@@ -109,6 +112,9 @@ public class MaterialService {
         FileType fileType = resolveFileType(contentType);
         validateFileExtension(request.getFileName(), fileType);
         HeadObjectResponse headObject = getUploadedObject(objectKey);
+
+        quotaService.validateCanStartMaterialUpload(userId);
+        quotaService.validateCanConfirmMaterialUpload(userId, workspaceId, headObject.contentLength());
 
         UploadedMaterial material = new UploadedMaterial();
         material.setWorkspace(workspace);

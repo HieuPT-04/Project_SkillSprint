@@ -22,5 +22,7 @@ public interface StudyWorkspaceRepository extends JpaRepository<StudyWorkspace, 
             WorkspaceStatus status
     );
 
+    long countByUserUserIdAndStatusNot(String userId, WorkspaceStatus status);
+
     boolean existsByWorkspaceIdAndUserUserId(UUID workspaceId, String userId);
 }

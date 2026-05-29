@@ -83,7 +83,17 @@ public enum ErrorCode {
     // Common fallback
     FORBIDDEN("Bạn không có quyền thực hiện thao tác này", HttpStatus.FORBIDDEN),
     VALIDATION_ERROR("Dữ liệu không hợp lệ", HttpStatus.BAD_REQUEST),
-    INTERNAL_SERVER_ERROR("Lỗi hệ thống", HttpStatus.INTERNAL_SERVER_ERROR);
+    INTERNAL_SERVER_ERROR("Lỗi hệ thống", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Subscription / quota
+    SERVICE_PLAN_NOT_FOUND("Không tìm thấy gói dịch vụ", HttpStatus.NOT_FOUND),
+    SUBSCRIPTION_NOT_FOUND("Không tìm thấy gói đang sử dụng", HttpStatus.NOT_FOUND),
+    QUOTA_WORKSPACE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số workspace của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_UPLOAD_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số tài liệu upload của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_FILE_SIZE_LIMIT_EXCEEDED("File vượt quá giới hạn dung lượng của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_STORAGE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn dung lượng lưu trữ của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN);
+
 
     // Notification
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
