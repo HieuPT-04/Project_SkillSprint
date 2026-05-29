@@ -39,6 +39,7 @@ public class MaterialProcessingService {
 
     static int MAX_CHUNK_LENGTH = 1_800;
     static int MIN_CHUNK_LENGTH = 400;
+    static int MAX_ERROR_MESSAGE_LENGTH = 2_000;
 
     UploadedMaterialRepository uploadedMaterialRepository;
     MaterialProcessingJobRepository materialProcessingJobRepository;
@@ -247,7 +248,7 @@ public class MaterialProcessingService {
             ErrorCode errorCode,
             String message
     ) {
-        String errorMessage = message == null || message.isBlank() ? errorCode.getMessage() : message;
+        String errorMessage = normalizeErrorMessage(errorCode, message);
 
         job.setStatus(ProcessingJobStatus.FAILED);
         job.setProgressPercent(100);
@@ -266,5 +267,13 @@ public class MaterialProcessingService {
 
         log.warn("[MATERIAL] Failed job {}: {}", job.getJobId(), errorMessage);
         notificationService.notifyMaterialProcessingFailed(material, errorMessage);
+    }
+
+    private String normalizeErrorMessage(ErrorCode errorCode, String message) {
+        String errorMessage = message == null || message.isBlank() ? errorCode.getMessage() : message.trim();
+        if (errorMessage.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return errorMessage;
+        }
+        return errorMessage.substring(0, MAX_ERROR_MESSAGE_LENGTH - 3).trim() + "...";
     }
 }

@@ -58,7 +58,7 @@ public class MaterialProcessingJob extends BaseAuditEntity {
     @Column(name = "error_code", length = 100)
     private String errorCode;
 
-    @Column(name = "error_message")
+    @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     @Column(name = "retryable", nullable = false)

@@ -43,7 +43,7 @@ public class MeController {
             @Valid @RequestBody UpdateMeRequest request
     ) {
         MeResponse response = userQueryService.updateMe(jwt.getSubject(), request);
-        return ResponseEntity.ok(ApiResponse.success("Update profile successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ thành công", response));
     }
 
     @PostMapping("/me/avatar/upload-url")
@@ -62,6 +62,6 @@ public class MeController {
     ) {
         String avatarObjectKey = s3PresignedUrlService.confirmAvatarUpload(jwt.getSubject(), request);
         MeResponse response = userQueryService.updateAvatar(jwt.getSubject(), avatarObjectKey);
-        return ResponseEntity.ok(ApiResponse.success("Update avatar successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật ảnh đại diện thành công", response));
     }
 }

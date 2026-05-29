@@ -23,7 +23,7 @@ public class ApiResponse<T> {
     List<FieldErrorDetail> errors;
 
     public static <T> ApiResponse<T> success(T data) {
-        return success("Success", data);
+        return success("Thành công", data);
     }
 
     public static <T> ApiResponse<T> success(String message, T data) {

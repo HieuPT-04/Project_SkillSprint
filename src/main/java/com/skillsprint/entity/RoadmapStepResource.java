@@ -48,13 +48,16 @@ public class RoadmapStepResource {
     @Column(name = "resource_type", length = 50)
     private ResourceType resourceType;
 
-    @Column(name = "search_query")
+    @Column(name = "search_query", columnDefinition = "TEXT")
     private String searchQuery;
 
-    @Column(name = "url")
+    @Column(name = "content", columnDefinition = "TEXT")
+    private String content;
+
+    @Column(name = "url", columnDefinition = "TEXT")
     private String url;
 
-    @Column(name = "reason")
+    @Column(name = "reason", columnDefinition = "TEXT")
     private String reason;
 
     @Column(name = "is_ai_recommended", nullable = false)

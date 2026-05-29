@@ -53,7 +53,7 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserStatusRequest request
     ) {
         AdminUserResponse response = adminUserService.updateUserStatus(userId, request);
-        return ResponseEntity.ok(ApiResponse.success("Update user status successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái người dùng thành công", response));
     }
 
     @PatchMapping("/{userId}/roles")
@@ -63,6 +63,6 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
         AdminUserResponse response = adminUserService.updateUserRole(userId, request);
-        return ResponseEntity.ok(ApiResponse.success("Update user role successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật vai trò người dùng thành công", response));
     }
 }

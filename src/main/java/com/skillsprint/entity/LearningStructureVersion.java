@@ -2,6 +2,7 @@ package com.skillsprint.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.enums.learningstructure.GeneratedBy;
@@ -61,12 +62,12 @@ public class LearningStructureVersion {
     @Column(name = "confidence_score", precision = 5, scale = 2)
     private BigDecimal confidenceScore;
 
-    @Column(name = "input_summary")
+    @Column(name = "input_summary", columnDefinition = "TEXT")
     private String inputSummary;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "warnings")
-    private String warnings;
+    private List<String> warnings;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

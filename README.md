@@ -5,7 +5,7 @@ Spring Boot backend cho SkillSprint, hệ thống học tập cá nhân hóa the
 Core MVP flow:
 
 ```text
-Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Progress
+Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Study Session -> Progress
 ```
 
 ## Stack
@@ -18,7 +18,8 @@ Auth -> User Profile -> Workspace -> Onboarding -> Material -> Learning Structur
 - Hibernate `ddl-auto: update` cho dev
 - AWS Cognito cho authentication
 - Cognito groups + DB roles cho authorization
-- AWS S3 presigned URL cho upload avatar/material sau này
+- AWS S3 presigned URL cho upload avatar/material
+- Gemini AI cho learning structure và calendar planning, có rule-based fallback
 
 ## Local Setup
 
@@ -46,6 +47,12 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_S3_BUCKET=your-bucket-name
 AWS_S3_PUBLIC_BASE_URL=https://your-bucket-name.s3.ap-southeast-1.amazonaws.com
 AWS_S3_UPLOAD_URL_EXPIRATION_MINUTES=10
+
+GEMINI_ENABLED=true
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+GEMINI_MAX_INPUT_CHARS=18000
 ```
 
 Không commit `.env`.
@@ -197,6 +204,102 @@ Material upload flow:
 
 Nếu PDF là ảnh scan hoặc file không có text, job sẽ chuyển sang `FAILED` và trả `errorMessage` rõ ràng để FE hiển thị.
 
+## Learning Structure Endpoints
+
+Yêu cầu token hợp lệ. User chỉ tạo/xem/confirm learning structure trong workspace của chính mình.
+
+```text
+POST /api/workspaces/{workspaceId}/learning-structure/generate
+GET /api/workspaces/{workspaceId}/learning-structure
+POST /api/workspaces/{workspaceId}/learning-structure/confirm
+```
+
+Learning structure ưu tiên dùng Gemini nếu có `GEMINI_API_KEY`. Nếu thiếu key, AI lỗi hoặc trả dữ liệu không hợp lệ, backend tự fallback về rule-based generator từ `material_chunks` để flow vẫn chạy được.
+
+## Roadmap Endpoints
+
+Yêu cầu token hợp lệ. Roadmap được tạo sau khi learning structure đã confirm.
+
+```text
+POST /api/workspaces/{workspaceId}/roadmaps/generate
+GET /api/workspaces/{workspaceId}/roadmaps/current
+```
+
+Roadmap step đầu tiên có status `CURRENT`, các step sau là `UPCOMING`. User vẫn có thể xem toàn bộ step, status chỉ dùng để biết tiến độ hiện tại.
+
+Mỗi roadmap step hiện có 3 resource để FE render màn học:
+
+```text
+DOCUMENT_SECTION -> nội dung gốc liên quan từ topic/step
+SEARCH_QUERY     -> link tìm video YouTube
+PRACTICE_PROMPT  -> bài tập ngắn để tự luyện sau khi học
+```
+
+## Calendar Endpoints
+
+Yêu cầu token hợp lệ. Calendar được tạo một lần từ roadmap hiện tại, sau đó user chỉnh từng task thay vì regenerate tùy tiện.
+
+```text
+POST /api/workspaces/{workspaceId}/calendar/generate
+GET /api/workspaces/{workspaceId}/calendar/tasks
+PATCH /api/calendar/tasks/{taskId}
+PATCH /api/calendar/tasks/{taskId}/complete
+```
+
+Calendar generate có thể nhận body rỗng `{}`. Khi đó backend lấy setup từ onboarding:
+
+```text
+preferredDays -> ngày học trong tuần
+preferredTimeSlots -> giờ bắt đầu và độ dài buổi học
+studyHoursPerWeek -> số buổi học mỗi ngày mặc định
+targetDeadline -> nếu deadline gần thì tăng số buổi/ngày trong các ngày đã chọn
+```
+
+Luật chia lịch hiện tại:
+
+```text
+estimatedMinutes lớn -> tách thành nhiều calendar task
+difficulty HARD -> cộng thêm thời lượng học
+includeReviewSessions=true -> thêm task ôn tập sau mỗi chapter
+complete task -> nếu toàn bộ task của step đã xong thì roadmap step chuyển COMPLETED
+CURRENT step hoàn thành -> step tiếp theo chuyển CURRENT
+```
+
+Nếu `GEMINI_ENABLED=true` và có `GEMINI_API_KEY`, backend sẽ dùng AI để sắp xếp lịch dựa trên roadmap + onboarding. Nếu AI lỗi hoặc trả dữ liệu không hợp lệ, backend tự dùng rule-based plan để flow vẫn chạy.
+
+Một calendar task trả thêm field để FE dùng ngay:
+
+```text
+overdue -> task TODO đã quá ngày học
+studySessionEndpoint -> URL mở màn học của task đó
+```
+
+## Study Session Endpoints
+
+Yêu cầu token hợp lệ. Study session dùng để mở màn học từ calendar task và tracking phiên học thật của user.
+
+```text
+GET /api/calendar/tasks/{taskId}/study-session
+POST /api/calendar/tasks/{taskId}/sessions/start
+POST /api/study-sessions/{sessionId}/finish
+```
+
+Flow:
+
+```text
+User bấm vào task trên Calendar
+-> backend trả study-session detail gồm task, roadmap step, summary, concepts, practice prompt, resources
+-> actions.startEndpoint dùng để bắt đầu học, actions.finishEndpointTemplate dùng sau khi start trả về sessionId
+-> FE mở màn học
+-> User bấm Start Learning
+-> backend tạo study_sessions status IN_PROGRESS
+-> user học
+-> user bấm Finish
+-> backend lưu endedAt, durationMinutes, notes, focusScore
+-> backend tự complete calendar task
+-> roadmap progress được cập nhật theo calendar task
+```
+
 ## API Response
 
 Success:
@@ -205,7 +308,7 @@ Success:
 {
   "success": true,
   "code": 200,
-  "message": "Success",
+  "message": "Thành công",
   "data": {}
 }
 ```
@@ -226,10 +329,30 @@ Error:
 Theo MVP, phần tiếp theo nên làm:
 
 ```text
-Material Processing Job Runner
--> Extract/Chunk Material
--> Learning Structure
--> Roadmap
--> Calendar
--> Progress
+Full core flow E2E verification
+```
+
+Core hiện đã có Auth, Workspace, Onboarding, Material, Learning Structure, Roadmap, Calendar, Study Session và Progress.
+Trước khi qua Phase Later, cần test lại full flow bằng Postman và chỉ sửa lỗi làm gãy core.
+
+Calendar hiện chỉ generate một lần từ roadmap. Sau khi đã có lịch, user chỉnh lịch bằng cách dời từng calendar task thay vì regenerate roadmap/lịch tùy tiện.
+
+## Progress Endpoint
+
+Yêu cầu token hợp lệ. API này gom dữ liệu để FE làm màn hình dashboard học tập.
+
+```text
+GET /api/workspaces/{workspaceId}/progress
+```
+
+Response gồm:
+
+```text
+roadmap progress
+current step
+today tasks
+overdue tasks
+total/completed task count
+study stats: totalStudyMinutes, completedSessions, currentStreakDays, lastStudyDate
+currentSession nếu user đang có phiên học IN_PROGRESS
 ```

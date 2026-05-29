@@ -51,6 +51,6 @@ public class NotificationLog {
     @Column(name = "sent_at")
     private Instant sentAt;
 
-    @Column(name = "error_message")
+    @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 }

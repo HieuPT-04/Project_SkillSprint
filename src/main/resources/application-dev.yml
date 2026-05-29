@@ -37,3 +37,10 @@ app:
     access-key-id: ${AWS_ACCESS_KEY_ID:}
     secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
     upload-url-expiration-minutes: ${AWS_S3_UPLOAD_URL_EXPIRATION_MINUTES:10}
+  ai:
+    gemini:
+      enabled: ${GEMINI_ENABLED:true}
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+      max-input-chars: ${GEMINI_MAX_INPUT_CHARS:18000}

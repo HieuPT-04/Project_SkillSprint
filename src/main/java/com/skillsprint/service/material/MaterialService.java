@@ -8,6 +8,7 @@ import com.skillsprint.dto.response.material.UploadedMaterialResponse;
 import com.skillsprint.entity.MaterialProcessingJob;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.entity.UploadedMaterial;
+import com.skillsprint.entity.User;
 import com.skillsprint.enums.material.FileType;
 import com.skillsprint.enums.material.MaterialProcessingStatus;
 import com.skillsprint.enums.material.ProcessingJobStatus;
@@ -19,6 +20,7 @@ import com.skillsprint.mapper.MaterialMapper;
 import com.skillsprint.repository.MaterialProcessingJobRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.UploadedMaterialRepository;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -65,10 +67,10 @@ public class MaterialService {
             UUID workspaceId,
             CreateMaterialUploadUrlRequest request
     ) {
-        findOwnedWorkspace(userId, workspaceId);
+        StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
         String contentType = normalizeContentType(request.getContentType());
         FileType fileType = resolveFileType(contentType);
-        String objectKey = buildMaterialObjectKey(userId, workspaceId, request.getFileName(), fileType);
+        String objectKey = buildMaterialObjectKey(workspace, request.getFileName(), fileType);
         Duration signatureDuration = Duration.ofMinutes(s3Properties.uploadUrlExpirationMinutes());
         Instant expiresAt = Instant.now().plus(signatureDuration);
 
@@ -176,19 +178,30 @@ public class MaterialService {
     }
 
     private void validateObjectKeyOwner(String userId, UUID workspaceId, String objectKey) {
-        String expectedPrefix = "users/%s/workspaces/%s/materials/".formatted(userId, workspaceId);
+        String expectedPrefix = "users/%s-".formatted(userId);
+        String expectedWorkspaceSegment = "/workspaces/%s-".formatted(workspaceId);
         if (!objectKey.startsWith(expectedPrefix)) {
+            throw new AppException(ErrorCode.INVALID_MATERIAL_OBJECT_KEY);
+        }
+        if (!objectKey.contains(expectedWorkspaceSegment)) {
             throw new AppException(ErrorCode.INVALID_MATERIAL_OBJECT_KEY);
         }
     }
 
-    private String buildMaterialObjectKey(String userId, UUID workspaceId, String fileName, FileType fileType) {
+    private String buildMaterialObjectKey(StudyWorkspace workspace, String fileName, FileType fileType) {
         validateFileExtension(fileName, fileType);
-        return "users/%s/workspaces/%s/materials/%s.%s".formatted(
-                userId,
-                workspaceId,
+        User user = workspace.getUser();
+        String userLabel = sanitizeForObjectKey(user.getFullName());
+        String workspaceLabel = sanitizeForObjectKey(workspace.getName());
+        String safeFileName = sanitizeForObjectKey(fileName);
+
+        return "users/%s-%s/workspaces/%s-%s/materials/%s-%s".formatted(
+                user.getUserId(),
+                userLabel,
+                workspace.getWorkspaceId(),
+                workspaceLabel,
                 UUID.randomUUID(),
-                fileType.name().toLowerCase()
+                safeFileName
         );
     }
 
@@ -214,5 +227,21 @@ public class MaterialService {
 
     private String buildFileUrl(String objectKey) {
         return s3Properties.publicBaseUrl().replaceAll("/+$", "") + "/" + objectKey;
+    }
+
+    private String sanitizeForObjectKey(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+
+        String normalized = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+
+        String sanitized = normalized.toLowerCase()
+                .replaceAll("[^a-z0-9.]+", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
+
+        return sanitized.isBlank() ? "unknown" : sanitized;
     }
 }

@@ -34,13 +34,13 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
         return ResponseEntity.status(201)
-                .body(ApiResponse.created("Register successfully. Please check your email for confirmation code.", null));
+                .body(ApiResponse.created("Đăng ký thành công. Vui lòng kiểm tra email để lấy mã xác thực", null));
     }
 
     @PostMapping("/confirm-register")
     public ResponseEntity<ApiResponse<Void>> confirmRegister(@Valid @RequestBody ConfirmRegisterRequest request) {
         authService.confirmRegister(request);
-        return ResponseEntity.ok(ApiResponse.success("Confirm register successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Xác thực tài khoản thành công", null));
     }
 
     @PostMapping("/resend-confirmation-code")
@@ -48,13 +48,13 @@ public class AuthController {
             @Valid @RequestBody ResendConfirmationCodeRequest request
     ) {
         authService.resendConfirmationCode(request);
-        return ResponseEntity.ok(ApiResponse.success("Confirmation code has been sent again", null));
+        return ResponseEntity.ok(ApiResponse.success("Mã xác thực đã được gửi lại", null));
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("Reset code has been sent to your email", null));
+        return ResponseEntity.ok(ApiResponse.success("Mã đặt lại mật khẩu đã được gửi tới email", null));
     }
 
     @PostMapping("/confirm-forgot-password")
@@ -62,13 +62,13 @@ public class AuthController {
             @Valid @RequestBody ConfirmForgotPasswordRequest request
     ) {
         authService.confirmForgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("Password has been reset successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công", null));
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
-        String message = response.getChallengeName() == null ? "Login successfully" : "New password required";
+        String message = response.getChallengeName() == null ? "Đăng nhập thành công" : "Cần đổi mật khẩu mới";
         return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 
@@ -77,7 +77,7 @@ public class AuthController {
             @Valid @RequestBody CompleteNewPasswordRequest request
     ) {
         AuthResponse response = authService.completeNewPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", response));
     }
 
     @PostMapping("/logout")
@@ -85,6 +85,6 @@ public class AuthController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader
     ) {
         authService.logout(authorizationHeader);
-        return ResponseEntity.ok(ApiResponse.success("Logout successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công", null));
     }
 }

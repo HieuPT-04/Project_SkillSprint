@@ -14,6 +14,34 @@ public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID
 
     List<CalendarTask> findByUserUserId(String userId);
 
+    List<CalendarTask> findByWorkspaceWorkspaceIdAndUserUserIdOrderByTaskDateAscStartTimeAscCreatedAtAsc(
+            UUID workspaceId,
+            String userId
+    );
+
+    List<CalendarTask> findByWorkspaceWorkspaceIdAndUserUserIdAndTaskDateOrderByStartTimeAscCreatedAtAsc(
+            UUID workspaceId,
+            String userId,
+            LocalDate taskDate
+    );
+
+    List<CalendarTask> findByWorkspaceWorkspaceIdAndUserUserIdAndStatusAndTaskDateBeforeOrderByTaskDateAscStartTimeAscCreatedAtAsc(
+            UUID workspaceId,
+            String userId,
+            CalendarTaskStatus status,
+            LocalDate taskDate
+    );
+
+    List<CalendarTask> findByRoadmapRoadmapIdAndStatusNot(
+            UUID roadmapId,
+            CalendarTaskStatus status
+    );
+
+    List<CalendarTask> findByRoadmapStepStepIdAndStatusNot(
+            UUID stepId,
+            CalendarTaskStatus status
+    );
+
     List<CalendarTask> findByWorkspaceWorkspaceIdAndTaskDate(UUID workspaceId, LocalDate taskDate);
 
     List<CalendarTask> findByWorkspaceWorkspaceIdAndStatus(UUID workspaceId, CalendarTaskStatus status);

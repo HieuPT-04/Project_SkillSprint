@@ -44,7 +44,7 @@ public class Chapter extends BaseAuditEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
-    @Column(name = "summary")
+    @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;
 
     @JdbcTypeCode(SqlTypes.JSON)

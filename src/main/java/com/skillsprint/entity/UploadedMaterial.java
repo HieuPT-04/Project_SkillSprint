@@ -73,7 +73,7 @@ public class UploadedMaterial {
     @Column(name = "processing_status", nullable = false, length = 30)
     private MaterialProcessingStatus processingStatus = MaterialProcessingStatus.PENDING;
 
-    @Column(name = "error_message")
+    @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     @CreationTimestamp

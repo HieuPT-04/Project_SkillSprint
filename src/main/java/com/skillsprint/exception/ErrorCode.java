@@ -33,6 +33,28 @@ public enum ErrorCode {
     ONBOARDING_WRITE_FAILED("Không thể xử lý dữ liệu onboarding", HttpStatus.INTERNAL_SERVER_ERROR),
     ONBOARDING_READ_FAILED("Không thể đọc dữ liệu onboarding", HttpStatus.INTERNAL_SERVER_ERROR),
 
+    // Learning structure
+    LEARNING_STRUCTURE_NOT_FOUND("Không tìm thấy learning structure", HttpStatus.NOT_FOUND),
+    LEARNING_STRUCTURE_ALREADY_CONFIRMED("Learning structure đã được xác nhận", HttpStatus.BAD_REQUEST),
+    LEARNING_STRUCTURE_NOT_CONFIRMED("Learning structure chưa được xác nhận", HttpStatus.BAD_REQUEST),
+    MATERIAL_CHUNKS_NOT_READY("Chưa có material chunks đã xử lý để tạo learning structure", HttpStatus.BAD_REQUEST),
+    LEARNING_STRUCTURE_GENERATION_FAILED("Không thể tạo learning structure", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Roadmap
+    ROADMAP_NOT_FOUND("Không tìm thấy roadmap", HttpStatus.NOT_FOUND),
+    ROADMAP_CONFIRMED_STRUCTURE_REQUIRED("Cần xác nhận learning structure trước khi tạo roadmap", HttpStatus.BAD_REQUEST),
+    ROADMAP_TOPICS_NOT_READY("Learning structure chưa có topic để tạo roadmap", HttpStatus.BAD_REQUEST),
+    ROADMAP_GENERATION_FAILED("Không thể tạo roadmap", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Calendar
+    CALENDAR_ROADMAP_REQUIRED("Cần tạo roadmap trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+    CALENDAR_ALREADY_GENERATED("Lịch học đã được tạo, vui lòng dời từng buổi học thay vì tạo lại", HttpStatus.CONFLICT),
+    CALENDAR_TASK_NOT_FOUND("Không tìm thấy calendar task", HttpStatus.NOT_FOUND),
+    CALENDAR_INVALID_TIME_RANGE("Giờ kết thúc phải sau giờ bắt đầu", HttpStatus.BAD_REQUEST),
+    CALENDAR_STUDY_DAYS_REQUIRED("Cần chọn ít nhất một ngày học trong tuần", HttpStatus.BAD_REQUEST),
+    CALENDAR_TIME_SLOT_REQUIRED("Cần chọn khung giờ học trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+    CALENDAR_ONBOARDING_REQUIRED("Cần setup onboarding trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
+
     // Avatar / S3
     INVALID_AVATAR_CONTENT_TYPE("Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),
     INVALID_AVATAR_FILE_EXTENSION("Tên file ảnh phải có đuôi JPG, PNG hoặc WEBP", HttpStatus.BAD_REQUEST),
@@ -48,6 +70,10 @@ public enum ErrorCode {
     MATERIAL_PROCESSING_JOB_NOT_FOUND("Không tìm thấy job xử lý tài liệu", HttpStatus.NOT_FOUND),
     MATERIAL_TEXT_EMPTY("Không đọc được nội dung tài liệu. File có thể là ảnh scan hoặc không chứa văn bản", HttpStatus.BAD_REQUEST),
     MATERIAL_PROCESSING_FAILED("Không thể xử lý tài liệu", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // Study session
+    STUDY_SESSION_NOT_FOUND("Không tìm thấy phiên học", HttpStatus.NOT_FOUND),
+    STUDY_SESSION_TASK_ALREADY_COMPLETED("Task học này đã hoàn thành", HttpStatus.CONFLICT),
 
     // Cognito
     COGNITO_ATTRIBUTE_MISSING("Thiếu thông tin người dùng từ Cognito", HttpStatus.BAD_GATEWAY),
