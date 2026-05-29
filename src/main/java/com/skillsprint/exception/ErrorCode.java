@@ -103,6 +103,9 @@ public enum ErrorCode {
     PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST);
 
 
+    // Notification
+    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+
     private final String message;
     private final HttpStatus status;
 }

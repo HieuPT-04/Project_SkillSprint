@@ -123,6 +123,7 @@ public class CalendarService {
 
         savedRun.setEndDate(tasks.get(tasks.size() - 1).getTaskDate());
         CalendarScheduleRun updatedRun = scheduleRunRepository.saveAndFlush(savedRun);
+        notificationService.notifyCalendarReady(workspace.getUser(), workspace);
         return calendarMapper.toScheduleRunResponse(updatedRun, tasks);
     }
 
@@ -206,6 +207,7 @@ public class CalendarService {
                         : request.getStudyDays()
         );
         LocalDate startDate = request.getStartDate() == null ? LocalDate.now() : request.getStartDate();
+        LocalDate endDate = request.getEndDate();
         LocalTime dailyStartTime = request.getDailyStartTime() == null ? firstTimeWindow.startTime() : request.getDailyStartTime();
         int sessionMinutes = resolveSessionMinutes(request, firstTimeWindow);
         int sessionsPerDay = defaultPositive(
@@ -362,17 +364,14 @@ public class CalendarService {
     }
 
     private int resolveSessionsPerDay(ScheduleConfig config, int taskCount) {
-        if (config.targetDeadline() == null || config.targetDeadline().isBefore(config.startDate())) {
+        int totalAvailableStudyDays = resolveAvailableStudyDayCount(config, taskCount);
+        if (totalAvailableStudyDays <= 0) {
             return config.sessionsPerDay();
         }
 
-        int studyDayCount = countStudyDays(config.startDate(), config.targetDeadline(), config.studyDays());
-        if (studyDayCount == 0) {
-            return config.sessionsPerDay();
-        }
-
-        int requiredSessionsPerDay = (int) Math.ceil((double) taskCount / studyDayCount);
-        return Math.min(Math.max(config.sessionsPerDay(), requiredSessionsPerDay), MAX_SESSIONS_PER_DAY);
+        double density = (double) taskCount / totalAvailableStudyDays;
+        int calculatedTasksPerDay = Math.max(1, (int) Math.ceil(density));
+        return Math.min(calculatedTasksPerDay, config.sessionsPerDay());
     }
 
     private CalendarScheduleRun createScheduleRun(
@@ -398,31 +397,120 @@ public class CalendarService {
 
     private List<PlannedTask> buildRuleBasedPlan(List<TaskDraft> drafts, ScheduleConfig config) {
         List<PlannedTask> plannedTasks = new ArrayList<>();
-        LocalDate currentDate = config.startDate();
-        int sessionsUsedToday = 0;
+        if (drafts.isEmpty()) {
+            return plannedTasks;
+        }
 
-        for (TaskDraft draft : drafts) {
-            while (!config.studyDays().contains(toWeekDay(currentDate))
-                    || sessionsUsedToday >= config.sessionsPerDay()) {
-                currentDate = currentDate.plusDays(1);
-                sessionsUsedToday = 0;
+        List<LocalDate> studyDates = resolveStudyDates(config, drafts.size());
+        if (studyDates.isEmpty()) {
+            throw new AppException(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED);
+        }
+
+        int maxSessionsPerDay = resolveSessionsPerDay(config, drafts.size());
+        int[] sessionsUsedByDay = new int[studyDates.size()];
+
+        for (int i = 0; i < drafts.size(); i++) {
+            TaskDraft draft = drafts.get(i);
+            int preferredDayIndex = resolvePreferredStudyDayIndex(i, drafts.size(), studyDates.size());
+            int dayIndex = findNextAvailableStudyDayIndex(preferredDayIndex, sessionsUsedByDay, maxSessionsPerDay);
+
+            if (dayIndex < 0) {
+                dayIndex = findNextAvailableStudyDayIndex(preferredDayIndex - 1, sessionsUsedByDay, maxSessionsPerDay);
+            }
+            if (dayIndex < 0) {
+                throw new AppException(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED);
             }
 
-            LocalTime startTime = config.dailyStartTime().plusMinutes((long) sessionsUsedToday * config.sessionMinutes());
+            int sessionIndexInDay = sessionsUsedByDay[dayIndex];
+            LocalDate taskDate = studyDates.get(dayIndex);
+            LocalTime startTime = config.dailyStartTime().plusMinutes((long) sessionIndexInDay * config.sessionMinutes());
             LocalTime endTime = startTime.plusMinutes(config.sessionMinutes());
 
             plannedTasks.add(new PlannedTask(
                     draft,
-                    currentDate,
+                    taskDate,
                     startTime,
                     endTime,
                     config.sessionMinutes(),
                     CalendarTaskSource.SYSTEM_GENERATED
             ));
-            sessionsUsedToday++;
+            sessionsUsedByDay[dayIndex]++;
         }
 
         return plannedTasks;
+    }
+
+    private int resolveAvailableStudyDayCount(ScheduleConfig config, int taskCount) {
+        return resolveStudyDates(config, taskCount).size();
+    }
+
+    private List<LocalDate> resolveStudyDates(ScheduleConfig config, int taskCount) {
+        LocalDate endDate = resolvePlanningEndDate(config, taskCount);
+        List<LocalDate> studyDates = new ArrayList<>();
+        LocalDate cursor = config.startDate();
+
+        while (!cursor.isAfter(endDate)) {
+            if (config.studyDays().contains(toWeekDay(cursor))) {
+                studyDates.add(cursor);
+            }
+            cursor = cursor.plusDays(1);
+        }
+
+        return studyDates;
+    }
+
+    private LocalDate resolvePlanningEndDate(ScheduleConfig config, int taskCount) {
+        if (config.endDate() != null && config.endDate().isAfter(config.startDate())) {
+            return config.endDate();
+        }
+
+        if (config.targetDeadline() != null && config.targetDeadline().isAfter(config.startDate())) {
+            return config.targetDeadline();
+        }
+
+        return config.startDate().plusDays(30);
+    }
+
+    private LocalDate addStudyDays(LocalDate startDate, int studyDayOffset, Set<WeekDay> studyDays) {
+        LocalDate cursor = startDate;
+        int matchedStudyDays = 0;
+
+        while (matchedStudyDays < studyDayOffset) {
+            cursor = cursor.plusDays(1);
+            if (studyDays.contains(toWeekDay(cursor))) {
+                matchedStudyDays++;
+            }
+        }
+
+        return cursor;
+    }
+
+    private int resolvePreferredStudyDayIndex(int taskIndex, int totalTasks, int totalStudyDays) {
+        if (totalTasks <= 1 || totalStudyDays <= 1) {
+            return 0;
+        }
+
+        double normalizedPosition = (double) taskIndex / (totalTasks - 1);
+        return Math.min(
+                totalStudyDays - 1,
+                Math.max(0, (int) Math.round(normalizedPosition * (totalStudyDays - 1)))
+        );
+    }
+
+    private int findNextAvailableStudyDayIndex(int preferredDayIndex, int[] sessionsUsedByDay, int maxSessionsPerDay) {
+        for (int i = Math.max(0, preferredDayIndex); i < sessionsUsedByDay.length; i++) {
+            if (sessionsUsedByDay[i] < maxSessionsPerDay) {
+                return i;
+            }
+        }
+
+        for (int i = Math.min(preferredDayIndex - 1, sessionsUsedByDay.length - 1); i >= 0; i--) {
+            if (sessionsUsedByDay[i] < maxSessionsPerDay) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private List<CalendarTask> createTasks(
@@ -795,5 +883,6 @@ public class CalendarService {
             int durationMinutes,
             CalendarTaskSource source
     ) {
+            LocalDate endDate,
     }
 }

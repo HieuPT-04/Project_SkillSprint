@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import com.skillsprint.service.notification.NotificationService;
 
 @Slf4j
 @Service
@@ -47,6 +48,7 @@ public class MaterialProcessingService {
     MaterialTextExtractor materialTextExtractor;
     MaterialMapper materialMapper;
     S3Client s3Client;
+    NotificationService notificationService;
 
     @Scheduled(fixedDelayString = "${app.material.processing.fixed-delay-ms:10000}")
     @Transactional
@@ -109,6 +111,7 @@ public class MaterialProcessingService {
             material.setErrorMessage(null);
 
             log.info("[MATERIAL] Completed job {} with {} chunks", job.getJobId(), chunks.size());
+            notificationService.notifyMaterialProcessingCompleted(material);
         } catch (AppException ex) {
             failJob(job, material, null, ex.getErrorCode(), ex.getMessage());
         } catch (Exception ex) {
@@ -263,6 +266,7 @@ public class MaterialProcessingService {
         }
 
         log.warn("[MATERIAL] Failed job {}: {}", job.getJobId(), errorMessage);
+        notificationService.notifyMaterialProcessingFailed(material, errorMessage);
     }
 
     private String normalizeErrorMessage(ErrorCode errorCode, String message) {

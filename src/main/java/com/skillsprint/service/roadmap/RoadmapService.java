@@ -74,6 +74,7 @@ public class RoadmapService {
         List<RoadmapStepResource> resources = roadmapStepResourceRepository
                 .saveAllAndFlush(createResources(steps));
 
+        notificationService.notifyRoadmapReady(workspace.getUser(), workspace);
         return roadmapMapper.toResponse(updatedRoadmap, steps, resources);
     }
 
