@@ -120,6 +120,7 @@ public class CalendarService {
 
         savedRun.setEndDate(tasks.get(tasks.size() - 1).getTaskDate());
         CalendarScheduleRun updatedRun = scheduleRunRepository.saveAndFlush(savedRun);
+        notificationService.notifyCalendarReady(workspace.getUser(), workspace);
         return calendarMapper.toScheduleRunResponse(updatedRun, tasks);
     }
 

@@ -55,7 +55,7 @@ public class NotificationService {
     public NotificationResponse markAsRead(String userId, UUID notificationId) {
         Notification notification = notificationRepository
                 .findByNotificationIdAndUserUserId(notificationId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không tìm thấy notification"));
+                .orElseThrow(() -> new AppException(ErrorCode.NOTIFICATION_NOT_FOUND));
 
         if (!notification.isRead()) {
             notification.setRead(true);
