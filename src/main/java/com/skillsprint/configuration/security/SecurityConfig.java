@@ -31,7 +31,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/health",
-            "/api/auth/**"
+            "/api/auth/**",
+            "/ws/**"
     };
 
     @Bean

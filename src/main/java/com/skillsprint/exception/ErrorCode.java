@@ -85,6 +85,9 @@ public enum ErrorCode {
     VALIDATION_ERROR("Dữ liệu không hợp lệ", HttpStatus.BAD_REQUEST),
     INTERNAL_SERVER_ERROR("Lỗi hệ thống", HttpStatus.INTERNAL_SERVER_ERROR);
 
+    // Notification
+    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+
     private final String message;
     private final HttpStatus status;
 }
