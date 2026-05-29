@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.skillsprint.service.subscription.QuotaService;
 
 @Service
 @RequiredArgsConstructor
@@ -55,10 +56,12 @@ public class LearningStructureService {
     TopicRepository topicRepository;
     LearningStructureMapper learningStructureMapper;
     GeminiLearningStructureClient geminiLearningStructureClient;
+    QuotaService quotaService;
 
     @Transactional
     public LearningStructureResponse generate(String userId, UUID workspaceId) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        quotaService.validateCanGenerateAi(userId);
         List<MaterialChunk> chunks = materialChunkRepository
                 .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspaceId);
 

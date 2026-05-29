@@ -60,6 +60,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.skillsprint.service.subscription.QuotaService;
 
 @Service
 @RequiredArgsConstructor
@@ -84,6 +85,7 @@ public class CalendarService {
     CalendarMapper calendarMapper;
     GeminiCalendarPlannerClient geminiCalendarPlannerClient;
     ObjectMapper objectMapper;
+    QuotaService quotaService;
 
     @Transactional
     public CalendarScheduleRunResponse generate(
@@ -92,6 +94,7 @@ public class CalendarService {
             GenerateCalendarRequest request
     ) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        quotaService.validateCanGenerateAi(userId);
         Roadmap roadmap = roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspaceId)
                 .orElseThrow(() -> new AppException(ErrorCode.CALENDAR_ROADMAP_REQUIRED));
         List<RoadmapStep> steps = roadmapStepRepository

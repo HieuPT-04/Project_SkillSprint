@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import com.skillsprint.service.subscription.SubscriptionService;
 
 @Service
 @Slf4j
@@ -40,6 +41,7 @@ public class AuthService {
     CognitoProperties cognitoProperties;
     UserSyncService userSyncService;
     AuthMapper authMapper;
+    SubscriptionService subscriptionService;
 
     public void register(RegisterRequest request) {
         String email = request.getEmail().trim().toLowerCase();
@@ -146,7 +148,8 @@ public class AuthService {
                             .username(email)
                             .build()
             );
-            syncLocalUser(cognitoUser, RoleName.LEARNER, email);
+            User user = syncLocalUser(cognitoUser, RoleName.LEARNER, email);
+            subscriptionService.ensureDefaultFreeSubscription(user);
         } catch (CodeMismatchException | ExpiredCodeException ex) {
             throw new AppException(ErrorCode.INVALID_CONFIRMATION_CODE);
         } catch (CognitoIdentityProviderException ex) {
@@ -179,6 +182,7 @@ public class AuthService {
 
             User user = syncLocalUserByEmail(email);
             ensureActiveUser(user);
+            subscriptionService.ensureDefaultFreeSubscription(user);
             return authMapper.toAuthResponse(response.authenticationResult());
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);

@@ -14,4 +14,6 @@ public interface CalendarScheduleRunRepository extends JpaRepository<CalendarSch
     List<CalendarScheduleRun> findByRoadmapRoadmapId(UUID roadmapId);
 
     Optional<CalendarScheduleRun> findTopByWorkspaceWorkspaceIdOrderByCreatedAtDesc(UUID workspaceId);
+
+    long countByUserUserId(String userId);
 }

@@ -55,4 +55,10 @@ public class ServicePlan {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "max_workspaces")
+    private Integer maxWorkspaces = 1;
+
+    @Column(name = "max_uploads")
+    private Integer maxUploads = 5;
 }
