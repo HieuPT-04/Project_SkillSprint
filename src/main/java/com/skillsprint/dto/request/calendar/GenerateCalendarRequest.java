@@ -19,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 public class GenerateCalendarRequest {
 
     LocalDate startDate;
+    LocalDate endDate;
 
     List<WeekDay> studyDays;
 
