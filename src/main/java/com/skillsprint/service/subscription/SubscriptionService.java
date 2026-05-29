@@ -83,6 +83,10 @@ public class SubscriptionService {
     }
 
     private Subscription createSubscription(User user, ServicePlanType planType) {
+        return createSubscription(user, planType, null);
+    }
+
+    private Subscription createSubscription(User user, ServicePlanType planType, LocalDate endDate) {
         ServicePlan plan = servicePlanRepository.findByPlanType(planType)
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
 
@@ -90,8 +94,28 @@ public class SubscriptionService {
         subscription.setUser(user);
         subscription.setPlan(plan);
         subscription.setStartDate(LocalDate.now());
+        subscription.setEndDate(endDate);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
 
         return subscriptionRepository.save(subscription);
+    }
+
+    @Transactional
+    public CurrentSubscriptionResponse activatePaidPlan(String userId, ServicePlanType planType, int months) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
+
+        subscriptionRepository
+                .findTopByUserUserIdAndStatusOrderByCreatedAtDesc(userId, SubscriptionStatus.ACTIVE)
+                .ifPresent(current -> {
+                    current.setStatus(SubscriptionStatus.CANCELED);
+                    current.setEndDate(LocalDate.now());
+                    subscriptionRepository.save(current);
+                });
+
+        LocalDate endDate = LocalDate.now().plusMonths(Math.max(1, months));
+        Subscription subscription = createSubscription(user, planType, endDate);
+
+        return subscriptionMapper.toCurrentSubscriptionResponse(subscription);
     }
 }
