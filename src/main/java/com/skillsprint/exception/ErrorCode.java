@@ -92,7 +92,15 @@ public enum ErrorCode {
     QUOTA_UPLOAD_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số tài liệu upload của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_FILE_SIZE_LIMIT_EXCEEDED("File vượt quá giới hạn dung lượng của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_STORAGE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn dung lượng lưu trữ của gói hiện tại", HttpStatus.FORBIDDEN),
-    QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN);
+    QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN),
+
+    // Payment
+    PAYMENT_TRANSACTION_NOT_FOUND("Không tìm thấy giao dịch thanh toán", HttpStatus.NOT_FOUND),
+    PAYMENT_INVALID_SIGNATURE("Chữ ký thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
+    PAYMENT_INVALID_AMOUNT("Số tiền thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
+    PAYMENT_ALREADY_CONFIRMED("Giao dịch đã được xác nhận trước đó", HttpStatus.CONFLICT),
+    PAYMENT_PROVIDER_ERROR("Không thể xử lý thanh toán", HttpStatus.BAD_GATEWAY),
+    PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST);
 
 
     private final String message;

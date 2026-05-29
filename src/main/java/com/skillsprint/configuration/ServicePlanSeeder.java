@@ -38,7 +38,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
         upsertPlan(
                 ServicePlanType.SKILL_BUILDER,
                 "Basic",
-                new BigDecimal("99000"),
+                new BigDecimal("89000"),
                 5,
                 50,
                 50,

@@ -1,0 +1,9 @@
+package com.skillsprint.configuration.payment;
+
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties(VnPayProperties.class)
+public class PaymentConfig {
+}
