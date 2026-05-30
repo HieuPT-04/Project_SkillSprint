@@ -86,6 +86,7 @@ public class CalendarService {
     GeminiCalendarPlannerClient geminiCalendarPlannerClient;
     ObjectMapper objectMapper;
     QuotaService quotaService;
+    com.skillsprint.service.notification.NotificationService notificationService;
 
     @Transactional
     public CalendarScheduleRunResponse generate(
@@ -218,14 +219,15 @@ public class CalendarService {
                 || Boolean.TRUE.equals(request.getIncludeReviewSessions());
 
         return new ScheduleConfig(
-                startDate,
-                studyDays,
-                dailyStartTime,
-                sessionMinutes,
-                Math.min(sessionsPerDay, MAX_SESSIONS_PER_DAY),
-                includeReviewSessions,
-                onboarding.getTargetDeadline(),
-                onboarding.getPreferredTimeSlots()
+            startDate,
+            studyDays,
+            dailyStartTime,
+            sessionMinutes,
+            Math.min(sessionsPerDay, MAX_SESSIONS_PER_DAY),
+            includeReviewSessions,
+            endDate,
+            onboarding.getTargetDeadline(),
+            onboarding.getPreferredTimeSlots()
         );
     }
 
@@ -847,6 +849,7 @@ public class CalendarService {
             int sessionMinutes,
             int sessionsPerDay,
             boolean includeReviewSessions,
+            LocalDate endDate,
             LocalDate targetDeadline,
             String timeSlotsJson
     ) {
@@ -859,6 +862,7 @@ public class CalendarService {
                     sessionMinutes,
                     value,
                     includeReviewSessions,
+                    endDate,
                     targetDeadline,
                     timeSlotsJson
             );
@@ -883,6 +887,5 @@ public class CalendarService {
             int durationMinutes,
             CalendarTaskSource source
     ) {
-            LocalDate endDate,
-    }
+        }
 }

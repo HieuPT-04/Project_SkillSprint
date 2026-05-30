@@ -50,6 +50,7 @@ public class RoadmapService {
     RoadmapStepRepository roadmapStepRepository;
     RoadmapStepResourceRepository roadmapStepResourceRepository;
     RoadmapMapper roadmapMapper;
+    com.skillsprint.service.notification.NotificationService notificationService;
 
     @Transactional
     public RoadmapResponse generate(String userId, UUID workspaceId) {
