@@ -34,6 +34,7 @@ public class SecurityConfig {
             "/api/auth/**",
             "/api/payments/vnpay/ipn",
             "/api/payments/vnpay/return"
+            ,
             "/ws/**"
     };
 

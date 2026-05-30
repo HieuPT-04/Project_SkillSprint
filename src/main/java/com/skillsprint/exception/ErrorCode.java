@@ -100,11 +100,10 @@ public enum ErrorCode {
     PAYMENT_INVALID_AMOUNT("Số tiền thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
     PAYMENT_ALREADY_CONFIRMED("Giao dịch đã được xác nhận trước đó", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_ERROR("Không thể xử lý thanh toán", HttpStatus.BAD_GATEWAY),
-    PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST);
-
+    PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST),
 
     // Notification
-    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND);
 
     private final String message;
     private final HttpStatus status;
