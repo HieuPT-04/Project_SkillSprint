@@ -41,7 +41,7 @@ public class PaymentController {
                 jwt.getSubject(),
                 request
         );
-        return ResponseEntity.ok(ApiResponse.success("Tạo yêu cầu thanh toán SePay thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Tạo thanh toán thành công", response));
     }
 
     @PostMapping("/sepay/webhook")
@@ -59,7 +59,7 @@ public class PaymentController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         List<PaymentTransactionResponse> response = sepayPaymentService.getMyPayments(jwt.getSubject());
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử thanh toán thành công", response));
     }
 
     @GetMapping("/{paymentId}")
@@ -68,6 +68,6 @@ public class PaymentController {
             @PathVariable UUID paymentId
     ) {
         PaymentTransactionResponse response = sepayPaymentService.getMyPayment(jwt.getSubject(), paymentId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy thanh toán thành công", response));
     }
 }

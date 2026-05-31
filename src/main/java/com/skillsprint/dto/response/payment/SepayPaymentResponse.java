@@ -1,5 +1,7 @@
 package com.skillsprint.dto.response.payment;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,19 +13,32 @@ import lombok.experimental.FieldDefaults;
 
 @Getter
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SepayPaymentResponse {
 
     UUID paymentId;
-    String paymentCode;
+    PaymentStatus status;
 
-    ServicePlanType planType;
+    ServicePlanType plan;
 
     BigDecimal amount;
     String currency;
-    Integer subscriptionMonths;
 
-    String qrCodeUrl;
+    String paymentCode;
+    String qrUrl;
+    BankInfo bank;
 
-    Instant expireAt;
+    Instant expiredAt;
+
+    @Getter
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    public static class BankInfo {
+
+        String bankCode;
+        String accountNumber;
+        String accountName;
+    }
 }

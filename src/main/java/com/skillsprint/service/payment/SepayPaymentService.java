@@ -296,13 +296,18 @@ public class SepayPaymentService {
     private SepayPaymentResponse toSepayPaymentResponse(PaymentTransaction transaction) {
         return SepayPaymentResponse.builder()
                 .paymentId(transaction.getPaymentId())
-                .paymentCode(transaction.getTxnRef())
-                .planType(transaction.getPlan().getPlanType())
+                .status(transaction.getStatus())
+                .plan(transaction.getPlan().getPlanType())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
-                .subscriptionMonths(transaction.getSubscriptionMonths())
-                .qrCodeUrl(transaction.getQrCodeUrl())
-                .expireAt(transaction.getExpireAt())
+                .paymentCode(transaction.getTxnRef())
+                .qrUrl(transaction.getQrCodeUrl())
+                .bank(SepayPaymentResponse.BankInfo.builder()
+                        .bankCode(transaction.getBankCode())
+                        .accountNumber(transaction.getBankAccountNumber())
+                        .accountName(transaction.getBankAccountName())
+                        .build())
+                .expiredAt(transaction.getExpireAt())
                 .build();
     }
 
