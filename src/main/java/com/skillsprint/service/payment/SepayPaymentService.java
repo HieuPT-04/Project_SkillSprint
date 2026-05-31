@@ -66,7 +66,7 @@ public class SepayPaymentService {
             return toSepayPaymentResponse(reusablePayment);
         }
 
-        BigDecimal amount = plan.getMonthlyPrice()
+        BigDecimal amount = subscriptionService.calculatePaymentAmount(userId, plan)
                 .multiply(BigDecimal.valueOf(SUBSCRIPTION_MONTHS))
                 .setScale(0, RoundingMode.HALF_UP);
 
@@ -197,18 +197,24 @@ public class SepayPaymentService {
     private PaymentTransaction findTransactionFromWebhook(SepayWebhookRequest request) {
         String paymentCode = normalizePaymentCode(request.getCode());
         if (paymentCode != null) {
-            return paymentTransactionRepository.findByTxnRef(paymentCode)
-                    .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND));
+            PaymentTransaction exactPayment = paymentTransactionRepository.findWithLockByTxnRef(paymentCode)
+                    .orElse(null);
+            if (exactPayment != null) {
+                return exactPayment;
+            }
         }
 
-        String content = request.getContent() == null ? "" : request.getContent();
-        return paymentTransactionRepository.findByProviderAndStatusOrderByCreatedAtDesc(
+        String searchableText = webhookSearchableText(request);
+        PaymentTransaction matchedPayment = paymentTransactionRepository.findByProviderAndStatusOrderByCreatedAtDesc(
                         PaymentProvider.SEPAY,
                         PaymentStatus.PENDING
                 )
                 .stream()
-                .filter(payment -> content.contains(payment.getTxnRef()))
+                .filter(payment -> searchableText.contains(payment.getTxnRef()))
                 .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND));
+
+        return paymentTransactionRepository.findWithLockByPaymentId(matchedPayment.getPaymentId())
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND));
     }
 
@@ -217,16 +223,30 @@ public class SepayPaymentService {
             throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, "Webhook SePay không phải giao dịch nhận tiền");
         }
 
+        if (!sameAccountNumber(request.getAccountNumber(), sepayProperties.bankAccountNumber())
+                && !sameAccountNumber(request.getSubAccount(), sepayProperties.bankAccountNumber())) {
+            throw new AppException(ErrorCode.PAYMENT_INVALID_RECEIVER_ACCOUNT);
+        }
+
         if (request.getTransferAmount() == null
                 || transaction.getAmount().compareTo(request.getTransferAmount().setScale(0, RoundingMode.HALF_UP)) != 0) {
             throw new AppException(ErrorCode.PAYMENT_INVALID_AMOUNT);
         }
 
-        String content = request.getContent() == null ? "" : request.getContent();
+        String searchableText = webhookSearchableText(request);
         String code = request.getCode() == null ? "" : request.getCode();
-        if (!content.contains(transaction.getTxnRef()) && !transaction.getTxnRef().equalsIgnoreCase(code.trim())) {
+        if (!searchableText.contains(transaction.getTxnRef()) && !transaction.getTxnRef().equalsIgnoreCase(code.trim())) {
             throw new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND);
         }
+    }
+
+    private String webhookSearchableText(SepayWebhookRequest request) {
+        return String.join(" ",
+                request.getCode() == null ? "" : request.getCode(),
+                request.getContent() == null ? "" : request.getContent(),
+                request.getDescription() == null ? "" : request.getDescription(),
+                request.getReferenceCode() == null ? "" : request.getReferenceCode()
+        ).toUpperCase();
     }
 
     private void validateWebhookAuthentication(String authorizationHeader, String apiKeyHeader) {
@@ -258,6 +278,14 @@ public class SepayPaymentService {
         return transaction.getExpireAt() != null && transaction.getExpireAt().isBefore(Instant.now());
     }
 
+    private boolean sameAccountNumber(String actual, String expected) {
+        return normalizeAccountNumber(actual).equals(normalizeAccountNumber(expected));
+    }
+
+    private String normalizeAccountNumber(String accountNumber) {
+        return accountNumber == null ? "" : accountNumber.replaceAll("\\s+", "").trim();
+    }
+
     private String normalizePaymentCode(String code) {
         if (code == null || code.isBlank()) {
             return null;
@@ -269,8 +297,6 @@ public class SepayPaymentService {
         return SepayPaymentResponse.builder()
                 .paymentId(transaction.getPaymentId())
                 .paymentCode(transaction.getTxnRef())
-                .planId(transaction.getPlan().getPlanId())
-                .planName(transaction.getPlan().getPlanName())
                 .planType(transaction.getPlan().getPlanType())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
@@ -293,7 +319,7 @@ public class SepayPaymentService {
     }
 
     private String generatePaymentCode() {
-        return "SS" + System.currentTimeMillis() + UUID.randomUUID().toString().replace("-", "").substring(0, 6)
+        return "DH" + System.currentTimeMillis() + UUID.randomUUID().toString().replace("-", "").substring(0, 6)
                 .toUpperCase();
     }
 

@@ -30,12 +30,9 @@ public class PaymentTransactionResponse {
     String currency;
     Integer subscriptionMonths;
 
-    String vnpTransactionNo;
-    String vnpBankCode;
-    String vnpBankTranNo;
-    String vnpCardType;
-    String vnpResponseCode;
-    String vnpTransactionStatus;
+    String qrCodeUrl;
+    String providerTransactionId;
+    String providerReferenceCode;
 
     Instant expireAt;
     Instant paidAt;

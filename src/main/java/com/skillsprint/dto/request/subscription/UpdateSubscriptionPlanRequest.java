@@ -12,7 +12,7 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class UpdateSubscriptionPlanRequest {
+public class    UpdateSubscriptionPlanRequest {
 
     @NotNull
     ServicePlanType planType;

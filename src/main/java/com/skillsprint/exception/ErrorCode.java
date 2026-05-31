@@ -98,9 +98,11 @@ public enum ErrorCode {
     PAYMENT_TRANSACTION_NOT_FOUND("Không tìm thấy giao dịch thanh toán", HttpStatus.NOT_FOUND),
     PAYMENT_INVALID_SIGNATURE("Chữ ký thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
     PAYMENT_INVALID_AMOUNT("Số tiền thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
+    PAYMENT_INVALID_RECEIVER_ACCOUNT("Tài khoản nhận tiền không hợp lệ", HttpStatus.BAD_REQUEST),
     PAYMENT_ALREADY_CONFIRMED("Giao dịch đã được xác nhận trước đó", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_ERROR("Không thể xử lý thanh toán", HttpStatus.BAD_GATEWAY),
     PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST),
+    SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED("Không thể mua gói thấp hơn gói hiện tại", HttpStatus.BAD_REQUEST),
 
     // Notification
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND);

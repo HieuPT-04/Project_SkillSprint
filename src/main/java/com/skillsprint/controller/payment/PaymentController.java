@@ -1,16 +1,14 @@
 package com.skillsprint.controller.payment;
 
 import com.skillsprint.common.ApiResponse;
-import com.skillsprint.dto.request.payment.CreateVnPayPaymentRequest;
+import com.skillsprint.dto.request.payment.CreateSepayPaymentRequest;
+import com.skillsprint.dto.request.payment.SepayWebhookRequest;
 import com.skillsprint.dto.response.payment.PaymentTransactionResponse;
-import com.skillsprint.dto.response.payment.VnPayIpnResponse;
-import com.skillsprint.dto.response.payment.VnPayPaymentUrlResponse;
-import com.skillsprint.dto.response.payment.VnPayReturnResponse;
-import com.skillsprint.service.payment.VnPayPaymentService;
-import jakarta.servlet.http.HttpServletRequest;
+import com.skillsprint.dto.response.payment.SepayPaymentResponse;
+import com.skillsprint.dto.response.payment.SepayWebhookResponse;
+import com.skillsprint.service.payment.SepayPaymentService;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -19,11 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,41 +30,35 @@ import org.springframework.web.bind.annotation.RestController;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PaymentController {
 
-    VnPayPaymentService vnPayPaymentService;
+    SepayPaymentService sepayPaymentService;
 
-    @PostMapping("/vnpay/create")
-    public ResponseEntity<ApiResponse<VnPayPaymentUrlResponse>> createVnPayPayment(
+    @PostMapping("/sepay/create")
+    public ResponseEntity<ApiResponse<SepayPaymentResponse>> createSepayPayment(
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody CreateVnPayPaymentRequest request,
-            HttpServletRequest servletRequest
+            @Valid @RequestBody CreateSepayPaymentRequest request
     ) {
-        VnPayPaymentUrlResponse response = vnPayPaymentService.createPaymentUrl(
+        SepayPaymentResponse response = sepayPaymentService.createPayment(
                 jwt.getSubject(),
-                request,
-                getClientIp(servletRequest)
+                request
         );
-        return ResponseEntity.ok(ApiResponse.success("Tạo yêu cầu thanh toán VNPay thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Tạo yêu cầu thanh toán SePay thành công", response));
     }
 
-    @GetMapping("/vnpay/ipn")
-    public ResponseEntity<VnPayIpnResponse> handleVnPayIpn(@RequestParam Map<String, String> params) {
-        VnPayIpnResponse response = vnPayPaymentService.handleIpn(params);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/vnpay/return")
-    public ResponseEntity<ApiResponse<VnPayReturnResponse>> handleVnPayReturn(
-            @RequestParam Map<String, String> params
+    @PostMapping("/sepay/webhook")
+    public ResponseEntity<SepayWebhookResponse> handleSepayWebhook(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestHeader(value = "X-API-KEY", required = false) String apiKeyHeader,
+            @RequestBody SepayWebhookRequest request
     ) {
-        VnPayReturnResponse response = vnPayPaymentService.handleReturn(params);
-        return ResponseEntity.ok(ApiResponse.success("Nhận kết quả thanh toán VNPay thành công", response));
+        sepayPaymentService.handleWebhook(request, authorizationHeader, apiKeyHeader);
+        return ResponseEntity.ok(new SepayWebhookResponse(true));
     }
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<List<PaymentTransactionResponse>>> getMyPayments(
             @AuthenticationPrincipal Jwt jwt
     ) {
-        List<PaymentTransactionResponse> response = vnPayPaymentService.getMyPayments(jwt.getSubject());
+        List<PaymentTransactionResponse> response = sepayPaymentService.getMyPayments(jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -76,21 +67,7 @@ public class PaymentController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId
     ) {
-        PaymentTransactionResponse response = vnPayPaymentService.getMyPayment(jwt.getSubject(), paymentId);
+        PaymentTransactionResponse response = sepayPaymentService.getMyPayment(jwt.getSubject(), paymentId);
         return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-
-        return request.getRemoteAddr();
     }
 }

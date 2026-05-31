@@ -18,6 +18,8 @@ public class CurrentSubscriptionResponse {
     ServicePlanResponse plan;
     LocalDate startDate;
     LocalDate endDate;
+    Instant startAt;
+    Instant endAt;
     SubscriptionStatus status;
     Instant createdAt;
 }

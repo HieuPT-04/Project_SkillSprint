@@ -17,8 +17,6 @@ public class SepayPaymentResponse {
     UUID paymentId;
     String paymentCode;
 
-    UUID planId;
-    String planName;
     ServicePlanType planType;
 
     BigDecimal amount;
