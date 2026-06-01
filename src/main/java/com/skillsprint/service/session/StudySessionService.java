@@ -67,6 +67,29 @@ public class StudySessionService {
     @Transactional(readOnly = true)
     public StudySessionDetailResponse getStudySessionDetail(String userId, UUID taskId) {
         CalendarTask task = findOwnedTask(userId, taskId);
+        StudySession currentSession = studySessionRepository
+                .findFirstByCalendarTaskTaskIdAndUserUserIdAndStatus(
+                        taskId,
+                        userId,
+                        StudySessionStatus.IN_PROGRESS
+                )
+                .orElse(null);
+
+        return buildStudySessionDetail(task, currentSession);
+    }
+
+    @Transactional(readOnly = true)
+    public StudySessionDetailResponse getSessionDetail(String userId, UUID sessionId) {
+        StudySession session = findOwnedSession(userId, sessionId);
+        CalendarTask task = session.getCalendarTask();
+        if (task == null) {
+            throw new AppException(ErrorCode.CALENDAR_TASK_NOT_FOUND);
+        }
+
+        return buildStudySessionDetail(task, session);
+    }
+
+    private StudySessionDetailResponse buildStudySessionDetail(CalendarTask task, StudySession session) {
         RoadmapStep step = task.getRoadmapStep();
         if (step == null) {
             throw new AppException(ErrorCode.ROADMAP_NOT_FOUND);
@@ -75,11 +98,12 @@ public class StudySessionService {
         List<RoadmapStepResource> resources = roadmapStepResourceRepository
                 .findByStepStepIdOrderBySequenceNoAsc(step.getStepId());
         return StudySessionDetailResponse.builder()
+                .session(toSessionResponse(session))
                 .task(calendarMapper.toTaskResponse(task))
                 .roadmapStep(toRoadmapStepStudyResponse(step))
                 .practice(buildPracticePrompt(step))
                 .resources(resources.stream().map(roadmapMapper::toResourceResponse).toList())
-                .actions(buildActions(task))
+                .actions(buildActions(task, session))
                 .build();
     }
 
@@ -153,14 +177,29 @@ public class StudySessionService {
                 .build();
     }
 
-    private StudySessionDetailResponse.StudySessionActionsResponse buildActions(CalendarTask task) {
+    private StudySessionResponse toSessionResponse(StudySession session) {
+        if (session == null) {
+            return null;
+        }
+        PomodoroSession pomodoro = findActivePomodoro(session);
+        return studySessionMapper.toResponse(session, pomodoro, calculateRemainingSeconds(pomodoro));
+    }
+
+    private StudySessionDetailResponse.StudySessionActionsResponse buildActions(CalendarTask task, StudySession session) {
         boolean completed = task.getStatus() == CalendarTaskStatus.COMPLETED;
+        boolean inProgress = session != null && session.getStatus() == StudySessionStatus.IN_PROGRESS;
         String taskId = task.getTaskId().toString();
+        String sessionId = session == null ? null : session.getSessionId().toString();
         return StudySessionDetailResponse.StudySessionActionsResponse.builder()
-                .canStart(!completed)
-                .canFinish(!completed)
+                .canStart(!completed && !inProgress)
+                .canFinish(!completed && inProgress)
                 .canCompleteTask(!completed)
                 .startEndpoint("/api/calendar/tasks/" + taskId + "/sessions/start")
+                .finishEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/finish")
+                .pausePomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/pause")
+                .resumePomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/resume")
+                .nextPomodoroPhaseEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/next-phase")
+                .finishPomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/finish")
                 .finishEndpointTemplate("/api/study-sessions/{sessionId}/finish")
                 .pausePomodoroEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/pause")
                 .resumePomodoroEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/resume")

@@ -31,11 +31,19 @@ public class ProgressMapper {
             List<CalendarTask> overdueTasks,
             LocalDate today,
             ProgressDashboardResponse.StudyStatsResponse studyStats,
-            StudySession currentSession
+            ProgressDashboardResponse.TodayProgressResponse todayProgress,
+            StudySession currentSession,
+            RoadmapStep nextStep
     ) {
         int completedTasks = (int) allTasks.stream()
                 .filter(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
                 .count();
+        int totalXp = allTasks.stream()
+                .filter(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
+                .map(CalendarTask::getXpReward)
+                .filter(xp -> xp != null && xp > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
         List<CalendarTaskResponse> todayTaskResponses = todayTasks.stream()
                 .map(calendarMapper::toTaskResponse)
                 .toList();
@@ -50,14 +58,17 @@ public class ProgressMapper {
                 .progressPercent(roadmap.getProgressPercent())
                 .totalSteps(roadmap.getTotalSteps())
                 .completedSteps(roadmap.getCompletedSteps())
+                .totalXp(totalXp)
                 .totalTasks(allTasks.size())
                 .completedTasks(completedTasks)
                 .todayTaskCount(todayTaskResponses.size())
                 .overdueTaskCount(overdueTaskResponses.size())
                 .today(today)
+                .todayProgress(todayProgress)
                 .study(studyStats)
                 .currentSession(toStudySessionResponse(currentSession))
                 .currentStep(toStepResponse(roadmap.getCurrentStep()))
+                .nextStep(toStepResponse(nextStep))
                 .todayTasks(todayTaskResponses)
                 .overdueTasks(overdueTaskResponses)
                 .build();
