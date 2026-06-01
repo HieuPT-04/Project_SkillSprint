@@ -12,10 +12,10 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class VnPayPaymentUrlResponse {
+public class SepayPaymentResponse {
 
     UUID paymentId;
-    String txnRef;
+    String paymentCode;
 
     UUID planId;
     String planName;
@@ -25,6 +25,7 @@ public class VnPayPaymentUrlResponse {
     String currency;
     Integer subscriptionMonths;
 
-    String paymentUrl;
+    String qrCodeUrl;
+
     Instant expireAt;
 }
