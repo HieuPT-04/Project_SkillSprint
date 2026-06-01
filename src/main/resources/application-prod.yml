@@ -7,6 +7,13 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -20,6 +27,9 @@ spring:
           issuer-uri: ${COGNITO_ISSUER_URI}
 
 app:
+  session:
+    enabled: ${APP_SESSION_ENABLED:true}
+    header-name: ${APP_SESSION_HEADER_NAME:X-Session-Id}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}
   cognito:

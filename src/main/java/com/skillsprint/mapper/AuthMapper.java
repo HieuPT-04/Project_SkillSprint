@@ -17,12 +17,17 @@ public class AuthMapper {
     private static final String ATTRIBUTE_NAME = "name";
 
     public AuthResponse toAuthResponse(AuthenticationResultType result) {
+        return toAuthResponse(result, null);
+    }
+
+    public AuthResponse toAuthResponse(AuthenticationResultType result, String sessionId) {
         return AuthResponse.builder()
                 .accessToken(result.accessToken())
                 .idToken(result.idToken())
                 .refreshToken(result.refreshToken())
                 .expiresIn(result.expiresIn())
                 .tokenType(result.tokenType())
+                .sessionId(sessionId)
                 .build();
     }
 

@@ -15,6 +15,7 @@ public class AuthResponse {
     String refreshToken;
     Integer expiresIn;
     String tokenType;
+    String sessionId;
     String challengeName;
     String session;
 }

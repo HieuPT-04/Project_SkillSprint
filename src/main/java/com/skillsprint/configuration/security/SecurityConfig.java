@@ -16,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -28,10 +29,17 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource;
     CustomAuthenticationEntryPoint authenticationEntryPoint;
     CustomAccessDeniedHandler accessDeniedHandler;
+    SingleSessionFilter singleSessionFilter;
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/health",
-            "/api/auth/**",
+            "/api/auth/register",
+            "/api/auth/resend-confirmation-code",
+            "/api/auth/confirm-register",
+            "/api/auth/login",
+            "/api/auth/complete-new-password",
+            "/api/auth/forgot-password",
+            "/api/auth/confirm-forgot-password",
             "/api/payments/sepay/webhook",
             "/ws/**"
     };
@@ -67,7 +75,8 @@ public class SecurityConfig {
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                );
+                )
+                .addFilterAfter(singleSessionFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }

@@ -9,6 +9,10 @@ spring:
       ddl-auto: create-drop
     open-in-view: false
     show-sql: false
+  data:
+    redis:
+      repositories:
+        enabled: false
   security:
     oauth2:
       resourceserver:
@@ -16,6 +20,9 @@ spring:
           issuer-uri: https://cognito-idp.ap-southeast-1.amazonaws.com/test_pool
 
 app:
+  session:
+    enabled: false
+    header-name: X-Session-Id
   cors:
     allowed-origins: http://localhost:5173
   cognito:
