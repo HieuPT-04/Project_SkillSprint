@@ -1,0 +1,15 @@
+.git
+.idea
+.vscode
+target
+
+.env
+.env.*
+
+.DS_Store
+*.iml
+*.log
+
+AGENTS.md
+TASKS.md
+*.postman_collection.json
