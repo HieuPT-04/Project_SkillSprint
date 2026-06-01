@@ -7,6 +7,7 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.CalendarScheduleRunRepository;
 import com.skillsprint.repository.LearningStructureVersionRepository;
+import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.UploadedMaterialRepository;
 import java.util.UUID;
@@ -25,6 +26,7 @@ public class QuotaService {
     StudyWorkspaceRepository workspaceRepository;
     UploadedMaterialRepository uploadedMaterialRepository;
     LearningStructureVersionRepository learningStructureVersionRepository;
+    RoadmapRepository roadmapRepository;
     CalendarScheduleRunRepository calendarScheduleRunRepository;
 
     @Transactional(readOnly = true)
@@ -133,8 +135,9 @@ public class QuotaService {
 
     private long countUsedAiGenerate(String userId) {
         long learningStructureCount = learningStructureVersionRepository.countByUserId(userId);
+        long roadmapCount = roadmapRepository.countByUserUserId(userId);
         long calendarGenerateCount = calendarScheduleRunRepository.countByUserUserId(userId);
-        return learningStructureCount + calendarGenerateCount;
+        return learningStructureCount + roadmapCount + calendarGenerateCount;
     }
 
     private int valueOrDefault(Integer value, int fallback) {

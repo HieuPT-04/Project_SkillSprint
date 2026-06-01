@@ -2,6 +2,7 @@ package com.skillsprint.controller.session;
 
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.session.FinishStudySessionRequest;
+import com.skillsprint.dto.request.session.StartStudySessionRequest;
 import com.skillsprint.dto.response.session.StudySessionDetailResponse;
 import com.skillsprint.dto.response.session.StudySessionResponse;
 import com.skillsprint.service.session.StudySessionService;
@@ -40,10 +41,56 @@ public class StudySessionController {
     @PostMapping("/calendar/tasks/{taskId}/sessions/start")
     public ResponseEntity<ApiResponse<StudySessionResponse>> startSession(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID taskId
+            @PathVariable UUID taskId,
+            @Valid @RequestBody(required = false) StartStudySessionRequest request
     ) {
-        StudySessionResponse response = studySessionService.startSession(jwt.getSubject(), taskId);
+        StudySessionResponse response = studySessionService.startSession(jwt.getSubject(), taskId, request);
         return ResponseEntity.ok(ApiResponse.success("Bắt đầu phiên học thành công", response));
+    }
+
+    @GetMapping("/study-sessions/{sessionId}")
+    public ResponseEntity<ApiResponse<StudySessionDetailResponse>> getSession(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionDetailResponse response = studySessionService.getSessionDetail(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiên học thành công", response));
+    }
+
+    @PostMapping("/study-sessions/{sessionId}/pomodoro/pause")
+    public ResponseEntity<ApiResponse<StudySessionResponse>> pausePomodoro(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionResponse response = studySessionService.pausePomodoro(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Tạm dừng Pomodoro thành công", response));
+    }
+
+    @PostMapping("/study-sessions/{sessionId}/pomodoro/resume")
+    public ResponseEntity<ApiResponse<StudySessionResponse>> resumePomodoro(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionResponse response = studySessionService.resumePomodoro(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Tiếp tục Pomodoro thành công", response));
+    }
+
+    @PostMapping("/study-sessions/{sessionId}/pomodoro/next-phase")
+    public ResponseEntity<ApiResponse<StudySessionResponse>> nextPomodoroPhase(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionResponse response = studySessionService.nextPomodoroPhase(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Chuyển Pomodoro phase thành công", response));
+    }
+
+    @PostMapping("/study-sessions/{sessionId}/pomodoro/finish")
+    public ResponseEntity<ApiResponse<StudySessionResponse>> finishPomodoro(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionResponse response = studySessionService.finishPomodoro(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Kết thúc Pomodoro thành công", response));
     }
 
     @PostMapping("/study-sessions/{sessionId}/finish")
@@ -53,6 +100,9 @@ public class StudySessionController {
             @Valid @RequestBody(required = false) FinishStudySessionRequest request
     ) {
         StudySessionResponse response = studySessionService.finishSession(jwt.getSubject(), sessionId, request);
-        return ResponseEntity.ok(ApiResponse.success("Kết thúc phiên học thành công", response));
+        String message = Boolean.TRUE.equals(response.getTaskCompleted())
+                ? "Hoàn thành buổi học thành công"
+                : "Phiên học đã kết thúc, task chưa hoàn thành vì thời gian học chưa đủ";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 }

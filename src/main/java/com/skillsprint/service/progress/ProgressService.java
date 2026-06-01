@@ -3,8 +3,10 @@ package com.skillsprint.service.progress;
 import com.skillsprint.dto.response.progress.ProgressDashboardResponse;
 import com.skillsprint.entity.CalendarTask;
 import com.skillsprint.entity.Roadmap;
+import com.skillsprint.entity.RoadmapStep;
 import com.skillsprint.entity.StudySession;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import com.skillsprint.enums.roadmap.RoadmapStepStatus;
 import com.skillsprint.enums.session.StudySessionStatus;
 import com.skillsprint.enums.workspace.WorkspaceStatus;
 import com.skillsprint.exception.AppException;
@@ -12,6 +14,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.ProgressMapper;
 import com.skillsprint.repository.CalendarTaskRepository;
 import com.skillsprint.repository.RoadmapRepository;
+import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import java.time.ZoneId;
@@ -35,6 +38,7 @@ public class ProgressService {
 
     StudyWorkspaceRepository workspaceRepository;
     RoadmapRepository roadmapRepository;
+    RoadmapStepRepository roadmapStepRepository;
     CalendarTaskRepository calendarTaskRepository;
     StudySessionRepository studySessionRepository;
     ProgressMapper progressMapper;
@@ -75,7 +79,9 @@ public class ProgressService {
                 overdueTasks,
                 today,
                 buildStudyStats(sessions, today),
-                currentSession.orElse(null)
+                buildTodayProgress(todayTasks, sessions, today),
+                currentSession.orElse(null),
+                resolveNextStep(roadmap)
         );
     }
 
@@ -110,6 +116,46 @@ public class ProgressService {
                 .currentStreakDays(calculateCurrentStreakDays(studyDates, today))
                 .lastStudyDate(lastStudyDate)
                 .build();
+    }
+
+    private ProgressDashboardResponse.TodayProgressResponse buildTodayProgress(
+            List<CalendarTask> todayTasks,
+            List<StudySession> sessions,
+            LocalDate today
+    ) {
+        int completedTasks = (int) todayTasks.stream()
+                .filter(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
+                .count();
+        int earnedXp = todayTasks.stream()
+                .filter(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
+                .map(CalendarTask::getXpReward)
+                .filter(xp -> xp != null && xp > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+        int studyMinutes = sessions.stream()
+                .filter(session -> session.getStatus() == StudySessionStatus.COMPLETED)
+                .filter(session -> today.equals(resolveStudyDate(session)))
+                .map(StudySession::getDurationMinutes)
+                .filter(duration -> duration != null && duration > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        return ProgressDashboardResponse.TodayProgressResponse.builder()
+                .totalTasks(todayTasks.size())
+                .completedTasks(completedTasks)
+                .studyMinutes(studyMinutes)
+                .earnedXp(earnedXp)
+                .build();
+    }
+
+    private RoadmapStep resolveNextStep(Roadmap roadmap) {
+        return roadmapStepRepository.findByRoadmapRoadmapIdAndStatusOrderBySequenceNoAsc(
+                        roadmap.getRoadmapId(),
+                        RoadmapStepStatus.UPCOMING
+                )
+                .stream()
+                .findFirst()
+                .orElse(null);
     }
 
     private int calculateCurrentStreakDays(Set<LocalDate> studyDates, LocalDate today) {

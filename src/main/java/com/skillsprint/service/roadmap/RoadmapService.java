@@ -22,6 +22,7 @@ import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.TopicRepository;
+import com.skillsprint.service.subscription.QuotaService;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -50,11 +51,13 @@ public class RoadmapService {
     RoadmapStepRepository roadmapStepRepository;
     RoadmapStepResourceRepository roadmapStepResourceRepository;
     RoadmapMapper roadmapMapper;
+    QuotaService quotaService;
     com.skillsprint.service.notification.NotificationService notificationService;
 
     @Transactional
     public RoadmapResponse generate(String userId, UUID workspaceId) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        quotaService.validateCanGenerateAi(userId);
         LearningStructureVersion structureVersion = findLatestConfirmedStructure(workspaceId);
         List<Topic> topics = topicRepository
                 .findByStructureVersionStructureVersionIdOrderByChapterSequenceNoAscSequenceNoAsc(
