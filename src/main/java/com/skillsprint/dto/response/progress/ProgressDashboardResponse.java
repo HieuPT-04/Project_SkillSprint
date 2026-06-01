@@ -23,14 +23,17 @@ public class ProgressDashboardResponse {
     BigDecimal progressPercent;
     Integer totalSteps;
     Integer completedSteps;
+    Integer totalXp;
     Integer totalTasks;
     Integer completedTasks;
     Integer todayTaskCount;
     Integer overdueTaskCount;
     LocalDate today;
+    TodayProgressResponse todayProgress;
     StudyStatsResponse study;
     StudySessionResponse currentSession;
     ProgressStepResponse currentStep;
+    ProgressStepResponse nextStep;
     List<CalendarTaskResponse> todayTasks;
     List<CalendarTaskResponse> overdueTasks;
 
@@ -42,5 +45,15 @@ public class ProgressDashboardResponse {
         Integer completedSessions;
         Integer currentStreakDays;
         LocalDate lastStudyDate;
+    }
+
+    @Getter
+    @Builder
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    public static class TodayProgressResponse {
+        Integer totalTasks;
+        Integer completedTasks;
+        Integer studyMinutes;
+        Integer earnedXp;
     }
 }

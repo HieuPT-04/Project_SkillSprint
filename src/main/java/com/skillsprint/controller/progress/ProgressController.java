@@ -29,6 +29,6 @@ public class ProgressController {
             @PathVariable UUID workspaceId
     ) {
         ProgressDashboardResponse response = progressService.getDashboard(jwt.getSubject(), workspaceId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy tiến độ học thành công", response));
     }
 }

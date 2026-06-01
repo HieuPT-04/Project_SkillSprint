@@ -16,6 +16,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class StudySessionDetailResponse {
 
+    StudySessionResponse session;
     CalendarTaskResponse task;
     RoadmapStepStudyResponse roadmapStep;
     PracticePromptResponse practice;
@@ -58,6 +59,11 @@ public class StudySessionDetailResponse {
         boolean canFinish;
         boolean canCompleteTask;
         String startEndpoint;
+        String finishEndpoint;
+        String pausePomodoroEndpoint;
+        String resumePomodoroEndpoint;
+        String nextPomodoroPhaseEndpoint;
+        String finishPomodoroEndpoint;
         String finishEndpointTemplate;
         String pausePomodoroEndpointTemplate;
         String resumePomodoroEndpointTemplate;

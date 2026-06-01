@@ -49,12 +49,12 @@ public class StudySessionController {
     }
 
     @GetMapping("/study-sessions/{sessionId}")
-    public ResponseEntity<ApiResponse<StudySessionResponse>> getSession(
+    public ResponseEntity<ApiResponse<StudySessionDetailResponse>> getSession(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID sessionId
     ) {
-        StudySessionResponse response = studySessionService.getSession(jwt.getSubject(), sessionId);
-        return ResponseEntity.ok(ApiResponse.success("Lấy trạng thái phiên học thành công", response));
+        StudySessionDetailResponse response = studySessionService.getSessionDetail(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiên học thành công", response));
     }
 
     @PostMapping("/study-sessions/{sessionId}/pomodoro/pause")
