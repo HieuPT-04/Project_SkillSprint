@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -82,9 +84,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
+            @RequestHeader("X-Session-Id") String sessionId,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        authService.logout(authorizationHeader);
+        authService.logout(authorizationHeader, jwt.getSubject(), sessionId);
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công", null));
     }
 }

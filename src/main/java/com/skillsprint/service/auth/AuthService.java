@@ -42,6 +42,7 @@ public class AuthService {
     UserSyncService userSyncService;
     AuthMapper authMapper;
     SubscriptionService subscriptionService;
+    UserSessionService userSessionService;
 
     public void register(RegisterRequest request) {
         String email = request.getEmail().trim().toLowerCase();
@@ -183,7 +184,8 @@ public class AuthService {
             User user = syncLocalUserByEmail(email);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
-            return authMapper.toAuthResponse(response.authenticationResult());
+            String sessionId = userSessionService.createSession(user.getUserId(), response.authenticationResult().expiresIn());
+            return authMapper.toAuthResponse(response.authenticationResult(), sessionId);
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (UserNotConfirmedException ex) {
@@ -215,7 +217,9 @@ public class AuthService {
 
             User user = syncLocalUserByEmail(email);
             ensureActiveUser(user);
-            return authMapper.toAuthResponse(response.authenticationResult());
+            subscriptionService.ensureDefaultFreeSubscription(user);
+            String sessionId = userSessionService.createSession(user.getUserId(), response.authenticationResult().expiresIn());
+            return authMapper.toAuthResponse(response.authenticationResult(), sessionId);
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         } catch (CognitoIdentityProviderException ex) {
@@ -223,7 +227,7 @@ public class AuthService {
         }
     }
 
-    public void logout(String authorizationHeader) {
+    public void logout(String authorizationHeader, String userId, String sessionId) {
         String accessToken = extractAccessToken(authorizationHeader);
 
         try {
@@ -232,7 +236,9 @@ public class AuthService {
                             .accessToken(accessToken)
                             .build()
             );
+            userSessionService.invalidateSession(userId, sessionId);
         } catch (NotAuthorizedException ex) {
+            userSessionService.invalidateSession(userId, sessionId);
             throw new AppException(ErrorCode.UNAUTHORIZED);
         } catch (CognitoIdentityProviderException ex) {
             throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
