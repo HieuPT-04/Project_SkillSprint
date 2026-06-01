@@ -30,6 +30,8 @@ public class SubscriptionMapper {
                 .plan(toServicePlanResponse(subscription.getPlan()))
                 .startDate(subscription.getStartDate())
                 .endDate(subscription.getEndDate())
+                .startAt(subscription.getStartAt())
+                .endAt(subscription.getEndAt())
                 .status(subscription.getStatus())
                 .createdAt(subscription.getCreatedAt())
                 .build();

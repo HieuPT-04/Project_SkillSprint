@@ -85,13 +85,15 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Study session detail API để user bấm calendar task là vào màn học.
 - Study session API để start/finish phiên học thật từ calendar task.
 - Progress dashboard API gồm roadmap progress, current step, today/overdue tasks, study stats và current session.
+- Subscription/quota basic.
+- SePay payment flow cho thanh toán thật bằng chuyển khoản ngân hàng.
 
 Cần rà soát tiếp:
 
 - Test lại full core flow end-to-end bằng Postman.
 - Cập nhật Postman collection mỗi khi API/response đổi.
 - Chỉ sửa core nếu test phát hiện lỗi làm gãy flow.
-- Chưa ưu tiên Phase Later như notification realtime, pomodoro, subscription/quota.
+- Chưa ưu tiên thêm Pomodoro/observability nâng cao.
 
 ## 4. Kiến Trúc Kỹ Thuật
 
@@ -346,13 +348,14 @@ Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
 - `notifications`.
 - `pomodoro_sessions`.
 
-Nhóm tạm chưa cần cho MVP hiện tại:
+Nhóm đã có basic support nhưng cần hardening sau MVP:
 
 - `business_activity_logs`.
 - `notification_logs`.
 - `progress_logs`.
 - `service_plans`.
 - `subscriptions`.
+- `payment_transactions`.
 
 ## 8. Learning Structure Review
 
@@ -523,6 +526,9 @@ FAILED | CANCELLED
 26. Calendar AI planner với rule-based fallback.
 27. Roadmap/Calendar response rút gọn cho FE, có `overdue` và `studySessionEndpoint`.
 28. Progress dashboard có study stats, streak và current session.
+29. Subscription/quota basic.
+30. SePay payment flow với pending, expireAt, webhook và activate subscription 1 tháng.
+31. Subscription trả phí hết hạn theo `startAt/endAt` và tự fallback về FREE.
 
 Làm tiếp:
 
@@ -559,7 +565,7 @@ Giữ:
 Tạm bỏ hoặc chưa làm:
 
 - Permission-based access khi chỉ có `ADMIN`/`LEARNER`.
-- Payment/subscription khi chưa có quota/payment API.
+- Payment/subscription nâng cao nếu basic flow chưa ổn.
 - Business logs khi chưa có business event thật.
 - Notification dispatch log khi chỉ cần in-app notification cơ bản.
 

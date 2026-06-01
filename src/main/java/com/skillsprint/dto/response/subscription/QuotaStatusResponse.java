@@ -11,8 +11,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class QuotaStatusResponse {
 
-    ServicePlanType planType;
-    String planName;
+    ServicePlanType plan;
 
     Integer maxWorkspaces;
     Long usedWorkspaces;

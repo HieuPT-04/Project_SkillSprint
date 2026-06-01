@@ -29,7 +29,7 @@ public class SubscriptionController {
     @GetMapping("/plans")
     public ResponseEntity<ApiResponse<List<ServicePlanResponse>>> getPlans() {
         List<ServicePlanResponse> response = subscriptionService.getActivePlans();
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách gói thành công", response));
     }
 
     @GetMapping("/me")
@@ -37,7 +37,7 @@ public class SubscriptionController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         CurrentSubscriptionResponse response = subscriptionService.getCurrentSubscription(jwt.getSubject());
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy gói hiện tại thành công", response));
     }
 
     @GetMapping("/me/quota")
@@ -45,6 +45,6 @@ public class SubscriptionController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         QuotaStatusResponse response = quotaService.getQuotaStatus(jwt.getSubject());
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy giới hạn sử dụng thành công", response));
     }
 }

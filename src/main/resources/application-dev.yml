@@ -45,10 +45,12 @@ app:
       base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
       max-input-chars: ${GEMINI_MAX_INPUT_CHARS:18000}
   payment:
-    vnpay:
-      enabled: ${VNPAY_ENABLED:true}
-      pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-      return-url: ${VNPAY_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
-      tmn-code: ${VNPAY_TMN_CODE:}
-      hash-secret: ${VNPAY_HASH_SECRET:}
-      expire-minutes: ${VNPAY_EXPIRE_MINUTES:15}
+    sepay:
+      enabled: ${SEPAY_ENABLED:true}
+      bank-code: ${SEPAY_BANK_CODE:}
+      bank-account-number: ${SEPAY_BANK_ACCOUNT_NUMBER:}
+      bank-account-name: ${SEPAY_BANK_ACCOUNT_NAME:}
+      webhook-api-key: ${SEPAY_WEBHOOK_API_KEY:}
+      qr-base-url: ${SEPAY_QR_BASE_URL:}
+      expire-minutes: ${SEPAY_EXPIRE_MINUTES:15}
+      expire-fixed-delay-ms: ${SEPAY_EXPIRE_FIXED_DELAY_MS:60000}

@@ -1,6 +1,6 @@
 package com.skillsprint.dto.response.payment;
 
-import com.skillsprint.enums.payment.PaymentProvider;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
@@ -13,31 +13,25 @@ import lombok.experimental.FieldDefaults;
 
 @Getter
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentTransactionResponse {
 
     UUID paymentId;
-    String txnRef;
-
-    PaymentProvider provider;
     PaymentStatus status;
 
-    UUID planId;
-    String planName;
-    ServicePlanType planType;
+    ServicePlanType plan;
 
     BigDecimal amount;
     String currency;
-    Integer subscriptionMonths;
 
-    String vnpTransactionNo;
-    String vnpBankCode;
-    String vnpBankTranNo;
-    String vnpCardType;
-    String vnpResponseCode;
-    String vnpTransactionStatus;
+    String paymentCode;
+    String qrUrl;
 
-    Instant expireAt;
+    String providerTransactionId;
+    String providerReferenceCode;
+
+    Instant expiredAt;
     Instant paidAt;
     Instant createdAt;
     Instant updatedAt;

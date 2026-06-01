@@ -45,8 +45,7 @@ public class QuotaService {
         double usedStorageMb = bytesToMb(usedStorageBytes);
 
         return QuotaStatusResponse.builder()
-                .planType(plan.getPlanType())
-                .planName(plan.getPlanName())
+                .plan(plan.getPlanType())
 
                 .maxWorkspaces(maxWorkspaces)
                 .usedWorkspaces(usedWorkspaces)

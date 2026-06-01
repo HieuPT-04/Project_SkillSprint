@@ -42,7 +42,7 @@ public class PaymentTransaction extends BaseAuditEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 30)
-    private PaymentProvider provider = PaymentProvider.VNPAY;
+    private PaymentProvider provider = PaymentProvider.SEPAY;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -60,8 +60,20 @@ public class PaymentTransaction extends BaseAuditEntity {
     @Column(name = "subscription_months", nullable = false)
     private Integer subscriptionMonths = 1;
 
-    @Column(name = "payment_url", columnDefinition = "TEXT")
-    private String paymentUrl;
+    @Column(name = "qr_code_url", columnDefinition = "TEXT")
+    private String qrCodeUrl;
+
+    @Column(name = "bank_code", length = 50)
+    private String bankCode;
+
+    @Column(name = "bank_account_number", length = 100)
+    private String bankAccountNumber;
+
+    @Column(name = "bank_account_name", length = 255)
+    private String bankAccountName;
+
+    @Column(name = "transfer_content", length = 255)
+    private String transferContent;
 
     @Column(name = "expire_at")
     private Instant expireAt;
@@ -69,26 +81,11 @@ public class PaymentTransaction extends BaseAuditEntity {
     @Column(name = "paid_at")
     private Instant paidAt;
 
-    @Column(name = "vnp_transaction_no", length = 100)
-    private String vnpTransactionNo;
+    @Column(name = "provider_transaction_id", unique = true, length = 100)
+    private String providerTransactionId;
 
-    @Column(name = "vnp_bank_code", length = 50)
-    private String vnpBankCode;
-
-    @Column(name = "vnp_bank_tran_no", length = 100)
-    private String vnpBankTranNo;
-
-    @Column(name = "vnp_card_type", length = 50)
-    private String vnpCardType;
-
-    @Column(name = "vnp_response_code", length = 20)
-    private String vnpResponseCode;
-
-    @Column(name = "vnp_transaction_status", length = 20)
-    private String vnpTransactionStatus;
-
-    @Column(name = "vnp_secure_hash", length = 256)
-    private String vnpSecureHash;
+    @Column(name = "provider_reference_code", length = 100)
+    private String providerReferenceCode;
 
     @Column(name = "raw_callback_data", columnDefinition = "TEXT")
     private String rawCallbackData;

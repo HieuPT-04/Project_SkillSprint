@@ -47,6 +47,12 @@ public class Subscription {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "start_at")
+    private Instant startAt;
+
+    @Column(name = "end_at")
+    private Instant endAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private SubscriptionStatus status = SubscriptionStatus.ACTIVE;
