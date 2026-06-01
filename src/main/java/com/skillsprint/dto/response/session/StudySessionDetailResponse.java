@@ -59,6 +59,9 @@ public class StudySessionDetailResponse {
         boolean canCompleteTask;
         String startEndpoint;
         String finishEndpointTemplate;
+        String pausePomodoroEndpointTemplate;
+        String resumePomodoroEndpointTemplate;
+        String nextPomodoroPhaseEndpointTemplate;
         String completeTaskEndpoint;
     }
 }

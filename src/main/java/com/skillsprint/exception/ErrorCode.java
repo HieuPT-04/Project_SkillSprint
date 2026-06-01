@@ -74,6 +74,10 @@ public enum ErrorCode {
     // Study session
     STUDY_SESSION_NOT_FOUND("Không tìm thấy phiên học", HttpStatus.NOT_FOUND),
     STUDY_SESSION_TASK_ALREADY_COMPLETED("Task học này đã hoàn thành", HttpStatus.CONFLICT),
+    POMODORO_SESSION_NOT_FOUND("Không tìm thấy Pomodoro session", HttpStatus.NOT_FOUND),
+    POMODORO_SESSION_ALREADY_COMPLETED("Pomodoro session đã hoàn thành", HttpStatus.CONFLICT),
+    POMODORO_SESSION_NOT_RUNNING("Pomodoro session không ở trạng thái đang chạy", HttpStatus.BAD_REQUEST),
+    POMODORO_SESSION_NOT_PAUSED("Pomodoro session không ở trạng thái tạm dừng", HttpStatus.BAD_REQUEST),
 
     // Cognito
     COGNITO_ATTRIBUTE_MISSING("Thiếu thông tin người dùng từ Cognito", HttpStatus.BAD_GATEWAY),
