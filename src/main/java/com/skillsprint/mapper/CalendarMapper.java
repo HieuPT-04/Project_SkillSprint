@@ -5,6 +5,7 @@ import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.entity.CalendarScheduleRun;
 import com.skillsprint.entity.CalendarTask;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,10 @@ public class CalendarMapper {
     }
 
     public CalendarTaskResponse toTaskResponse(CalendarTask task) {
+        return toTaskResponse(task, task.getEisenhowerQuadrant());
+    }
+
+    public CalendarTaskResponse toTaskResponse(CalendarTask task, EisenhowerQuadrant eisenhowerQuadrant) {
         return CalendarTaskResponse.builder()
                 .taskId(task.getTaskId())
                 .workspaceId(task.getWorkspace().getWorkspaceId())
@@ -50,6 +55,15 @@ public class CalendarMapper {
                 .priority(task.getPriority())
                 .status(task.getStatus())
                 .source(task.getSource())
+                .importanceScore(task.getImportanceScore())
+                .urgencyScore(task.getUrgencyScore())
+                .important(task.getImportant())
+                .urgent(task.getUrgent())
+                .eisenhowerQuadrant(eisenhowerQuadrant)
+                .classificationReason(task.getClassificationReason())
+                .classifiedBy(task.getClassifiedBy())
+                .classifiedAt(task.getClassifiedAt())
+                .xpReward(task.getXpReward())
                 .overdue(isOverdue(task))
                 .studySessionEndpoint("/api/calendar/tasks/" + task.getTaskId() + "/study-session")
                 .completedAt(task.getCompletedAt())

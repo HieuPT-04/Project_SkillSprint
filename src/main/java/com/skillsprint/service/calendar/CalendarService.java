@@ -7,6 +7,8 @@ import com.skillsprint.dto.request.calendar.GenerateCalendarRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
 import com.skillsprint.dto.response.calendar.CalendarScheduleRunResponse;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
+import com.skillsprint.dto.response.calendar.EisenhowerBoardResponse;
+import com.skillsprint.dto.response.calendar.EisenhowerQuadrantResponse;
 import com.skillsprint.entity.CalendarScheduleRun;
 import com.skillsprint.entity.CalendarTask;
 import com.skillsprint.entity.OnboardingProfile;
@@ -20,6 +22,8 @@ import com.skillsprint.enums.calendar.CalendarTaskCategory;
 import com.skillsprint.enums.calendar.CalendarTaskPriority;
 import com.skillsprint.enums.calendar.CalendarTaskSource;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import com.skillsprint.enums.calendar.ClassifiedBy;
+import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import com.skillsprint.enums.calendar.WeekDay;
 import com.skillsprint.enums.learningstructure.DifficultyLevel;
 import com.skillsprint.enums.roadmap.RoadmapProgressActionType;
@@ -40,6 +44,7 @@ import com.skillsprint.service.calendar.ai.AiCalendarPlanDraft;
 import com.skillsprint.service.calendar.ai.AiCalendarTaskInput;
 import com.skillsprint.service.calendar.ai.AiCalendarTaskSuggestion;
 import com.skillsprint.service.calendar.ai.GeminiCalendarPlannerClient;
+import com.skillsprint.service.subscription.QuotaService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -60,7 +65,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.skillsprint.service.subscription.QuotaService;
 
 @Service
 @RequiredArgsConstructor
@@ -136,6 +140,20 @@ public class CalendarService {
                 .stream()
                 .map(calendarMapper::toTaskResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EisenhowerBoardResponse getEisenhowerBoard(String userId, UUID workspaceId, LocalDate date) {
+        findOwnedWorkspace(userId, workspaceId);
+        LocalDate targetDate = date == null ? LocalDate.now() : date;
+        List<CalendarTask> tasks = calendarTaskRepository
+                .findByWorkspaceWorkspaceIdAndUserUserIdAndTaskDateOrderByStartTimeAscCreatedAtAsc(
+                        workspaceId,
+                        userId,
+                        targetDate
+                );
+
+        return buildEisenhowerBoard(workspaceId, targetDate, tasks);
     }
 
     @Transactional
@@ -549,7 +567,129 @@ public class CalendarService {
         task.setStatus(CalendarTaskStatus.TODO);
         task.setSource(plannedTask.source());
         task.setXpReward(draft.xpReward());
+        applyDefaultEisenhowerClassification(task);
         return task;
+    }
+
+    private EisenhowerBoardResponse buildEisenhowerBoard(UUID workspaceId, LocalDate date, List<CalendarTask> tasks) {
+        List<EisenhowerQuadrantResponse> quadrants = List.of(
+                buildQuadrantResponse(tasks, EisenhowerQuadrant.DO_NOW),
+                buildQuadrantResponse(tasks, EisenhowerQuadrant.SCHEDULE),
+                buildQuadrantResponse(tasks, EisenhowerQuadrant.DELAY_OR_DELEGATE),
+                buildQuadrantResponse(tasks, EisenhowerQuadrant.ELIMINATE)
+        );
+
+        int completedTasks = (int) tasks.stream()
+                .filter(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
+                .count();
+
+        return EisenhowerBoardResponse.builder()
+                .workspaceId(workspaceId)
+                .date(date)
+                .totalTasks(tasks.size())
+                .completedTasks(completedTasks)
+                .pendingTasks(tasks.size() - completedTasks)
+                .quadrants(quadrants)
+                .build();
+    }
+
+    private EisenhowerQuadrantResponse buildQuadrantResponse(
+            List<CalendarTask> tasks,
+            EisenhowerQuadrant quadrant
+    ) {
+        List<CalendarTaskResponse> taskResponses = tasks.stream()
+                .filter(task -> resolveEisenhowerQuadrant(task) == quadrant)
+                .map(task -> calendarMapper.toTaskResponse(task, quadrant))
+                .toList();
+
+        return EisenhowerQuadrantResponse.builder()
+                .quadrant(quadrant)
+                .title(resolveQuadrantTitle(quadrant))
+                .description(resolveQuadrantDescription(quadrant))
+                .taskCount(taskResponses.size())
+                .tasks(taskResponses)
+                .build();
+    }
+
+    private void applyDefaultEisenhowerClassification(CalendarTask task) {
+        EisenhowerQuadrant quadrant = resolveEisenhowerQuadrant(task);
+        task.setEisenhowerQuadrant(quadrant);
+        task.setImportant(isImportantQuadrant(quadrant));
+        task.setUrgent(isUrgentQuadrant(quadrant));
+        task.setImportanceScore(isImportantQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
+        task.setUrgencyScore(isUrgentQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
+        task.setClassificationReason(resolveDefaultClassificationReason(quadrant));
+        task.setClassifiedBy(ClassifiedBy.RULE_BASED);
+        task.setClassifiedAt(Instant.now());
+    }
+
+    private EisenhowerQuadrant resolveEisenhowerQuadrant(CalendarTask task) {
+        if (task.getEisenhowerQuadrant() != null) {
+            return task.getEisenhowerQuadrant();
+        }
+
+        Boolean important = task.getImportant();
+        Boolean urgent = task.getUrgent();
+        if (important != null || urgent != null) {
+            return resolveQuadrant(Boolean.TRUE.equals(important), Boolean.TRUE.equals(urgent));
+        }
+
+        CalendarTaskPriority priority = task.getPriority() == null ? CalendarTaskPriority.MEDIUM : task.getPriority();
+        return switch (priority) {
+            case HIGH -> EisenhowerQuadrant.DO_NOW;
+            case MEDIUM -> EisenhowerQuadrant.SCHEDULE;
+            case LOW -> task.getCategory() == CalendarTaskCategory.PERSONAL
+                    ? EisenhowerQuadrant.ELIMINATE
+                    : EisenhowerQuadrant.DELAY_OR_DELEGATE;
+        };
+    }
+
+    private EisenhowerQuadrant resolveQuadrant(boolean important, boolean urgent) {
+        if (important && urgent) {
+            return EisenhowerQuadrant.DO_NOW;
+        }
+        if (important) {
+            return EisenhowerQuadrant.SCHEDULE;
+        }
+        if (urgent) {
+            return EisenhowerQuadrant.DELAY_OR_DELEGATE;
+        }
+        return EisenhowerQuadrant.ELIMINATE;
+    }
+
+    private boolean isImportantQuadrant(EisenhowerQuadrant quadrant) {
+        return quadrant == EisenhowerQuadrant.DO_NOW || quadrant == EisenhowerQuadrant.SCHEDULE;
+    }
+
+    private boolean isUrgentQuadrant(EisenhowerQuadrant quadrant) {
+        return quadrant == EisenhowerQuadrant.DO_NOW || quadrant == EisenhowerQuadrant.DELAY_OR_DELEGATE;
+    }
+
+    private String resolveQuadrantTitle(EisenhowerQuadrant quadrant) {
+        return switch (quadrant) {
+            case DO_NOW -> "Làm ngay";
+            case SCHEDULE -> "Lên lịch";
+            case DELAY_OR_DELEGATE -> "Để sau";
+            case ELIMINATE -> "Loại bỏ";
+        };
+    }
+
+    private String resolveQuadrantDescription(EisenhowerQuadrant quadrant) {
+        return switch (quadrant) {
+            case DO_NOW -> "Quan trọng và khẩn cấp";
+            case SCHEDULE -> "Quan trọng nhưng không khẩn cấp";
+            case DELAY_OR_DELEGATE -> "Khẩn cấp nhưng ít quan trọng";
+            case ELIMINATE -> "Không quan trọng và không khẩn cấp";
+        };
+    }
+
+    private String resolveDefaultClassificationReason(EisenhowerQuadrant quadrant) {
+        return switch (quadrant) {
+            case DO_NOW -> "Task có độ ưu tiên cao nên cần xử lý trước.";
+            case SCHEDULE -> "Task học tập quan trọng và nên được làm theo lịch.";
+            case DELAY_OR_DELEGATE -> "Task ít quan trọng hơn, có thể xử lý sau.";
+            case ELIMINATE -> "Task không ảnh hưởng trực tiếp đến tiến độ học.";
+        };
     }
 
     private void completeRoadmapStepIfReady(RoadmapStep step) {

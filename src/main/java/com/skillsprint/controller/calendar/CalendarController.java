@@ -5,8 +5,10 @@ import com.skillsprint.dto.request.calendar.GenerateCalendarRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
 import com.skillsprint.dto.response.calendar.CalendarScheduleRunResponse;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
+import com.skillsprint.dto.response.calendar.EisenhowerBoardResponse;
 import com.skillsprint.service.calendar.CalendarService;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -48,6 +51,16 @@ public class CalendarController {
     ) {
         List<CalendarTaskResponse> response = calendarService.getTasks(jwt.getSubject(), workspaceId);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/workspaces/{workspaceId}/calendar/eisenhower")
+    public ResponseEntity<ApiResponse<EisenhowerBoardResponse>> getEisenhowerBoard(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @RequestParam(required = false) LocalDate date
+    ) {
+        EisenhowerBoardResponse response = calendarService.getEisenhowerBoard(jwt.getSubject(), workspaceId, date);
+        return ResponseEntity.ok(ApiResponse.success("Lấy Eisenhower board thành công", response));
     }
 
     @PatchMapping("/calendar/tasks/{taskId}")
