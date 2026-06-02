@@ -2,7 +2,7 @@ package com.skillsprint.enums.payment;
 
 public enum PaymentStatus {
     PENDING,
-    SUCCESS,
+    PAID,
     FAILED,
     CANCELED,
     EXPIRED

@@ -3,9 +3,9 @@ package com.skillsprint.controller.payment;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.payment.CreateSepayPaymentRequest;
 import com.skillsprint.dto.request.payment.SepayWebhookRequest;
-import com.skillsprint.dto.response.payment.PaymentTransactionResponse;
 import com.skillsprint.dto.response.payment.SepayPaymentResponse;
 import com.skillsprint.dto.response.payment.SepayWebhookResponse;
+import com.skillsprint.dto.response.payment.UserPaymentResponse;
 import com.skillsprint.service.payment.SepayPaymentService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -55,19 +55,19 @@ public class PaymentController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<List<PaymentTransactionResponse>>> getMyPayments(
+    public ResponseEntity<ApiResponse<List<UserPaymentResponse>>> getMyPayments(
             @AuthenticationPrincipal Jwt jwt
     ) {
-        List<PaymentTransactionResponse> response = sepayPaymentService.getMyPayments(jwt.getSubject());
+        List<UserPaymentResponse> response = sepayPaymentService.getMyPayments(jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử thanh toán thành công", response));
     }
 
     @GetMapping("/{paymentId}")
-    public ResponseEntity<ApiResponse<PaymentTransactionResponse>> getMyPayment(
+    public ResponseEntity<ApiResponse<UserPaymentResponse>> getMyPayment(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId
     ) {
-        PaymentTransactionResponse response = sepayPaymentService.getMyPayment(jwt.getSubject(), paymentId);
+        UserPaymentResponse response = sepayPaymentService.getMyPayment(jwt.getSubject(), paymentId);
         return ResponseEntity.ok(ApiResponse.success("Lấy thanh toán thành công", response));
     }
 }
