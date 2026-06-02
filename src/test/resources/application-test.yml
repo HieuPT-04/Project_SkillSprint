@@ -23,6 +23,8 @@ app:
   session:
     enabled: false
     header-name: X-Session-Id
+  rate-limit:
+    enabled: false
   cors:
     allowed-origins: http://localhost:5173
   cognito:
