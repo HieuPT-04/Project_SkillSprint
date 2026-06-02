@@ -10,6 +10,8 @@ import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.auth.AuthResponse;
 import com.skillsprint.service.auth.AuthService;
+import com.skillsprint.service.ratelimit.RateLimitService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +33,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     AuthService authService;
+    RateLimitService rateLimitService;
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<ApiResponse<Void>> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        rateLimitService.checkRegister(request.getEmail(), servletRequest);
         authService.register(request);
         return ResponseEntity.status(201)
                 .body(ApiResponse.created("Đăng ký thành công. Vui lòng kiểm tra email để lấy mã xác thực", null));
@@ -47,14 +54,20 @@ public class AuthController {
 
     @PostMapping("/resend-confirmation-code")
     public ResponseEntity<ApiResponse<Void>> resendConfirmationCode(
-            @Valid @RequestBody ResendConfirmationCodeRequest request
+            @Valid @RequestBody ResendConfirmationCodeRequest request,
+            HttpServletRequest servletRequest
     ) {
+        rateLimitService.checkResendConfirmationCode(request.getEmail(), servletRequest);
         authService.resendConfirmationCode(request);
         return ResponseEntity.ok(ApiResponse.success("Mã xác thực đã được gửi lại", null));
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        rateLimitService.checkForgotPassword(request.getEmail(), servletRequest);
         authService.forgotPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Mã đặt lại mật khẩu đã được gửi tới email", null));
     }
@@ -68,7 +81,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        rateLimitService.checkLogin(request.getEmail(), servletRequest);
         AuthResponse response = authService.login(request);
         String message = response.getChallengeName() == null ? "Đăng nhập thành công" : "Cần đổi mật khẩu mới";
         return ResponseEntity.ok(ApiResponse.success(message, response));

@@ -30,6 +30,23 @@ app:
   session:
     enabled: ${APP_SESSION_ENABLED:true}
     header-name: ${APP_SESSION_HEADER_NAME:X-Session-Id}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    login:
+      max-attempts: ${RATE_LIMIT_LOGIN_MAX_ATTEMPTS:5}
+      window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:300}
+    register:
+      max-attempts: ${RATE_LIMIT_REGISTER_MAX_ATTEMPTS:3}
+      window-seconds: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:3600}
+    resend-confirmation-code:
+      max-attempts: ${RATE_LIMIT_RESEND_CONFIRMATION_MAX_ATTEMPTS:3}
+      window-seconds: ${RATE_LIMIT_RESEND_CONFIRMATION_WINDOW_SECONDS:900}
+    forgot-password:
+      max-attempts: ${RATE_LIMIT_FORGOT_PASSWORD_MAX_ATTEMPTS:3}
+      window-seconds: ${RATE_LIMIT_FORGOT_PASSWORD_WINDOW_SECONDS:900}
+    payment-create:
+      max-attempts: ${RATE_LIMIT_PAYMENT_CREATE_MAX_ATTEMPTS:5}
+      window-seconds: ${RATE_LIMIT_PAYMENT_CREATE_WINDOW_SECONDS:900}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}
   cognito:

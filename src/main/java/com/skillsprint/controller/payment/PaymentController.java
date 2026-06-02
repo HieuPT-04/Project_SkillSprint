@@ -7,6 +7,7 @@ import com.skillsprint.dto.response.payment.SepayPaymentResponse;
 import com.skillsprint.dto.response.payment.SepayWebhookResponse;
 import com.skillsprint.dto.response.payment.UserPaymentResponse;
 import com.skillsprint.service.payment.SepayPaymentService;
+import com.skillsprint.service.ratelimit.RateLimitService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -31,12 +32,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
     SepayPaymentService sepayPaymentService;
+    RateLimitService rateLimitService;
 
     @PostMapping("/sepay/create")
     public ResponseEntity<ApiResponse<SepayPaymentResponse>> createSepayPayment(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateSepayPaymentRequest request
     ) {
+        rateLimitService.checkPaymentCreate(jwt.getSubject());
         SepayPaymentResponse response = sepayPaymentService.createPayment(
                 jwt.getSubject(),
                 request
