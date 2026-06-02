@@ -37,6 +37,8 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
 
     long countByUserUserId(String userId);
 
+    long countByProcessingStatus(MaterialProcessingStatus processingStatus);
+
     @Query("""
         select coalesce(sum(m.fileSizeBytes), 0)
         from UploadedMaterial m

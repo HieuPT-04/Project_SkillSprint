@@ -45,4 +45,6 @@ public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID
     List<CalendarTask> findByWorkspaceWorkspaceIdAndTaskDate(UUID workspaceId, LocalDate taskDate);
 
     List<CalendarTask> findByWorkspaceWorkspaceIdAndStatus(UUID workspaceId, CalendarTaskStatus status);
+
+    long countByStatus(CalendarTaskStatus status);
 }

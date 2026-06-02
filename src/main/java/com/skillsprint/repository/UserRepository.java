@@ -1,6 +1,8 @@
 package com.skillsprint.repository;
 
+import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
 
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
@@ -15,6 +17,14 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
 
     long countByStatus(UserStatus status);
+
+    long countByCreatedAtAfter(Instant createdAt);
+
+    long countByCreatedAtBetween(Instant from, Instant to);
+
+    long countByEmailVerified(boolean emailVerified);
+
+    List<User> findTop5ByOrderByCreatedAtDesc();
 
     Page<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
             String email,

@@ -27,4 +27,6 @@ public interface StudySessionRepository extends JpaRepository<StudySession, UUID
             String userId,
             StudySessionStatus status
     );
+
+    long countByStatus(StudySessionStatus status);
 }
