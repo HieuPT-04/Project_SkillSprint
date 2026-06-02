@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.configuration.payment.SepayProperties;
 import com.skillsprint.dto.request.payment.CreateSepayPaymentRequest;
 import com.skillsprint.dto.request.payment.SepayWebhookRequest;
-import com.skillsprint.dto.response.payment.PaymentTransactionResponse;
 import com.skillsprint.dto.response.payment.SepayPaymentResponse;
+import com.skillsprint.dto.response.payment.UserPaymentResponse;
 import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
@@ -121,7 +121,7 @@ public class SepayPaymentService {
 
         validateIncomingPayment(request, transaction);
 
-        transaction.setStatus(PaymentStatus.SUCCESS);
+        transaction.setStatus(PaymentStatus.PAID);
         transaction.setPaidAt(Instant.now());
         paymentTransactionRepository.save(transaction);
 
@@ -132,20 +132,20 @@ public class SepayPaymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentTransactionResponse> getMyPayments(String userId) {
+    public List<UserPaymentResponse> getMyPayments(String userId) {
         return paymentTransactionRepository.findByUserUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .map(paymentMapper::toResponse)
+                .map(paymentMapper::toUserResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public PaymentTransactionResponse getMyPayment(String userId, UUID paymentId) {
+    public UserPaymentResponse getMyPayment(String userId, UUID paymentId) {
         PaymentTransaction transaction = paymentTransactionRepository.findById(paymentId)
                 .filter(payment -> payment.getUser().getUserId().equals(userId))
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND));
 
-        return paymentMapper.toResponse(transaction);
+        return paymentMapper.toUserResponse(transaction);
     }
 
     @Scheduled(fixedDelayString = "${app.payment.sepay.expire-fixed-delay-ms:60000}")

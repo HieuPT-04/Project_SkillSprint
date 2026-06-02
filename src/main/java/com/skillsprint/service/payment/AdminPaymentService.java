@@ -63,7 +63,7 @@ public class AdminPaymentService {
             throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR);
         }
 
-        if (PaymentStatus.SUCCESS.equals(transaction.getStatus())) {
+        if (PaymentStatus.PAID.equals(transaction.getStatus())) {
             throw new AppException(ErrorCode.PAYMENT_ALREADY_CONFIRMED);
         }
 
@@ -75,7 +75,7 @@ public class AdminPaymentService {
 
         Instant paidAt = request.getPaidAt() == null ? Instant.now() : request.getPaidAt();
 
-        transaction.setStatus(PaymentStatus.SUCCESS);
+        transaction.setStatus(PaymentStatus.PAID);
         transaction.setPaidAt(paidAt);
         transaction.setProviderTransactionId(providerTransactionId);
         transaction.setProviderReferenceCode(normalizeBlank(request.getProviderReferenceCode()));
