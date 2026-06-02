@@ -16,6 +16,8 @@ public interface RoadmapRepository extends JpaRepository<Roadmap, UUID> {
 
     long countByUserUserId(String userId);
 
+    long countByStatus(RoadmapStatus status);
+
     List<Roadmap> findByWorkspaceWorkspaceIdAndStatus(UUID workspaceId, RoadmapStatus status);
 
     Optional<Roadmap> findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(UUID workspaceId);

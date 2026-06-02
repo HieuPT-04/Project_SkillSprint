@@ -31,6 +31,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     long countByStatus(PaymentStatus status);
 
+    long countByStatusAndExpireAtBefore(PaymentStatus status, Instant expireAt);
+
     List<PaymentTransaction> findTop5ByOrderByCreatedAtDesc();
 
     List<PaymentTransaction> findByUserUserIdAndStatusOrderByCreatedAtDesc(
@@ -93,5 +95,18 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     java.math.BigDecimal sumAmountByStatusAndPaidAtAfter(
             @Param("status") PaymentStatus status,
             @Param("from") Instant from
+    );
+
+    @Query("""
+            select coalesce(sum(payment.amount), 0)
+            from PaymentTransaction payment
+            where payment.status = :status
+              and payment.paidAt >= :from
+              and payment.paidAt < :to
+            """)
+    java.math.BigDecimal sumAmountByStatusAndPaidAtBetween(
+            @Param("status") PaymentStatus status,
+            @Param("from") Instant from,
+            @Param("to") Instant to
     );
 }
