@@ -14,6 +14,7 @@ public enum ErrorCode {
     ACCOUNT_NOT_CONFIRMED("Tài khoản chưa xác thực email", HttpStatus.FORBIDDEN),
     ACCOUNT_DISABLED("Tài khoản đã bị khóa", HttpStatus.FORBIDDEN),
     SESSION_EXPIRED("Phiên đăng nhập đã hết hạn hoặc đã bị thay thế", HttpStatus.UNAUTHORIZED),
+    INVALID_REFRESH_TOKEN("Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
     INVALID_CONFIRMATION_CODE("Mã xác thực không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
     USER_ALREADY_EXISTS("Email này đã được đăng ký", HttpStatus.CONFLICT),
 

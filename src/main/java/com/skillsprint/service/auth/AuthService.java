@@ -8,6 +8,7 @@ import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
 import com.skillsprint.dto.request.auth.ForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
+import com.skillsprint.dto.request.auth.RefreshTokenRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
 import com.skillsprint.dto.response.auth.AuthResponse;
 import com.skillsprint.enums.auth.RoleName;
@@ -184,7 +185,7 @@ public class AuthService {
             User user = syncLocalUserByEmail(email);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
-            String sessionId = userSessionService.createSession(user.getUserId(), response.authenticationResult().expiresIn());
+            String sessionId = userSessionService.createSession(user.getUserId());
             return authMapper.toAuthResponse(response.authenticationResult(), sessionId);
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
@@ -218,10 +219,49 @@ public class AuthService {
             User user = syncLocalUserByEmail(email);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
-            String sessionId = userSessionService.createSession(user.getUserId(), response.authenticationResult().expiresIn());
+            String sessionId = userSessionService.createSession(user.getUserId());
             return authMapper.toAuthResponse(response.authenticationResult(), sessionId);
         } catch (NotAuthorizedException | UserNotFoundException ex) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
+        }
+    }
+
+    @Transactional
+    public AuthResponse refreshToken(RefreshTokenRequest request, String sessionId) {
+        String email = request.getEmail().trim().toLowerCase();
+
+        try {
+            User user = syncLocalUserByEmail(email);
+            ensureActiveUser(user);
+
+            if (!userSessionService.isCurrentSession(user.getUserId(), sessionId)) {
+                throw new AppException(ErrorCode.SESSION_EXPIRED);
+            }
+
+            Map<String, String> authParams = new HashMap<>();
+            authParams.put("USERNAME", email);
+            authParams.put("REFRESH_TOKEN", request.getRefreshToken());
+            putSecretHashIfNeeded(authParams, email);
+
+            AdminInitiateAuthResponse response = cognitoClient.adminInitiateAuth(
+                    AdminInitiateAuthRequest.builder()
+                            .userPoolId(cognitoProperties.userPoolId())
+                            .clientId(cognitoProperties.clientId())
+                            .authFlow(AuthFlowType.REFRESH_TOKEN_AUTH)
+                            .authParameters(authParams)
+                            .build()
+            );
+
+            if (response.authenticationResult() == null || response.authenticationResult().accessToken() == null) {
+                throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
+            }
+
+            userSessionService.refreshSession(user.getUserId(), sessionId);
+            return authMapper.toAuthResponse(response.authenticationResult(), sessionId, request.getRefreshToken());
+        } catch (NotAuthorizedException | UserNotFoundException ex) {
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
         } catch (CognitoIdentityProviderException ex) {
             throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
         }

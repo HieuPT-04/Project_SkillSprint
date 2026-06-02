@@ -6,6 +6,7 @@ import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
 import com.skillsprint.dto.request.auth.ForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RegisterRequest;
+import com.skillsprint.dto.request.auth.RefreshTokenRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.auth.AuthResponse;
@@ -97,6 +98,15 @@ public class AuthController {
     ) {
         AuthResponse response = authService.completeNewPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", response));
+    }
+
+    @PostMapping("/refresh-token")
+    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
+            @RequestHeader("X-Session-Id") String sessionId,
+            @Valid @RequestBody RefreshTokenRequest request
+    ) {
+        AuthResponse response = authService.refreshToken(request, sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Làm mới phiên đăng nhập thành công", response));
     }
 
     @PostMapping("/logout")

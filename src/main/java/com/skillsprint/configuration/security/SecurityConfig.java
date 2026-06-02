@@ -37,6 +37,7 @@ public class SecurityConfig {
             "/api/auth/resend-confirmation-code",
             "/api/auth/confirm-register",
             "/api/auth/login",
+            "/api/auth/refresh-token",
             "/api/auth/complete-new-password",
             "/api/auth/forgot-password",
             "/api/auth/confirm-forgot-password",

@@ -21,10 +21,14 @@ public class AuthMapper {
     }
 
     public AuthResponse toAuthResponse(AuthenticationResultType result, String sessionId) {
+        return toAuthResponse(result, sessionId, result.refreshToken());
+    }
+
+    public AuthResponse toAuthResponse(AuthenticationResultType result, String sessionId, String refreshToken) {
         return AuthResponse.builder()
                 .accessToken(result.accessToken())
                 .idToken(result.idToken())
-                .refreshToken(result.refreshToken())
+                .refreshToken(refreshToken)
                 .expiresIn(result.expiresIn())
                 .tokenType(result.tokenType())
                 .sessionId(sessionId)

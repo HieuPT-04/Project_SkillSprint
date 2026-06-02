@@ -25,13 +25,17 @@ public class UserSessionService {
     @NonFinal
     boolean sessionEnabled;
 
-    public String createSession(String userId, Integer expiresInSeconds) {
+    @Value("${app.session.ttl-days:30}")
+    @NonFinal
+    long sessionTtlDays;
+
+    public String createSession(String userId) {
         if (!sessionEnabled) {
             return null;
         }
 
         String sessionId = UUID.randomUUID().toString();
-        Duration ttl = Duration.ofSeconds(resolveTtlSeconds(expiresInSeconds));
+        Duration ttl = sessionTtl();
         String userSessionKey = userSessionKey(userId);
         String sessionUserKey = sessionUserKey(sessionId);
 
@@ -43,6 +47,19 @@ public class UserSessionService {
         redisTemplate.opsForValue().set(userSessionKey, sessionId, ttl);
         redisTemplate.opsForValue().set(sessionUserKey, userId, ttl);
         return sessionId;
+    }
+
+    public void refreshSession(String userId, String sessionId) {
+        if (!sessionEnabled) {
+            return;
+        }
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+
+        Duration ttl = sessionTtl();
+        redisTemplate.opsForValue().set(userSessionKey(userId), sessionId, ttl);
+        redisTemplate.opsForValue().set(sessionUserKey(sessionId), userId, ttl);
     }
 
     public boolean isCurrentSession(String userId, String sessionId) {
@@ -78,11 +95,11 @@ public class UserSessionService {
                 .ifPresent(userId -> invalidateSession(userId, sessionId));
     }
 
-    private long resolveTtlSeconds(Integer expiresInSeconds) {
-        if (expiresInSeconds == null || expiresInSeconds <= 0) {
-            return Duration.ofHours(1).toSeconds();
+    private Duration sessionTtl() {
+        if (sessionTtlDays <= 0) {
+            return Duration.ofDays(30);
         }
-        return expiresInSeconds;
+        return Duration.ofDays(sessionTtlDays);
     }
 
     private String userSessionKey(String userId) {
