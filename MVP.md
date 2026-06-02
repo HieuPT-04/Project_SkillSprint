@@ -85,15 +85,21 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Study session detail API để user bấm calendar task là vào màn học.
 - Study session API để start/finish phiên học thật từ calendar task.
 - Progress dashboard API gồm roadmap progress, current step, today/overdue tasks, study stats và current session.
+- Redis-backed session tracking để hỗ trợ logout và kiểm soát phiên đăng nhập.
+- Refresh token API để user học lâu không bị out khi access token hết hạn.
+- Eisenhower daily board API để FE gom task theo 4 nhóm trong ngày.
+- Pomodoro/study timer basic để user start/finish phiên học.
 - Subscription/quota basic.
 - SePay payment flow cho thanh toán thật bằng chuyển khoản ngân hàng.
+- Admin payment APIs cho danh sách giao dịch và reconcile thủ công khi cần.
+- Admin Dashboard API gồm tổng quan user, workspace, subscription, payment, learning, chart và alert.
 
 Cần rà soát tiếp:
 
 - Test lại full core flow end-to-end bằng Postman.
 - Cập nhật Postman collection mỗi khi API/response đổi.
 - Chỉ sửa core nếu test phát hiện lỗi làm gãy flow.
-- Chưa ưu tiên thêm Pomodoro/observability nâng cao.
+- Chưa ưu tiên thêm reminder, realtime notification và observability nâng cao.
 
 ## 4. Kiến Trúc Kỹ Thuật
 
@@ -160,6 +166,7 @@ POST /api/auth/register
 POST /api/auth/resend-confirmation-code
 POST /api/auth/confirm-register
 POST /api/auth/login
+POST /api/auth/refresh-token
 POST /api/auth/complete-new-password
 POST /api/auth/forgot-password
 POST /api/auth/confirm-forgot-password
@@ -184,7 +191,19 @@ Login
 -> Backend đọc user + groups từ Cognito
 -> Sync user về DB
 -> Gán role nội bộ
--> Trả token
+-> Tạo Redis session
+-> Trả token + sessionId
+```
+
+Refresh token flow:
+
+```text
+Access token gần hết hạn
+-> FE gọi refresh-token bằng refreshToken + X-Session-Id
+-> Backend kiểm tra Redis session còn hợp lệ
+-> Backend xin access token mới từ Cognito
+-> Backend gia hạn Redis session
+-> Trả access token mới + sessionId cũ
 ```
 
 Manual Cognito user flow:
@@ -226,6 +245,16 @@ GET /api/admin/users
 GET /api/admin/users/{userId}
 PATCH /api/admin/users/{userId}/status
 PATCH /api/admin/users/{userId}/roles
+```
+
+Admin dashboard/payment endpoints:
+
+```text
+GET /api/admin/dashboard
+GET /api/admin/dashboard?from=yyyy-MM-dd&to=yyyy-MM-dd
+GET /api/admin/payments
+POST /api/admin/payments/{paymentId}/reconcile
+PATCH /api/admin/users/{userId}/subscription
 ```
 
 ## 6. API Response Chuẩn
@@ -340,22 +369,22 @@ Nhóm calendar/progress:
 - `calendar_schedule_runs`: mỗi lần sinh lịch học từ roadmap.
 - `calendar_tasks`: task học theo ngày/giờ.
 - `study_sessions`: phiên học thật của user từ calendar task.
+- `pomodoro_sessions`: phiên Pomodoro/timer học tập của user.
 - `workspace_progress`: tiến độ tổng của workspace.
+- `progress_logs`: lịch sử thay đổi progress nếu cần audit.
+
+Nhóm payment/subscription:
+
+- `service_plans`: gói dịch vụ cố định.
+- `subscriptions`: gói hiện tại của user.
+- `payment_transactions`: giao dịch thanh toán SePay.
 
 Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
 
 - `reminders`.
 - `notifications`.
-- `pomodoro_sessions`.
-
-Nhóm đã có basic support nhưng cần hardening sau MVP:
-
-- `business_activity_logs`.
 - `notification_logs`.
-- `progress_logs`.
-- `service_plans`.
-- `subscriptions`.
-- `payment_transactions`.
+- `business_activity_logs`.
 
 ## 8. Learning Structure Review
 
@@ -440,6 +469,18 @@ CalendarTask
 -> Complete calendar task
 -> Update progress
 ```
+
+Eisenhower daily board:
+
+```text
+GET /api/workspaces/{workspaceId}/calendar/eisenhower?date=yyyy-MM-dd
+```
+
+Mục tiêu:
+
+- FE lấy task trong một ngày và render 4 cột: làm ngay, lên lịch, để sau, loại bỏ.
+- Backend phân loại dựa trên `isUrgent`, `isImportant`, `priority`, `taskDate` và metadata đã có trên calendar task.
+- Không tạo bảng mới, chỉ đọc và nhóm lại từ `calendar_tasks`.
 
 `CalendarScheduleRun` cần giữ vì nó lưu lịch sử mỗi lần sinh lịch, giúp:
 
@@ -529,12 +570,19 @@ FAILED | CANCELLED
 29. Subscription/quota basic.
 30. SePay payment flow với pending, expireAt, webhook và activate subscription 1 tháng.
 31. Subscription trả phí hết hạn theo `startAt/endAt` và tự fallback về FREE.
+32. Admin payment list/reconcile và admin subscription adjustment.
+33. Redis-backed session tracking cho logout/session control.
+34. Refresh token API và Redis session TTL theo session policy.
+35. Pomodoro/study timer basic.
+36. Eisenhower daily board API.
+37. Admin Dashboard API với overview, chart, alert và recent activity.
 
 Làm tiếp:
 
 1. Rà soát full core flow end-to-end.
-2. Sửa lỗi core nếu phát hiện trong lúc test.
-3. Sau khi core ổn mới chọn Phase Later đầu tiên.
+2. Chuẩn hóa thêm API contract nếu FE cần field cụ thể.
+3. Sửa lỗi core nếu phát hiện trong lúc test.
+4. Sau khi core ổn mới chọn Phase Later đầu tiên.
 
 Thứ tự kiểm thử trước mắt:
 
@@ -592,4 +640,4 @@ Login
 -> Track Progress
 ```
 
-Khi vòng này ổn, mới mở rộng sang reminder, notification realtime, Pomodoro, payment/quota và analytics.
+Khi vòng này ổn, mới mở rộng sang reminder, notification realtime, audit/business log, observability và admin analytics nâng cao.
