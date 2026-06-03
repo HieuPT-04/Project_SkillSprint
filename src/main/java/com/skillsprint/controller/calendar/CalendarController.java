@@ -1,8 +1,10 @@
 package com.skillsprint.controller.calendar;
 
 import com.skillsprint.common.ApiResponse;
+import com.skillsprint.dto.request.calendar.CreateCalendarTaskRequest;
 import com.skillsprint.dto.request.calendar.GenerateCalendarRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
+import com.skillsprint.dto.request.calendar.UpdateCalendarTaskStatusRequest;
 import com.skillsprint.dto.response.calendar.CalendarScheduleRunResponse;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.dto.response.calendar.EisenhowerBoardResponse;
@@ -14,6 +16,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -61,6 +64,36 @@ public class CalendarController {
     ) {
         EisenhowerBoardResponse response = calendarService.getEisenhowerBoard(jwt.getSubject(), workspaceId, date);
         return ResponseEntity.ok(ApiResponse.success("Lấy Eisenhower board thành công", response));
+    }
+
+    @GetMapping("/workspaces/{workspaceId}/eisenhower-tasks")
+    public ResponseEntity<ApiResponse<EisenhowerBoardResponse>> getEisenhowerTasks(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId
+    ) {
+        EisenhowerBoardResponse response = calendarService.getEisenhowerTasksForWorkspace(jwt.getSubject(), workspaceId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy Eisenhower tasks thành công", response));
+    }
+
+    @PostMapping("/workspaces/{workspaceId}/calendar/tasks")
+    public ResponseEntity<ApiResponse<CalendarTaskResponse>> createTask(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @Valid @RequestBody CreateCalendarTaskRequest request
+    ) {
+        CalendarTaskResponse response = calendarService.createTask(jwt.getSubject(), workspaceId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created("Tạo task thành công", response));
+    }
+
+    @PatchMapping("/workspaces/{workspaceId}/calendar/tasks/{taskId}/status")
+    public ResponseEntity<ApiResponse<CalendarTaskResponse>> updateTaskStatus(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID taskId,
+            @Valid @RequestBody UpdateCalendarTaskStatusRequest request
+    ) {
+        CalendarTaskResponse response = calendarService.updateTaskStatus(jwt.getSubject(), workspaceId, taskId, request);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái task thành công", response));
     }
 
     @PatchMapping("/calendar/tasks/{taskId}")

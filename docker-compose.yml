@@ -11,7 +11,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-skillsprint}
       DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
       REDIS_HOST: redis
       REDIS_PORT: 6379
     ports:
@@ -29,7 +29,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-skillsprint}
       POSTGRES_USER: ${DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
     ports:
       - "${POSTGRES_PORT:-5434}:5432"
     volumes:

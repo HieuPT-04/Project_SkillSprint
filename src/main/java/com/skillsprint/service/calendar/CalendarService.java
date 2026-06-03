@@ -3,8 +3,10 @@ package com.skillsprint.service.calendar;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skillsprint.dto.request.calendar.CreateCalendarTaskRequest;
 import com.skillsprint.dto.request.calendar.GenerateCalendarRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
+import com.skillsprint.dto.request.calendar.UpdateCalendarTaskStatusRequest;
 import com.skillsprint.dto.response.calendar.CalendarScheduleRunResponse;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.dto.response.calendar.EisenhowerBoardResponse;
@@ -156,6 +158,17 @@ public class CalendarService {
         return buildEisenhowerBoard(workspaceId, targetDate, tasks);
     }
 
+    @Transactional(readOnly = true)
+    public EisenhowerBoardResponse getEisenhowerTasksForWorkspace(String userId, UUID workspaceId) {
+        findOwnedWorkspace(userId, workspaceId);
+        List<CalendarTask> tasks = calendarTaskRepository
+                .findByWorkspaceWorkspaceIdAndUserUserIdOrderByTaskDateAscStartTimeAscCreatedAtAsc(
+                        workspaceId,
+                        userId
+                );
+        return buildEisenhowerBoard(workspaceId, LocalDate.now(), tasks);
+    }
+
     @Transactional
     public CalendarTaskResponse updateTask(
             String userId,
@@ -195,6 +208,56 @@ public class CalendarService {
         }
 
         return calendarMapper.toTaskResponse(task);
+    }
+
+    @Transactional
+    public CalendarTaskResponse createTask(String userId, UUID workspaceId, CreateCalendarTaskRequest request) {
+        StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+
+        CalendarTask task = new CalendarTask();
+        task.setWorkspace(workspace);
+        task.setUser(workspace.getUser());
+        task.setTitle(request.getTitle().trim());
+        task.setDescription(request.getDescription());
+        task.setTaskDate(request.getTaskDate() != null ? request.getTaskDate() : LocalDate.now());
+        task.setStartTime(request.getStartTime());
+        task.setEndTime(request.getEndTime());
+        task.setDurationMinutes(request.getDurationMinutes());
+        task.setCategory(CalendarTaskCategory.PERSONAL);
+        task.setPriority(CalendarTaskPriority.MEDIUM);
+        task.setStatus(CalendarTaskStatus.TODO);
+        task.setSource(CalendarTaskSource.USER_CREATED);
+
+        EisenhowerQuadrant quadrant = request.getQuadrant() != null
+                ? request.getQuadrant()
+                : EisenhowerQuadrant.SCHEDULE;
+        task.setEisenhowerQuadrant(quadrant);
+        task.setImportant(isImportantQuadrant(quadrant));
+        task.setUrgent(isUrgentQuadrant(quadrant));
+        task.setImportanceScore(isImportantQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
+        task.setUrgencyScore(isUrgentQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
+        task.setClassificationReason("Người dùng tạo thủ công.");
+        task.setClassifiedBy(ClassifiedBy.USER);
+        task.setClassifiedAt(Instant.now());
+
+        return calendarMapper.toTaskResponse(calendarTaskRepository.save(task));
+    }
+
+    @Transactional
+    public CalendarTaskResponse updateTaskStatus(
+            String userId,
+            UUID workspaceId,
+            UUID taskId,
+            UpdateCalendarTaskStatusRequest request
+    ) {
+        findOwnedWorkspace(userId, workspaceId);
+        CalendarTask task = findOwnedTask(userId, taskId);
+
+        CalendarTaskStatus newStatus = resolveStatus(request.getStatus());
+        task.setStatus(newStatus);
+        task.setCompletedAt(newStatus == CalendarTaskStatus.COMPLETED ? Instant.now() : null);
+
+        return calendarMapper.toTaskResponse(calendarTaskRepository.save(task));
     }
 
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {
@@ -689,6 +752,16 @@ public class CalendarService {
             case SCHEDULE -> "Task học tập quan trọng và nên được làm theo lịch.";
             case DELAY_OR_DELEGATE -> "Task ít quan trọng hơn, có thể xử lý sau.";
             case ELIMINATE -> "Task không ảnh hưởng trực tiếp đến tiến độ học.";
+        };
+    }
+
+    private CalendarTaskStatus resolveStatus(String raw) {
+        if (raw == null) return CalendarTaskStatus.TODO;
+        return switch (raw.toUpperCase()) {
+            case "COMPLETED" -> CalendarTaskStatus.COMPLETED;
+            case "MISSED"    -> CalendarTaskStatus.MISSED;
+            case "CANCELLED" -> CalendarTaskStatus.CANCELLED;
+            default          -> CalendarTaskStatus.TODO;
         };
     }
 

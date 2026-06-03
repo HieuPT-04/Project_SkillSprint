@@ -1,7 +1,9 @@
 package com.skillsprint.dto.request.payment;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,7 +19,10 @@ public class SepayWebhookRequest {
 
     Long id;
     String gateway;
-    String transactionDate;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    LocalDateTime transactionDate;
+
     String accountNumber;
     String subAccount;
     String code;
