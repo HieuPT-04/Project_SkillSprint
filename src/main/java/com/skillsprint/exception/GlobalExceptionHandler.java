@@ -6,6 +6,7 @@ import com.skillsprint.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -57,6 +58,20 @@ public class GlobalExceptionHandler {
         ApiResponse<Object> response = ApiResponse.error(
                 ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Malformed request body at {}: {}", request.getRequestURI(), ex.getMessage());
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.VALIDATION_ERROR,
+                "Malformed or unreadable request body",
                 request.getRequestURI()
         );
         return ResponseEntity.badRequest().body(response);

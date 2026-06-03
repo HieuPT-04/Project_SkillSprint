@@ -8,3 +8,6 @@ target/
 .idea/
 *.iml
 *.md
+
+#test
+/test/SkillSprint.postman_collection (2).json

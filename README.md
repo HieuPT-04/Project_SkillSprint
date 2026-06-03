@@ -246,17 +246,35 @@ All endpoints follow a strict, predictable response wrapper.
 }
 ```
 
----
+## Current Next Tasks
 
-## ⚠️ Notes & Known Limitations
+Theo MVP, phần tiếp theo nên làm:
 
-* 🔄 **AI Fallback:** If the Gemini API fails or is disabled, the system gracefully falls back to a deterministic rule-based generator.
-* 🗑️ **Soft Deletes:** Workspaces use soft-deletion (`status = DELETED`) to preserve relational integrity.
-* 🔗 **Dynamic URLs:** S3 object URLs are constructed at response time; only object keys are stored in DB.
-* 🚧 **Pending:** `DELETE /api/workspaces/{workspaceId}/materials/{materialId}` is currently unmapped.
+```text
+Full core flow E2E verification
+```
 
----
+Core hiện đã có Auth, Workspace, Onboarding, Material, Learning Structure, Roadmap, Calendar, Study Session và Progress.
+Trước khi qua Phase Later, cần test lại full flow bằng Postman và chỉ sửa lỗi làm gãy core.
 
-<div align="center">
-  <p><i>Developed with 🔥 by <b>Bộ Tộc Deadline</b> | Part of the EXE201 capstone course.</i></p>
-</div>
+Calendar hiện chỉ generate một lần từ roadmap. Sau khi đã có lịch, user chỉnh lịch bằng cách dời từng calendar task thay vì regenerate roadmap/lịch tùy tiện.
+
+## Progress Endpoint
+
+Yêu cầu token hợp lệ. API này gom dữ liệu để FE làm màn hình dashboard học tập.
+
+```text
+GET /api/workspaces/{workspaceId}/progress
+```
+
+Response gồm:
+
+```text
+roadmap progress
+current step
+today tasks
+overdue tasks
+total/completed task count
+study stats: totalStudyMinutes, completedSessions, currentStreakDays, lastStudyDate
+currentSession nếu user đang có phiên học IN_PROGRESS
+```

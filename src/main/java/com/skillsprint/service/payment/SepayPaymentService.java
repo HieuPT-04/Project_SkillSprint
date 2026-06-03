@@ -109,18 +109,25 @@ public class SepayPaymentService {
             return;
         }
 
-        transaction.setRawCallbackData(toJson(request));
-        transaction.setProviderTransactionId(providerTransactionId);
-        transaction.setProviderReferenceCode(request.getReferenceCode());
+        String rawCallbackData = toJson(request);
 
         if (isExpired(transaction)) {
+            transaction.setRawCallbackData(rawCallbackData);
+            transaction.setProviderTransactionId(providerTransactionId);
+            transaction.setProviderReferenceCode(request.getReferenceCode());
             transaction.setStatus(PaymentStatus.EXPIRED);
             paymentTransactionRepository.save(transaction);
             return;
         }
 
+        // Validate before dirtying the entity so that if validation fails
+        // the transaction rolls back with no dirty state, letting AppException
+        // propagate cleanly to the global handler (→ 400, not 500).
         validateIncomingPayment(request, transaction);
 
+        transaction.setRawCallbackData(rawCallbackData);
+        transaction.setProviderTransactionId(providerTransactionId);
+        transaction.setProviderReferenceCode(request.getReferenceCode());
         transaction.setStatus(PaymentStatus.PAID);
         transaction.setPaidAt(Instant.now());
         paymentTransactionRepository.save(transaction);
@@ -230,7 +237,9 @@ public class SepayPaymentService {
 
         if (request.getTransferAmount() == null
                 || transaction.getAmount().compareTo(request.getTransferAmount().setScale(0, RoundingMode.HALF_UP)) != 0) {
-            throw new AppException(ErrorCode.PAYMENT_INVALID_AMOUNT);
+            throw new AppException(ErrorCode.PAYMENT_INVALID_AMOUNT,
+                    "Sai lệch số tiền: Hóa đơn yêu cầu " + transaction.getAmount()
+                            + " nhưng thực nhận " + request.getTransferAmount());
         }
 
         String searchableText = webhookSearchableText(request);
