@@ -79,7 +79,8 @@ public class RoadmapService {
                 .saveAllAndFlush(createResources(steps));
 
         notificationService.notifyRoadmapReady(workspace.getUser(), workspace);
-        return roadmapMapper.toResponse(updatedRoadmap, steps, resources);
+        int unlockedStepLimit = quotaService.getUnlockedRoadmapStepLimit(userId);
+        return roadmapMapper.toResponse(updatedRoadmap, steps, resources, unlockedStepLimit);
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +96,8 @@ public class RoadmapService {
                         .stream())
                 .toList();
 
-        return roadmapMapper.toResponse(roadmap, steps, resources);
+        int unlockedStepLimit = quotaService.getUnlockedRoadmapStepLimit(userId);
+        return roadmapMapper.toResponse(roadmap, steps, resources, unlockedStepLimit);
     }
 
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {

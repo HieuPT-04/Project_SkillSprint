@@ -25,6 +25,7 @@ import com.skillsprint.repository.PomodoroSessionRepository;
 import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.service.calendar.CalendarService;
+import com.skillsprint.service.subscription.QuotaService;
 import java.util.EnumSet;
 import java.util.List;
 import java.time.Duration;
@@ -63,10 +64,12 @@ public class StudySessionService {
     RoadmapMapper roadmapMapper;
     StudySessionMapper studySessionMapper;
     CalendarService calendarService;
+    QuotaService quotaService;
 
     @Transactional(readOnly = true)
     public StudySessionDetailResponse getStudySessionDetail(String userId, UUID taskId) {
         CalendarTask task = findOwnedTask(userId, taskId);
+        quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
         StudySession currentSession = studySessionRepository
                 .findFirstByCalendarTaskTaskIdAndUserUserIdAndStatus(
                         taskId,
@@ -85,6 +88,7 @@ public class StudySessionService {
         if (task == null) {
             throw new AppException(ErrorCode.CALENDAR_TASK_NOT_FOUND);
         }
+        quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
 
         return buildStudySessionDetail(task, session);
     }
@@ -211,6 +215,7 @@ public class StudySessionService {
     @Transactional
     public StudySessionResponse startSession(String userId, UUID taskId, StartStudySessionRequest request) {
         CalendarTask task = findOwnedTask(userId, taskId);
+        quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
         if (task.getStatus() == CalendarTaskStatus.COMPLETED) {
             throw new AppException(ErrorCode.STUDY_SESSION_TASK_ALREADY_COMPLETED);
         }

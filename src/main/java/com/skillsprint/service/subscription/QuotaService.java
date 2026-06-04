@@ -1,7 +1,9 @@
 package com.skillsprint.service.subscription;
 
 import com.skillsprint.dto.response.subscription.QuotaStatusResponse;
+import com.skillsprint.entity.RoadmapStep;
 import com.skillsprint.entity.ServicePlan;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.workspace.WorkspaceStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -21,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class QuotaService {
+
+    static int FREE_ROADMAP_STEP_LIMIT = 2;
 
     SubscriptionService subscriptionService;
     StudyWorkspaceRepository workspaceRepository;
@@ -122,6 +126,25 @@ public class QuotaService {
 
         if (countUsedAiGenerate(userId) >= aiGenerateLimit) {
             throw new AppException(ErrorCode.QUOTA_AI_GENERATE_LIMIT_EXCEEDED);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public int getUnlockedRoadmapStepLimit(String userId) {
+        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+        if (plan.getPlanType() == ServicePlanType.FREE) {
+            return FREE_ROADMAP_STEP_LIMIT;
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    @Transactional(readOnly = true)
+    public void validateCanAccessRoadmapStep(String userId, RoadmapStep step) {
+        if (step == null || step.getSequenceNo() == null) {
+            return;
+        }
+        if (step.getSequenceNo() > getUnlockedRoadmapStepLimit(userId)) {
+            throw new AppException(ErrorCode.QUOTA_ROADMAP_STEP_LOCKED);
         }
     }
 
