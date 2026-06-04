@@ -62,6 +62,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -80,6 +82,10 @@ public class CalendarService {
     static int MAX_SESSIONS_PER_DAY = 8;
     static int TITLE_LENGTH = 90;
     static int SAFE_VARCHAR_LENGTH = 250;
+    static Pattern DISPLAY_STEP_PREFIX_PATTERN = Pattern.compile(
+            "^(?:bước|step|topic)\\s*\\d+(?:[.\\-:/)]\\s*|\\s+)(.+)$",
+            Pattern.CASE_INSENSITIVE
+    );
 
     StudyWorkspaceRepository workspaceRepository;
     RoadmapRepository roadmapRepository;
@@ -386,7 +392,7 @@ public class CalendarService {
             TaskDraft currentDraft = currentPlan.draft();
             TaskDraft optimizedDraft = new TaskDraft(
                     currentDraft.step(),
-                    truncate(defaultText(suggestion.title(), currentDraft.title()), TITLE_LENGTH),
+                    cleanCalendarTaskTitle(defaultText(suggestion.title(), currentDraft.title()), TITLE_LENGTH),
                     truncate(defaultText(suggestion.description(), currentDraft.description()), SAFE_VARCHAR_LENGTH),
                     suggestion.category() == null ? currentDraft.category() : suggestion.category(),
                     suggestion.priority() == null ? currentDraft.priority() : suggestion.priority(),
@@ -410,7 +416,7 @@ public class CalendarService {
     private String buildLearningTaskTitle(RoadmapStep step, int part, int totalParts) {
         String suffix = totalParts == 1 ? "" : " (" + part + "/" + totalParts + ")";
         int maxBaseLength = TITLE_LENGTH - "Học: ".length() - suffix.length();
-        return "Học: " + truncate(step.getTitle(), Math.max(20, maxBaseLength)) + suffix;
+        return "Học: " + cleanDisplayTitle(step.getTitle(), Math.max(20, maxBaseLength)) + suffix;
     }
 
     private String buildLearningTaskDescription(RoadmapStep step, int part, int totalParts) {
@@ -428,7 +434,7 @@ public class CalendarService {
     }
 
     private String buildReviewTaskTitle(RoadmapStep step) {
-        return "Ôn tập: " + truncate(resolveChapterTitle(step), TITLE_LENGTH - "Ôn tập: ".length());
+        return "Ôn tập: " + cleanDisplayTitle(resolveChapterTitle(step), TITLE_LENGTH - "Ôn tập: ".length());
     }
 
     private String buildReviewTaskDescription(RoadmapStep step) {
@@ -1050,6 +1056,26 @@ public class CalendarService {
             return fallback;
         }
         return value.trim();
+    }
+
+    private String cleanCalendarTaskTitle(String value, int maxLength) {
+        String title = defaultText(value, "Nhiệm vụ học").replaceAll("\\s+", " ").trim();
+        if (title.regionMatches(true, 0, "Học: ", 0, "Học: ".length())) {
+            return "Học: " + cleanDisplayTitle(title.substring("Học: ".length()), maxLength - "Học: ".length());
+        }
+        if (title.regionMatches(true, 0, "Ôn tập: ", 0, "Ôn tập: ".length())) {
+            return "Ôn tập: " + cleanDisplayTitle(title.substring("Ôn tập: ".length()), maxLength - "Ôn tập: ".length());
+        }
+        return cleanDisplayTitle(title, maxLength);
+    }
+
+    private String cleanDisplayTitle(String value, int maxLength) {
+        String title = defaultText(value, "Nội dung học").replaceAll("\\s+", " ").trim();
+        Matcher matcher = DISPLAY_STEP_PREFIX_PATTERN.matcher(title);
+        if (matcher.matches()) {
+            title = matcher.group(1).trim();
+        }
+        return truncate(title, maxLength);
     }
 
     private record TimeWindow(LocalTime startTime, LocalTime endTime) {

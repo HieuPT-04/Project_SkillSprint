@@ -51,6 +51,10 @@ public class LearningStructureService {
     static Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("^(#{1,5})\\s+(.{3,160})$");
     static Pattern NUMBERED_HEADING_PATTERN = Pattern.compile("^(\\d+(?:\\.\\d+){0,4})[.)]?\\s+(.{3,160})$");
     static Pattern LIST_MARKER_PATTERN = Pattern.compile("^[-*•]\\s+.+$");
+    static Pattern DISPLAY_STEP_PREFIX_PATTERN = Pattern.compile(
+            "^(?:bước|step|topic)\\s*\\d+(?:[.\\-:/)]\\s*|\\s+)(.+)$",
+            Pattern.CASE_INSENSITIVE
+    );
 
     StudyWorkspaceRepository workspaceRepository;
     MaterialChunkRepository materialChunkRepository;
@@ -192,7 +196,7 @@ public class LearningStructureService {
             Chapter chapter = new Chapter();
             chapter.setWorkspace(workspace);
             chapter.setStructureVersion(structureVersion);
-            chapter.setTitle(truncate(defaultText(draft.title(), "Chương " + (i + 1)), 90));
+            chapter.setTitle(cleanDisplayTitle(defaultText(draft.title(), "Chương " + (i + 1)), 90));
             chapter.setSummary(truncate(defaultText(draft.summary(), chapter.getTitle()), 1200));
             chapter.setWhatToLearn(safeList(draft.whatToLearn()));
             chapter.setKeyConcepts(safeList(draft.keyConcepts()));
@@ -220,7 +224,7 @@ public class LearningStructureService {
                 topic.setChapter(chapter);
                 topic.setWorkspace(workspace);
                 topic.setStructureVersion(structureVersion);
-                topic.setTitle(truncate(defaultText(draft.title(), "Topic " + (topicIndex + 1)), 90));
+                topic.setTitle(cleanDisplayTitle(defaultText(draft.title(), "Nội dung " + (topicIndex + 1)), 90));
                 topic.setSummaryContent(truncate(defaultText(draft.summaryContent(), topic.getTitle()), 1200));
                 topic.setWhatToLearn(safeList(draft.whatToLearn()));
                 topic.setKeyConcepts(safeList(draft.keyConcepts()));
@@ -574,6 +578,15 @@ public class LearningStructureService {
 
     private String defaultText(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String cleanDisplayTitle(String value, int maxLength) {
+        String title = defaultText(value, "Nội dung học").replaceAll("\\s+", " ").trim();
+        Matcher matcher = DISPLAY_STEP_PREFIX_PATTERN.matcher(title);
+        if (matcher.matches()) {
+            title = matcher.group(1).trim();
+        }
+        return truncate(title, maxLength);
     }
 
     private List<String> safeList(List<String> values) {

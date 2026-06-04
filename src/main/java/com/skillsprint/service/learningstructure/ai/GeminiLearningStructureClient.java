@@ -131,6 +131,7 @@ public class GeminiLearningStructureClient {
                 - Không bịa nội dung ngoài tài liệu.
                 - Mỗi chapter nên có ít nhất 1 topic.
                 - Title ngắn, rõ ý, tối đa 12 từ.
+                - Không đặt title bắt đầu bằng "Bước 1", "Step 1", "Topic 1" hoặc các tiền tố đánh số máy móc tương tự.
                 - Summary chỉ 1-2 câu ngắn.
                 - whatToLearn trả 2-4 ý ngắn.
                 - keyConcepts trả 3-6 khái niệm ngắn.
@@ -168,6 +169,7 @@ public class GeminiLearningStructureClient {
                 - Nếu dưới 5 slot, tạo 2-3 chapter.
                 - Mỗi topic nên bám theo 1 hoặc vài slot học thật.
                 - Title ngắn, rõ ý, tối đa 10 từ.
+                - Không đặt title bắt đầu bằng "Bước 1", "Step 1", "Topic 1" hoặc các tiền tố đánh số máy móc tương tự.
                 - Summary chỉ 1 câu ngắn, không copy nguyên bảng.
                 - whatToLearn trả 2-4 ý ngắn.
                 - keyConcepts trả 3-6 khái niệm ngắn.
@@ -255,6 +257,7 @@ public class GeminiLearningStructureClient {
                 - Không tạo chapter chỉ tên "Assignment" hoặc "Requirements".
                 - Nếu bài tập nhỏ, chỉ tạo 2-4 chapter.
                 - Title ngắn, rõ, tối đa 10 từ.
+                - Không đặt title bắt đầu bằng "Bước 1", "Step 1", "Topic 1" hoặc các tiền tố đánh số máy móc tương tự.
                 - sourceChunkIds chỉ dùng id có trong input.
 
                 Phân tích sơ bộ:
