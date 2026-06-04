@@ -6,6 +6,7 @@ import com.skillsprint.dto.response.roadmap.RoadmapStepResponse;
 import com.skillsprint.entity.Roadmap;
 import com.skillsprint.entity.RoadmapStep;
 import com.skillsprint.entity.RoadmapStepResource;
+import com.skillsprint.enums.plan.ServicePlanType;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,11 +23,21 @@ public class RoadmapMapper {
     static int RESOURCE_REASON_LENGTH = 220;
     static int RESOURCE_TITLE_LENGTH = 120;
     static int RESOURCE_QUERY_LENGTH = 180;
+    static String LOCK_REASON = "Vui lòng nâng cấp gói để học tiếp.";
 
     public RoadmapResponse toResponse(
             Roadmap roadmap,
             List<RoadmapStep> steps,
             List<RoadmapStepResource> resources
+    ) {
+        return toResponse(roadmap, steps, resources, Integer.MAX_VALUE);
+    }
+
+    public RoadmapResponse toResponse(
+            Roadmap roadmap,
+            List<RoadmapStep> steps,
+            List<RoadmapStepResource> resources,
+            int unlockedStepLimit
     ) {
         Map<UUID, List<RoadmapStepResource>> resourcesByStepId = resources.stream()
                 .collect(Collectors.groupingBy(resource -> resource.getStep().getStepId()));
@@ -48,13 +59,19 @@ public class RoadmapMapper {
                 .steps(steps.stream()
                         .map(step -> toStepResponse(
                                 step,
-                                resourcesByStepId.getOrDefault(step.getStepId(), List.of())
+                                resourcesByStepId.getOrDefault(step.getStepId(), List.of()),
+                                unlockedStepLimit
                         ))
                         .toList())
                 .build();
     }
 
-    private RoadmapStepResponse toStepResponse(RoadmapStep step, List<RoadmapStepResource> resources) {
+    private RoadmapStepResponse toStepResponse(
+            RoadmapStep step,
+            List<RoadmapStepResource> resources,
+            int unlockedStepLimit
+    ) {
+        boolean locked = isLocked(step, unlockedStepLimit);
         return RoadmapStepResponse.builder()
                 .stepId(step.getStepId())
                 .chapterId(step.getChapter() == null ? null : step.getChapter().getChapterId())
@@ -72,6 +89,9 @@ public class RoadmapMapper {
                 .sequenceNo(step.getSequenceNo())
                 .status(step.getStatus())
                 .completedAt(step.getCompletedAt())
+                .locked(locked)
+                .lockReason(locked ? LOCK_REASON : null)
+                .requiredPlan(locked ? ServicePlanType.SKILL_BUILDER : null)
                 .resources(resources.stream().map(this::toResourceResponse).toList())
                 .build();
     }
@@ -101,6 +121,10 @@ public class RoadmapMapper {
                 .limit(MAX_LIST_ITEMS)
                 .map(value -> truncate(value, LIST_ITEM_LENGTH))
                 .toList();
+    }
+
+    private boolean isLocked(RoadmapStep step, int unlockedStepLimit) {
+        return step.getSequenceNo() != null && step.getSequenceNo() > unlockedStepLimit;
     }
 
     private String truncate(String value, int maxLength) {

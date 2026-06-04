@@ -1,6 +1,7 @@
 package com.skillsprint.dto.response.roadmap;
 
 import com.skillsprint.enums.learningstructure.DifficultyLevel;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.roadmap.RoadmapStepStatus;
 import java.time.Instant;
 import java.util.List;
@@ -31,5 +32,8 @@ public class RoadmapStepResponse {
     Integer sequenceNo;
     RoadmapStepStatus status;
     Instant completedAt;
+    Boolean locked;
+    String lockReason;
+    ServicePlanType requiredPlan;
     List<RoadmapResourceResponse> resources;
 }

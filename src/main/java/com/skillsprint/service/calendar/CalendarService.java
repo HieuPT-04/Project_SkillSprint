@@ -202,6 +202,7 @@ public class CalendarService {
     @Transactional
     public CalendarTaskResponse completeTask(String userId, UUID taskId) {
         CalendarTask task = findOwnedTask(userId, taskId);
+        quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
 
         if (task.getStatus() != CalendarTaskStatus.COMPLETED) {
             task.setStatus(CalendarTaskStatus.COMPLETED);
