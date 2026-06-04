@@ -130,6 +130,14 @@ public class QuotaService {
     }
 
     @Transactional(readOnly = true)
+    public void validatePremiumFeature(String userId) {
+        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+        if (plan.getPlanType() != ServicePlanType.PREMIUM) {
+            throw new AppException(ErrorCode.PREMIUM_FEATURE_REQUIRED);
+        }
+    }
+
+    @Transactional(readOnly = true)
     public int getUnlockedRoadmapStepLimit(String userId) {
         ServicePlan plan = subscriptionService.getCurrentPlan(userId);
         if (plan.getPlanType() == ServicePlanType.FREE) {
