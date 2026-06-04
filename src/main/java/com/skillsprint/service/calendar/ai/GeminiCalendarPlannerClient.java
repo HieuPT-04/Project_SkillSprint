@@ -98,6 +98,7 @@ public class GeminiCalendarPlannerClient {
                 - Không xếp task vào ngày không có trong suggestedTaskDate của input nếu không cần thiết.
                 - Không tạo lịch trùng giờ trong cùng ngày.
                 - title ngắn, rõ, tối đa 12 từ.
+                - Không đặt title bắt đầu bằng "Bước 1", "Step 1", "Topic 1" hoặc các tiền tố đánh số máy móc tương tự.
                 - description ngắn gọn, tối đa 220 ký tự.
                 - durationMinutes nên là 30-120 phút, không vượt quá suggestedDurationMinutes quá nhiều.
                 - category và priority chỉ dùng enum hợp lệ.
