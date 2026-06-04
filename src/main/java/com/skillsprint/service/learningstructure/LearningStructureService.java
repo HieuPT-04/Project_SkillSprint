@@ -22,6 +22,8 @@ import com.skillsprint.service.learningstructure.ai.AiChapterDraft;
 import com.skillsprint.service.learningstructure.ai.AiLearningStructureDraft;
 import com.skillsprint.service.learningstructure.ai.AiTopicDraft;
 import com.skillsprint.service.learningstructure.ai.GeminiLearningStructureClient;
+import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentAnalysis;
+import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.SyllabusSlot;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,8 +71,9 @@ public class LearningStructureService {
             throw new AppException(ErrorCode.MATERIAL_CHUNKS_NOT_READY);
         }
 
-        AiLearningStructureDraft aiDraft = geminiLearningStructureClient.generate(chunks);
-        boolean useAi = isValidAiDraft(aiDraft, chunks);
+        DocumentAnalysis documentAnalysis = LearningDocumentAnalyzer.analyze(chunks);
+        AiLearningStructureDraft aiDraft = geminiLearningStructureClient.generate(chunks, documentAnalysis);
+        boolean useAi = isValidAiDraft(aiDraft, chunks, documentAnalysis);
 
         LearningStructureVersion structureVersion = new LearningStructureVersion();
         structureVersion.setWorkspace(workspace);
@@ -85,9 +88,11 @@ public class LearningStructureService {
             structureVersion.setWarnings(safeList(aiDraft.warnings()));
         } else {
             structureVersion.setGeneratedBy(GeneratedBy.SYSTEM);
-            structureVersion.setAiModel("rule-based-mvp");
+            structureVersion.setAiModel(documentAnalysis.isSyllabus() ? "rule-based-syllabus-mvp" : "rule-based-mvp");
             structureVersion.setConfidenceScore(BigDecimal.valueOf(0.70));
-            structureVersion.setWarnings(List.of("AI chưa sẵn sàng hoặc dữ liệu AI không hợp lệ, đã dùng rule-based fallback"));
+            structureVersion.setWarnings(List.of(documentAnalysis.isSyllabus()
+                    ? "AI trả cấu trúc syllabus chưa đạt, đã dùng rule-based syllabus fallback"
+                    : "AI chưa sẵn sàng hoặc dữ liệu AI không hợp lệ, đã dùng rule-based fallback"));
         }
 
         LearningStructureVersion savedVersion = structureVersionRepository.saveAndFlush(structureVersion);
@@ -96,9 +101,13 @@ public class LearningStructureService {
             generatedStructure = createAiStructure(savedVersion, workspace, aiDraft, chunks);
         } else {
             List<HeadingSection> headingSections = detectHeadingSections(chunks);
-            generatedStructure = headingSections.isEmpty()
-                    ? createFallbackStructure(savedVersion, workspace, chunks)
-                    : createHeadingBasedStructure(savedVersion, workspace, headingSections);
+            if (documentAnalysis.isSyllabus() && !documentAnalysis.syllabusSlots().isEmpty()) {
+                generatedStructure = createSyllabusBasedStructure(savedVersion, workspace, documentAnalysis.syllabusSlots());
+            } else {
+                generatedStructure = headingSections.isEmpty()
+                        ? createFallbackStructure(savedVersion, workspace, chunks)
+                        : createHeadingBasedStructure(savedVersion, workspace, headingSections);
+            }
         }
 
         return learningStructureMapper.toResponse(
@@ -306,6 +315,71 @@ public class LearningStructureService {
         return new GeneratedStructure(savedChapters, topicRepository.saveAllAndFlush(topics));
     }
 
+    private GeneratedStructure createSyllabusBasedStructure(
+            LearningStructureVersion structureVersion,
+            StudyWorkspace workspace,
+            List<SyllabusSlot> slots
+    ) {
+        List<List<SyllabusSlot>> groups = groupSyllabusSlots(slots);
+        List<Chapter> chapters = new ArrayList<>();
+
+        for (int i = 0; i < groups.size(); i++) {
+            List<SyllabusSlot> group = groups.get(i);
+            Chapter chapter = new Chapter();
+            chapter.setWorkspace(workspace);
+            chapter.setStructureVersion(structureVersion);
+            chapter.setTitle(truncate(inferSyllabusChapterTitle(group), 90));
+            chapter.setSummary(truncate(buildSyllabusChapterSummary(group), 700));
+            chapter.setWhatToLearn(group.stream()
+                    .map(SyllabusSlot::topic)
+                    .map(topic -> "Học: " + truncate(topic, 80))
+                    .limit(4)
+                    .toList());
+            chapter.setKeyConcepts(extractSyllabusConcepts(group));
+            chapter.setLearningOutcomes(List.of("Nắm được nhóm nội dung " + chapter.getTitle()));
+            chapter.setRecommendedFocus(List.of("Học theo thứ tự slot trong syllabus", "Ưu tiên thực hành sau mỗi nhóm kiến thức"));
+            chapter.setDifficulty(resolveDifficulty(i));
+            chapter.setEstimatedMinutes(Math.max(30, group.size() * 25));
+            chapter.setSequenceNo(i + 1);
+            chapter.setSourceChunkIds(group.stream()
+                    .flatMap(slot -> slot.sourceChunkIds().stream())
+                    .distinct()
+                    .toList());
+            chapter.setAiGenerated(false);
+            chapters.add(chapter);
+        }
+
+        List<Chapter> savedChapters = chapterRepository.saveAllAndFlush(chapters);
+        List<Topic> topics = new ArrayList<>();
+
+        for (int chapterIndex = 0; chapterIndex < groups.size(); chapterIndex++) {
+            Chapter chapter = savedChapters.get(chapterIndex);
+            List<SyllabusSlot> group = groups.get(chapterIndex);
+
+            for (int topicIndex = 0; topicIndex < group.size(); topicIndex++) {
+                SyllabusSlot slot = group.get(topicIndex);
+                Topic topic = new Topic();
+                topic.setChapter(chapter);
+                topic.setWorkspace(workspace);
+                topic.setStructureVersion(structureVersion);
+                topic.setTitle(truncate(slot.topic(), 90));
+                topic.setSummaryContent(truncate(buildSyllabusTopicSummary(slot), 700));
+                topic.setWhatToLearn(List.of("Học nội dung slot " + slot.slot(), "Thực hành phần: " + truncate(slot.topic(), 70)));
+                topic.setKeyConcepts(extractSyllabusConcepts(List.of(slot)));
+                topic.setLearningOutcomes(List.of("Trình bày và áp dụng được " + truncate(slot.topic(), 80)));
+                topic.setRecommendedFocus(List.of("Bám theo bài tập/lab trong syllabus"));
+                topic.setDifficulty(chapter.getDifficulty());
+                topic.setEstimatedMinutes(estimateSyllabusTopicMinutes(slot));
+                topic.setSequenceNo(topicIndex + 1);
+                topic.setSourceChunkIds(slot.sourceChunkIds());
+                topic.setAiGenerated(false);
+                topics.add(topic);
+            }
+        }
+
+        return new GeneratedStructure(savedChapters, topicRepository.saveAllAndFlush(topics));
+    }
+
     private List<Chapter> createChapters(
             LearningStructureVersion structureVersion,
             StudyWorkspace workspace,
@@ -388,11 +462,15 @@ public class LearningStructureService {
         return "Generated from " + chunks.size() + " material chunks, estimated " + tokenCount + " tokens.";
     }
 
-    private boolean isValidAiDraft(AiLearningStructureDraft draft, List<MaterialChunk> chunks) {
+    private boolean isValidAiDraft(AiLearningStructureDraft draft, List<MaterialChunk> chunks, DocumentAnalysis analysis) {
         if (draft == null || chunks == null || chunks.isEmpty()) {
             return false;
         }
         if (draft.chapters() == null || draft.chapters().isEmpty()) {
+            return false;
+        }
+
+        if (analysis != null && analysis.isSyllabus() && !isValidSyllabusAiDraft(draft, analysis)) {
             return false;
         }
 
@@ -411,6 +489,35 @@ public class LearningStructureService {
         }
 
         return true;
+    }
+
+    private boolean isValidSyllabusAiDraft(AiLearningStructureDraft draft, DocumentAnalysis analysis) {
+        int slotCount = analysis.syllabusSlots() == null ? 0 : analysis.syllabusSlots().size();
+        int chapterCount = draft.chapters().size();
+        int topicCount = draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::topics)
+                .filter(Objects::nonNull)
+                .mapToInt(List::size)
+                .sum();
+
+        if (chapterCount == 1 && slotCount >= 3) {
+            return false;
+        }
+        if (slotCount >= 10 && chapterCount < 4) {
+            return false;
+        }
+        if (slotCount >= 5 && chapterCount < 3) {
+            return false;
+        }
+        if (slotCount >= 5 && topicCount < Math.min(slotCount, 5)) {
+            return false;
+        }
+
+        return draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::title)
+                .noneMatch(this::isBadSyllabusChapterTitle);
     }
 
     private BigDecimal normalizeConfidence(BigDecimal confidenceScore) {
@@ -503,6 +610,133 @@ public class LearningStructureService {
                 .distinct()
                 .limit(5)
                 .toList();
+    }
+
+    private List<List<SyllabusSlot>> groupSyllabusSlots(List<SyllabusSlot> slots) {
+        List<List<SyllabusSlot>> semanticGroups = new ArrayList<>();
+        List<SyllabusSlot> currentGroup = new ArrayList<>();
+        String currentModule = null;
+
+        for (SyllabusSlot slot : slots) {
+            String module = classifySyllabusModule(slot);
+            boolean shouldStartNewGroup = currentModule != null
+                    && (!currentModule.equals(module) || currentGroup.size() >= 4);
+
+            if (shouldStartNewGroup) {
+                semanticGroups.add(currentGroup);
+                currentGroup = new ArrayList<>();
+            }
+
+            currentGroup.add(slot);
+            currentModule = module;
+        }
+
+        if (!currentGroup.isEmpty()) {
+            semanticGroups.add(currentGroup);
+        }
+
+        if (slots.size() >= 5 && semanticGroups.size() < 3) {
+            return groupSyllabusSlotsBySize(slots, slots.size() >= 10 ? 3 : 2);
+        }
+
+        return semanticGroups;
+    }
+
+    private List<List<SyllabusSlot>> groupSyllabusSlotsBySize(List<SyllabusSlot> slots, int groupSize) {
+        List<List<SyllabusSlot>> groups = new ArrayList<>();
+        for (int i = 0; i < slots.size(); i += groupSize) {
+            groups.add(slots.subList(i, Math.min(i + groupSize, slots.size())));
+        }
+        return groups;
+    }
+
+    private String classifySyllabusModule(SyllabusSlot slot) {
+        String text = (slot.topic() + " " + String.join(" ", slot.details())).toLowerCase();
+        if (containsAny(text, "html", "http", "web", "client-server", "client server")) {
+            return "WEB_FOUNDATION";
+        }
+        if (containsAny(text, "css", "bootstrap", "responsive", "ui", "ux", "flexbox", "grid")) {
+            return "UI";
+        }
+        if (containsAny(text, "javascript", "js", "es6", "dom")) {
+            return "JAVASCRIPT";
+        }
+        if (containsAny(text, "node", "express", "backend", "api", "server")) {
+            return "BACKEND";
+        }
+        if (containsAny(text, "mysql", "database", "sql", "cơ sở dữ liệu", "co so du lieu")) {
+            return "DATABASE";
+        }
+        if (containsAny(text, "crud", "project", "lab", "update", "delete", "create")) {
+            return "PROJECT";
+        }
+        return "GENERAL";
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String inferSyllabusChapterTitle(List<SyllabusSlot> slots) {
+        String module = classifySyllabusModule(slots.get(0));
+        return switch (module) {
+            case "WEB_FOUNDATION" -> "Nền tảng Web và HTML";
+            case "UI" -> "CSS và Responsive UI";
+            case "JAVASCRIPT" -> "JavaScript phía Client";
+            case "BACKEND" -> "Backend và API";
+            case "DATABASE" -> "Database và dữ liệu";
+            case "PROJECT" -> "CRUD và Project";
+            default -> slots.size() == 1
+                    ? slots.get(0).topic()
+                    : "Module " + slots.get(0).slot() + "-" + slots.get(slots.size() - 1).slot();
+        };
+    }
+
+    private String buildSyllabusChapterSummary(List<SyllabusSlot> slots) {
+        String slotRange = slots.size() == 1
+                ? "slot " + slots.get(0).slot()
+                : "slot " + slots.get(0).slot() + "-" + slots.get(slots.size() - 1).slot();
+        String topics = slots.stream()
+                .map(SyllabusSlot::topic)
+                .limit(3)
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("");
+        return "Học nhóm nội dung từ " + slotRange + ": " + topics + ".";
+    }
+
+    private String buildSyllabusTopicSummary(SyllabusSlot slot) {
+        if (slot.details() == null || slot.details().isEmpty()) {
+            return "Slot " + slot.slot() + ": " + slot.topic() + ".";
+        }
+        return "Slot " + slot.slot() + ": " + slot.topic() + ". Nội dung chính: " + String.join("; ", slot.details()) + ".";
+    }
+
+    private List<String> extractSyllabusConcepts(List<SyllabusSlot> slots) {
+        return slots.stream()
+                .map(SyllabusSlot::topic)
+                .map(topic -> truncate(topic, 80))
+                .distinct()
+                .limit(5)
+                .toList();
+    }
+
+    private int estimateSyllabusTopicMinutes(SyllabusSlot slot) {
+        return slot.details() == null || slot.details().isEmpty() ? 20 : 30;
+    }
+
+    private boolean isBadSyllabusChapterTitle(String title) {
+        String normalized = title == null ? "" : title.toLowerCase();
+        return normalized.contains("syllabus")
+                || normalized.contains("course description")
+                || normalized.contains("assessment scheme")
+                || normalized.contains("learning materials")
+                || normalized.contains("prerequisite")
+                || normalized.contains("credits");
     }
 
     private List<String> toChunkIds(List<MaterialChunk> chunks) {
