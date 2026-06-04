@@ -81,6 +81,12 @@ public enum ErrorCode {
     POMODORO_SESSION_NOT_RUNNING("Pomodoro session không ở trạng thái đang chạy", HttpStatus.BAD_REQUEST),
     POMODORO_SESSION_NOT_PAUSED("Pomodoro session không ở trạng thái tạm dừng", HttpStatus.BAD_REQUEST),
 
+    // Quiz
+    QUIZ_NOT_FOUND("Không tìm thấy quiz", HttpStatus.NOT_FOUND),
+    QUIZ_ATTEMPT_NOT_FOUND("Chưa có lượt làm quiz", HttpStatus.NOT_FOUND),
+    QUIZ_INVALID_ANSWER("Đáp án quiz không hợp lệ", HttpStatus.BAD_REQUEST),
+    QUIZ_GENERATION_FAILED("Không thể tạo quiz", HttpStatus.INTERNAL_SERVER_ERROR),
+
     // Cognito
     COGNITO_ATTRIBUTE_MISSING("Thiếu thông tin người dùng từ Cognito", HttpStatus.BAD_GATEWAY),
     COGNITO_SECRET_HASH_FAILED("Không thể tạo Cognito secret hash", HttpStatus.INTERNAL_SERVER_ERROR),
