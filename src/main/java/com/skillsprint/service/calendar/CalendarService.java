@@ -685,9 +685,9 @@ public class CalendarService {
         task.setEisenhowerQuadrant(quadrant);
         task.setImportant(isImportantQuadrant(quadrant));
         task.setUrgent(isUrgentQuadrant(quadrant));
-        task.setImportanceScore(isImportantQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
-        task.setUrgencyScore(isUrgentQuadrant(quadrant) ? BigDecimal.valueOf(0.80) : BigDecimal.valueOf(0.30));
-        task.setClassificationReason(resolveDefaultClassificationReason(quadrant));
+        task.setImportanceScore(resolveImportanceScore(quadrant));
+        task.setUrgencyScore(resolveUrgencyScore(quadrant));
+        task.setClassificationReason(resolveDefaultClassificationReason(task, quadrant));
         task.setClassifiedBy(ClassifiedBy.RULE_BASED);
         task.setClassifiedAt(Instant.now());
     }
@@ -703,7 +703,28 @@ public class CalendarService {
             return resolveQuadrant(Boolean.TRUE.equals(important), Boolean.TRUE.equals(urgent));
         }
 
+        CalendarTaskCategory category = task.getCategory();
+        DifficultyLevel difficulty = resolveTaskDifficulty(task);
         CalendarTaskPriority priority = task.getPriority() == null ? CalendarTaskPriority.MEDIUM : task.getPriority();
+
+        if (category == CalendarTaskCategory.PERSONAL) {
+            return priority == CalendarTaskPriority.HIGH
+                    ? EisenhowerQuadrant.SCHEDULE
+                    : EisenhowerQuadrant.ELIMINATE;
+        }
+
+        if (category == CalendarTaskCategory.REVIEW) {
+            return EisenhowerQuadrant.SCHEDULE;
+        }
+
+        if (priority == CalendarTaskPriority.HIGH || difficulty == DifficultyLevel.HARD) {
+            return EisenhowerQuadrant.DO_NOW;
+        }
+
+        if (priority == CalendarTaskPriority.LOW || difficulty == DifficultyLevel.EASY) {
+            return EisenhowerQuadrant.DELAY_OR_DELEGATE;
+        }
+
         return switch (priority) {
             case HIGH -> EisenhowerQuadrant.DO_NOW;
             case MEDIUM -> EisenhowerQuadrant.SCHEDULE;
@@ -734,6 +755,24 @@ public class CalendarService {
         return quadrant == EisenhowerQuadrant.DO_NOW || quadrant == EisenhowerQuadrant.DELAY_OR_DELEGATE;
     }
 
+    private BigDecimal resolveImportanceScore(EisenhowerQuadrant quadrant) {
+        return switch (quadrant) {
+            case DO_NOW -> BigDecimal.valueOf(0.90);
+            case SCHEDULE -> BigDecimal.valueOf(0.80);
+            case DELAY_OR_DELEGATE -> BigDecimal.valueOf(0.35);
+            case ELIMINATE -> BigDecimal.valueOf(0.20);
+        };
+    }
+
+    private BigDecimal resolveUrgencyScore(EisenhowerQuadrant quadrant) {
+        return switch (quadrant) {
+            case DO_NOW -> BigDecimal.valueOf(0.90);
+            case SCHEDULE -> BigDecimal.valueOf(0.35);
+            case DELAY_OR_DELEGATE -> BigDecimal.valueOf(0.70);
+            case ELIMINATE -> BigDecimal.valueOf(0.20);
+        };
+    }
+
     private String resolveQuadrantTitle(EisenhowerQuadrant quadrant) {
         return switch (quadrant) {
             case DO_NOW -> "Làm ngay";
@@ -752,13 +791,36 @@ public class CalendarService {
         };
     }
 
-    private String resolveDefaultClassificationReason(EisenhowerQuadrant quadrant) {
+    private String resolveDefaultClassificationReason(CalendarTask task, EisenhowerQuadrant quadrant) {
+        CalendarTaskCategory category = task.getCategory();
+        DifficultyLevel difficulty = resolveTaskDifficulty(task);
+
+        if (category == CalendarTaskCategory.REVIEW) {
+            return "Task ôn tập quan trọng nhưng nên làm theo lịch đã xếp.";
+        }
+        if (category == CalendarTaskCategory.PERSONAL) {
+            return "Task cá nhân không ảnh hưởng trực tiếp đến tiến độ học.";
+        }
+        if (difficulty == DifficultyLevel.HARD) {
+            return "Nội dung khó nên được ưu tiên xử lý trong buổi học.";
+        }
+        if (difficulty == DifficultyLevel.EASY) {
+            return "Nội dung dễ hơn, có thể xử lý sau các task quan trọng.";
+        }
+
         return switch (quadrant) {
             case DO_NOW -> "Task có độ ưu tiên cao nên cần xử lý trước.";
             case SCHEDULE -> "Task học tập quan trọng và nên được làm theo lịch.";
             case DELAY_OR_DELEGATE -> "Task ít quan trọng hơn, có thể xử lý sau.";
             case ELIMINATE -> "Task không ảnh hưởng trực tiếp đến tiến độ học.";
         };
+    }
+
+    private DifficultyLevel resolveTaskDifficulty(CalendarTask task) {
+        if (task.getRoadmapStep() == null || task.getRoadmapStep().getDifficulty() == null) {
+            return null;
+        }
+        return task.getRoadmapStep().getDifficulty();
     }
 
     private CalendarTaskStatus resolveStatus(String raw) {
