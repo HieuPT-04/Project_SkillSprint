@@ -23,7 +23,6 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,12 +42,11 @@ public class AdminPaymentService {
     public PageResponse<PaymentTransactionResponse> getPayments(PaymentStatus status, String search, int page, int size) {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
-                normalizeSize(size),
-                Sort.by(Sort.Direction.DESC, "createdAt")
+                normalizeSize(size)
         );
 
         Page<PaymentTransactionResponse> payments = paymentTransactionRepository
-                .searchAdminPayments(status, normalizeSearch(search), pageable)
+                .searchAdminPayments(status != null ? status.name() : null, normalizeSearch(search), pageable)
                 .map(paymentMapper::toResponse);
 
         return PageResponse.from(payments);

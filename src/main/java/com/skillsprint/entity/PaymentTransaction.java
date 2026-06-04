@@ -48,7 +48,7 @@ public class PaymentTransaction extends BaseAuditEntity {
     @Column(name = "status", nullable = false, length = 30)
     private PaymentStatus status = PaymentStatus.PENDING;
 
-    @Column(name = "txn_ref", nullable = false, unique = true, length = 100)
+    @Column(name = "txn_ref", nullable = false, unique = true, columnDefinition = "varchar(100)")
     private String txnRef;
 
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
@@ -81,10 +81,10 @@ public class PaymentTransaction extends BaseAuditEntity {
     @Column(name = "paid_at")
     private Instant paidAt;
 
-    @Column(name = "provider_transaction_id", unique = true, length = 100)
+    @Column(name = "provider_transaction_id", unique = true, columnDefinition = "varchar(100)")
     private String providerTransactionId;
 
-    @Column(name = "provider_reference_code", length = 100)
+    @Column(name = "provider_reference_code", columnDefinition = "varchar(100)")
     private String providerReferenceCode;
 
     @Column(name = "raw_callback_data", columnDefinition = "TEXT")
