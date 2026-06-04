@@ -59,22 +59,32 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             PaymentStatus status
     );
 
-    @Query("""
-            select payment
-            from PaymentTransaction payment
-            join payment.user user
-            where (:status is null or payment.status = :status)
-              and (
-                    :search is null
-                    or lower(payment.txnRef) like lower(concat('%', :search, '%'))
-                    or lower(payment.providerReferenceCode) like lower(concat('%', :search, '%'))
-                    or lower(payment.providerTransactionId) like lower(concat('%', :search, '%'))
-                    or lower(user.email) like lower(concat('%', :search, '%'))
-                    or lower(user.fullName) like lower(concat('%', :search, '%'))
-              )
-            """)
+    @Query(
+            value = """
+                    SELECT pt.* FROM payment_transactions pt
+                    JOIN users u ON u.user_id = pt.user_id
+                    WHERE (:status IS NULL OR pt.status = :status)
+                      AND (
+                            :search IS NULL
+                            OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(u.full_name) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    ORDER BY pt.created_at DESC
+                    """,
+            countQuery = """
+                    SELECT count(*)
+                    FROM payment_transactions pt
+                    JOIN users u ON u.user_id = pt.user_id
+                    WHERE (:status IS NULL OR pt.status = :status)
+                      AND (
+                            :search IS NULL
+                            OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(u.full_name) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
+            nativeQuery = true)
     Page<PaymentTransaction> searchAdminPayments(
-            @Param("status") PaymentStatus status,
+            @Param("status") String status,
             @Param("search") String search,
             Pageable pageable
     );
