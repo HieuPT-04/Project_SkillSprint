@@ -23,6 +23,7 @@ import com.skillsprint.service.learningstructure.ai.AiLearningStructureDraft;
 import com.skillsprint.service.learningstructure.ai.AiTopicDraft;
 import com.skillsprint.service.learningstructure.ai.GeminiLearningStructureClient;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentAnalysis;
+import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentKind;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.SyllabusSlot;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -88,11 +89,9 @@ public class LearningStructureService {
             structureVersion.setWarnings(safeList(aiDraft.warnings()));
         } else {
             structureVersion.setGeneratedBy(GeneratedBy.SYSTEM);
-            structureVersion.setAiModel(documentAnalysis.isSyllabus() ? "rule-based-syllabus-mvp" : "rule-based-mvp");
+            structureVersion.setAiModel(fallbackAiModel(documentAnalysis));
             structureVersion.setConfidenceScore(BigDecimal.valueOf(0.70));
-            structureVersion.setWarnings(List.of(documentAnalysis.isSyllabus()
-                    ? "AI trả cấu trúc syllabus chưa đạt, đã dùng rule-based syllabus fallback"
-                    : "AI chưa sẵn sàng hoặc dữ liệu AI không hợp lệ, đã dùng rule-based fallback"));
+            structureVersion.setWarnings(List.of(fallbackWarning(documentAnalysis)));
         }
 
         LearningStructureVersion savedVersion = structureVersionRepository.saveAndFlush(structureVersion);
@@ -473,6 +472,9 @@ public class LearningStructureService {
         if (analysis != null && analysis.isSyllabus() && !isValidSyllabusAiDraft(draft, analysis)) {
             return false;
         }
+        if (analysis != null && analysis.kind() != DocumentKind.SYLLABUS && !isValidDocumentAwareAiDraft(draft, analysis)) {
+            return false;
+        }
 
         for (AiChapterDraft chapter : draft.chapters()) {
             if (chapter == null || defaultText(chapter.title(), "").isBlank()) {
@@ -489,6 +491,35 @@ public class LearningStructureService {
         }
 
         return true;
+    }
+
+    private boolean isValidDocumentAwareAiDraft(AiLearningStructureDraft draft, DocumentAnalysis analysis) {
+        int sectionCount = analysis.sections() == null ? 0 : analysis.sections().size();
+        int chapterCount = draft.chapters().size();
+        int topicCount = draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::topics)
+                .filter(Objects::nonNull)
+                .mapToInt(List::size)
+                .sum();
+
+        if (analysis.kind() == DocumentKind.LECTURE_NOTE && sectionCount >= 4 && chapterCount == 1) {
+            return false;
+        }
+        if (analysis.kind() == DocumentKind.SLIDE_DECK && sectionCount >= 6 && chapterCount == 1) {
+            return false;
+        }
+        if (analysis.kind() == DocumentKind.ASSIGNMENT && chapterCount > 6) {
+            return false;
+        }
+        if (sectionCount >= 4 && topicCount < 2) {
+            return false;
+        }
+
+        return draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::title)
+                .noneMatch(title -> isBadGenericChapterTitle(title, analysis.kind()));
     }
 
     private boolean isValidSyllabusAiDraft(AiLearningStructureDraft draft, DocumentAnalysis analysis) {
@@ -737,6 +768,37 @@ public class LearningStructureService {
                 || normalized.contains("learning materials")
                 || normalized.contains("prerequisite")
                 || normalized.contains("credits");
+    }
+
+    private boolean isBadGenericChapterTitle(String title, DocumentKind kind) {
+        String normalized = title == null ? "" : title.toLowerCase();
+        if (kind == DocumentKind.ASSIGNMENT) {
+            return normalized.equals("assignment") || normalized.equals("requirements") || normalized.equals("bài tập");
+        }
+        if (kind == DocumentKind.SLIDE_DECK) {
+            return normalized.matches("slide\\s*\\d+");
+        }
+        return false;
+    }
+
+    private String fallbackAiModel(DocumentAnalysis analysis) {
+        return switch (analysis.kind()) {
+            case SYLLABUS -> "rule-based-syllabus-mvp";
+            case LECTURE_NOTE -> "rule-based-lecture-note-mvp";
+            case SLIDE_DECK -> "rule-based-slide-deck-mvp";
+            case ASSIGNMENT -> "rule-based-assignment-mvp";
+            case GENERAL -> "rule-based-mvp";
+        };
+    }
+
+    private String fallbackWarning(DocumentAnalysis analysis) {
+        return switch (analysis.kind()) {
+            case SYLLABUS -> "AI trả cấu trúc syllabus chưa đạt, đã dùng rule-based syllabus fallback";
+            case LECTURE_NOTE -> "AI trả cấu trúc lecture note chưa đạt, đã dùng heading fallback";
+            case SLIDE_DECK -> "AI trả cấu trúc slide chưa đạt, đã dùng section fallback";
+            case ASSIGNMENT -> "AI trả cấu trúc bài tập chưa đạt, đã dùng rule-based fallback";
+            case GENERAL -> "AI chưa sẵn sàng hoặc dữ liệu AI không hợp lệ, đã dùng rule-based fallback";
+        };
     }
 
     private List<String> toChunkIds(List<MaterialChunk> chunks) {
