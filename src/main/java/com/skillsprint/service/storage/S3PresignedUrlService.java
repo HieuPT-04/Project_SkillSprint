@@ -15,10 +15,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 @Service
@@ -61,10 +63,28 @@ public class S3PresignedUrlService {
 
         return AvatarUploadUrlResponse.builder()
                 .uploadUrl(uploadUrl)
-                .fileUrl(buildFileUrl(objectKey))
+                .fileUrl(createViewUrl(objectKey))
                 .objectKey(objectKey)
                 .expiresAt(expiresAt)
                 .build();
+    }
+
+    public String createViewUrl(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(objectKey)
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(properties.uploadUrlExpirationMinutes()))
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 
     public String confirmAvatarUpload(String userId, ConfirmAvatarUploadRequest request) {
@@ -125,7 +145,4 @@ public class S3PresignedUrlService {
         throw new AppException(ErrorCode.INVALID_AVATAR_FILE_EXTENSION);
     }
 
-    private String buildFileUrl(String objectKey) {
-        return properties.publicBaseUrl().replaceAll("/+$", "") + "/" + objectKey;
-    }
 }

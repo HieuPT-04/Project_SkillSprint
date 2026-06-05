@@ -1,9 +1,9 @@
 package com.skillsprint.mapper;
 
-import com.skillsprint.configuration.s3.S3Properties;
 import com.skillsprint.dto.response.admin.AdminUserResponse;
 import com.skillsprint.dto.response.user.MeResponse;
 import com.skillsprint.entity.User;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserMapper {
 
-    S3Properties s3Properties;
+    S3PresignedUrlService s3PresignedUrlService;
 
     public MeResponse toMeResponse(User user, List<String> roles) {
         return MeResponse.builder()
@@ -23,7 +23,7 @@ public class UserMapper {
                 .email(user.getEmail())
                 .emailVerified(user.isEmailVerified())
                 .fullName(user.getFullName())
-                .avatarUrl(buildFileUrl(user.getAvatarObjectKey()))
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .timeZone(user.getTimeZone())
                 .status(user.getStatus())
                 .roles(roles)
@@ -36,7 +36,7 @@ public class UserMapper {
                 .email(user.getEmail())
                 .emailVerified(user.isEmailVerified())
                 .fullName(user.getFullName())
-                .avatarUrl(buildFileUrl(user.getAvatarObjectKey()))
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .timeZone(user.getTimeZone())
                 .status(user.getStatus())
                 .roles(roles)
@@ -44,12 +44,5 @@ public class UserMapper {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
-    }
-
-    private String buildFileUrl(String objectKey) {
-        if (objectKey == null || objectKey.isBlank()) {
-            return null;
-        }
-        return s3Properties.publicBaseUrl().replaceAll("/+$", "") + "/" + objectKey;
     }
 }
