@@ -182,6 +182,7 @@ public class CalendarService {
             UpdateCalendarTaskRequest request
     ) {
         CalendarTask task = findOwnedTask(userId, taskId);
+        ensureTaskCanBeRescheduled(task);
 
         if (request.getTaskDate() != null) {
             task.setTaskDate(request.getTaskDate());
@@ -195,6 +196,8 @@ public class CalendarService {
 
         validateTimeRange(task.getStartTime(), task.getEndTime());
         task.setDurationMinutes(calculateDurationMinutes(task.getStartTime(), task.getEndTime(), task.getDurationMinutes()));
+        ensureNoTimeConflict(task);
+        reclassifyAfterReschedule(task);
 
         return calendarMapper.toTaskResponse(calendarTaskRepository.save(task));
     }
@@ -280,6 +283,49 @@ public class CalendarService {
         return calendarTaskRepository.findById(taskId)
                 .filter(calendarTask -> calendarTask.getUser().getUserId().equals(userId))
                 .orElseThrow(() -> new AppException(ErrorCode.CALENDAR_TASK_NOT_FOUND));
+    }
+
+    private void ensureTaskCanBeRescheduled(CalendarTask task) {
+        if (task.getStatus() == CalendarTaskStatus.COMPLETED) {
+            throw new AppException(ErrorCode.CALENDAR_TASK_ALREADY_COMPLETED);
+        }
+    }
+
+    private void ensureNoTimeConflict(CalendarTask task) {
+        if (task.getTaskDate() == null || task.getStartTime() == null || task.getEndTime() == null) {
+            return;
+        }
+
+        boolean hasConflict = calendarTaskRepository
+                .findByWorkspaceWorkspaceIdAndUserUserIdAndTaskDateOrderByStartTimeAscCreatedAtAsc(
+                        task.getWorkspace().getWorkspaceId(),
+                        task.getUser().getUserId(),
+                        task.getTaskDate()
+                )
+                .stream()
+                .filter(existingTask -> !existingTask.getTaskId().equals(task.getTaskId()))
+                .filter(existingTask -> existingTask.getStatus() != CalendarTaskStatus.CANCELLED)
+                .anyMatch(existingTask -> hasTimeOverlap(task, existingTask));
+
+        if (hasConflict) {
+            throw new AppException(ErrorCode.CALENDAR_TASK_TIME_CONFLICT);
+        }
+    }
+
+    private boolean hasTimeOverlap(CalendarTask currentTask, CalendarTask existingTask) {
+        if (existingTask.getStartTime() == null || existingTask.getEndTime() == null) {
+            return false;
+        }
+
+        return currentTask.getStartTime().isBefore(existingTask.getEndTime())
+                && currentTask.getEndTime().isAfter(existingTask.getStartTime());
+    }
+
+    private void reclassifyAfterReschedule(CalendarTask task) {
+        task.setEisenhowerQuadrant(null);
+        task.setImportant(null);
+        task.setUrgent(null);
+        applyDefaultEisenhowerClassification(task);
     }
 
     private ScheduleConfig resolveScheduleConfig(UUID workspaceId, GenerateCalendarRequest request) {
