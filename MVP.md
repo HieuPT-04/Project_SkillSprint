@@ -9,7 +9,7 @@ Người dùng tạo một workspace cho mục tiêu học tập, upload tài li
 Giá trị chính:
 
 ```text
-Tài liệu thô -> Cấu trúc học tập -> Roadmap -> Lịch học -> Phiên học -> Tiến độ
+Tài liệu thô -> Cấu trúc học tập -> Roadmap -> Lịch học -> Phiên học -> Quiz/AI Tutor -> Tiến độ
 ```
 
 MVP cần chứng minh một vòng học tập chạy thật từ đăng nhập đến tạo workspace, xử lý tài liệu, sinh roadmap và sinh lịch học cơ bản.
@@ -35,14 +35,15 @@ Login bằng Cognito
 -> Gợi ý tài nguyên học
 -> Sinh calendar tasks từ roadmap
 -> User mở study session từ calendar task
--> User học và complete task
+-> User học, hỏi AI Tutor hoặc làm quiz nếu có Premium
+-> User complete task
 -> Cập nhật progress
 ```
 
 Flow ưu tiên hiện tại:
 
 ```text
-Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Study Session -> Progress
+Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> Calendar -> Study Session -> Quiz/AI Tutor -> Progress
 ```
 
 ## 3. Trạng Thái Hiện Tại
@@ -85,6 +86,9 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - Study session detail API để user bấm calendar task là vào màn học.
 - Study session API để start/finish phiên học thật từ calendar task.
 - Progress dashboard API gồm roadmap progress, current step, today/overdue tasks, study stats và current session.
+- Quiz API cho từng roadmap step, tạo 5 câu, lưu đáp án đúng và chấm điểm khi user submit.
+- AI Tutor API dạng chatbox theo workspace hoặc roadmap step.
+- Quiz và AI Tutor chỉ mở cho gói `PREMIUM`; gói thấp hơn nhận lỗi `403`.
 - Redis-backed session tracking để hỗ trợ logout và kiểm soát phiên đăng nhập.
 - Refresh token API để user học lâu không bị out khi access token hết hạn.
 - Eisenhower daily board API để FE gom task theo 4 nhóm trong ngày.
@@ -373,6 +377,15 @@ Nhóm calendar/progress:
 - `workspace_progress`: tiến độ tổng của workspace.
 - `progress_logs`: lịch sử thay đổi progress nếu cần audit.
 
+Nhóm quiz/AI tutor:
+
+- `quizzes`: quiz gắn với user, workspace và roadmap step.
+- `quiz_questions`: câu hỏi quiz, hiện ưu tiên multiple-choice.
+- `quiz_options`: đáp án lựa chọn, có lưu đáp án đúng để backend tự chấm.
+- `quiz_attempts`: mỗi lần user nộp quiz.
+- `quiz_attempt_answers`: chi tiết đáp án user đã chọn.
+- AI Tutor hiện chưa lưu lịch sử chat trong MVP; response được tạo theo context workspace/roadmap step/material chunks.
+
 Nhóm payment/subscription:
 
 - `service_plans`: gói dịch vụ cố định.
@@ -468,6 +481,34 @@ CalendarTask
 -> Start/finish study session
 -> Complete calendar task
 -> Update progress
+```
+
+Quiz quick check:
+
+```text
+Roadmap step
+-> Generate quiz
+-> Gemini tạo 5 câu nếu sẵn sàng, fallback rule-based nếu AI lỗi
+-> Backend lưu câu hỏi, options và đáp án đúng
+-> User submit đáp án
+-> Backend chấm điểm, trả score/pass/results
+```
+
+AI Tutor:
+
+```text
+User hỏi từ chatbox global hoặc từ roadmap step
+-> Backend kiểm tra user có gói PREMIUM
+-> Backend gom context từ workspace/roadmap/calendar/material chunks
+-> Gemini trả answer + suggestedQuestions + confidence
+-> Backend làm gọn response, fallback nếu AI lỗi
+```
+
+Quota hiện tại:
+
+```text
+FREE / SKILL_BUILDER: không dùng Quiz và AI Tutor
+PREMIUM: được dùng Quiz và AI Tutor
 ```
 
 Eisenhower daily board:
@@ -576,13 +617,16 @@ FAILED | CANCELLED
 35. Pomodoro/study timer basic.
 36. Eisenhower daily board API.
 37. Admin Dashboard API với overview, chart, alert và recent activity.
+38. Quiz API theo roadmap step, tạo 5 câu, submit và xem attempt mới nhất.
+39. AI Tutor API theo workspace/roadmap step, response gọn cho FE.
+40. Giới hạn Quiz và AI Tutor chỉ cho gói `PREMIUM`.
 
 Làm tiếp:
 
 1. Rà soát full core flow end-to-end.
 2. Chuẩn hóa thêm API contract nếu FE cần field cụ thể.
 3. Sửa lỗi core nếu phát hiện trong lúc test.
-4. Sau khi core ổn mới chọn Phase Later đầu tiên.
+4. Sau khi core ổn mới chọn Phase Later đầu tiên: chat history AI Tutor, notification hoặc observability.
 
 Thứ tự kiểm thử trước mắt:
 
@@ -599,6 +643,8 @@ Login
 -> Generate calendar
 -> Get study session detail từ calendar task
 -> Start/finish study session
+-> Generate/submit quiz nếu user là PREMIUM
+-> Ask AI Tutor nếu user là PREMIUM
 -> Check progress dashboard
 ```
 
@@ -637,6 +683,7 @@ Login
 -> Generate Roadmap
 -> Generate Calendar
 -> Open Study Session
+-> Quiz/AI Tutor cho Premium
 -> Track Progress
 ```
 
