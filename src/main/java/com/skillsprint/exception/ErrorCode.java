@@ -128,7 +128,10 @@ public enum ErrorCode {
     SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED("Không thể mua gói thấp hơn gói hiện tại", HttpStatus.BAD_REQUEST),
 
     // Notification
-    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND);
+    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+
+    // Feedback
+    FEEDBACK_NOT_FOUND("Không tìm thấy feedback", HttpStatus.NOT_FOUND);
 
     private final String message;
     private final HttpStatus status;
