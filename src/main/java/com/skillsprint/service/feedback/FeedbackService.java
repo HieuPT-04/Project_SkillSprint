@@ -61,11 +61,16 @@ public class FeedbackService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizeSize(size),
-                Sort.by(Sort.Direction.DESC, "createdAt")
+                Sort.by(Sort.Direction.DESC, "created_at")
         );
 
         Page<FeedbackAdminResponse> feedback = feedbackRepository
-                .searchAdminFeedback(type, status, normalizeSearch(search), pageable)
+                .searchAdminFeedback(
+                        type != null ? type.name() : null,
+                        status != null ? status.name() : null,
+                        toSearchPattern(search),
+                        pageable
+                )
                 .map(this::toAdminResponse);
 
         return PageResponse.from(feedback);
@@ -99,6 +104,7 @@ public class FeedbackService {
         if (size < 1) {
             return 10;
         }
+
         return Math.min(size, MAX_PAGE_SIZE);
     }
 
@@ -106,10 +112,16 @@ public class FeedbackService {
         return normalizeBlank(search);
     }
 
+    private String toSearchPattern(String search) {
+        String normalized = normalizeSearch(search);
+        return normalized != null ? "%" + normalized + "%" : null;
+    }
+
     private String normalizeBlank(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
+
         return value.trim();
     }
 
@@ -125,11 +137,12 @@ public class FeedbackService {
 
     private FeedbackAdminResponse toAdminResponse(Feedback feedback) {
         User user = feedback.getUser();
+
         return FeedbackAdminResponse.builder()
                 .feedbackId(feedback.getFeedbackId())
-                .userId(user.getUserId())
-                .userEmail(user.getEmail())
-                .userFullName(user.getFullName())
+                .userId(user != null ? user.getUserId() : null)
+                .userEmail(user != null ? user.getEmail() : null)
+                .userFullName(user != null ? user.getFullName() : null)
                 .type(feedback.getType())
                 .title(feedback.getTitle())
                 .content(feedback.getContent())
