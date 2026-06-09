@@ -3,7 +3,7 @@ package com.skillsprint.controller.admin;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.feedback.UpdateFeedbackStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
-import com.skillsprint.dto.response.feedback.FeedbackResponse;
+import com.skillsprint.dto.response.feedback.FeedbackAdminResponse;
 import com.skillsprint.enums.feedback.FeedbackStatus;
 import com.skillsprint.enums.feedback.FeedbackType;
 import com.skillsprint.service.feedback.FeedbackService;
@@ -33,31 +33,31 @@ public class AdminFeedbackController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<PageResponse<FeedbackResponse>>> getFeedback(
+    public ResponseEntity<ApiResponse<PageResponse<FeedbackAdminResponse>>> getFeedback(
             @RequestParam(required = false) FeedbackType type,
             @RequestParam(required = false) FeedbackStatus status,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        PageResponse<FeedbackResponse> response = feedbackService.getAdminFeedback(type, status, search, page, size);
+        PageResponse<FeedbackAdminResponse> response = feedbackService.getAdminFeedback(type, status, search, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{feedbackId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<FeedbackResponse>> getFeedbackDetail(@PathVariable UUID feedbackId) {
-        FeedbackResponse response = feedbackService.getFeedback(feedbackId);
+    public ResponseEntity<ApiResponse<FeedbackAdminResponse>> getFeedbackDetail(@PathVariable UUID feedbackId) {
+        FeedbackAdminResponse response = feedbackService.getFeedback(feedbackId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/{feedbackId}/status")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<FeedbackResponse>> updateFeedbackStatus(
+    public ResponseEntity<ApiResponse<FeedbackAdminResponse>> updateFeedbackStatus(
             @PathVariable UUID feedbackId,
             @Valid @RequestBody UpdateFeedbackStatusRequest request
     ) {
-        FeedbackResponse response = feedbackService.updateFeedbackStatus(feedbackId, request);
+        FeedbackAdminResponse response = feedbackService.updateFeedbackStatus(feedbackId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật feedback thành công", response));
     }
 }

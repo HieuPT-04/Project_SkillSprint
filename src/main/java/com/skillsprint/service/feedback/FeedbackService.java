@@ -3,7 +3,8 @@ package com.skillsprint.service.feedback;
 import com.skillsprint.dto.request.feedback.CreateFeedbackRequest;
 import com.skillsprint.dto.request.feedback.UpdateFeedbackStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
-import com.skillsprint.dto.response.feedback.FeedbackResponse;
+import com.skillsprint.dto.response.feedback.FeedbackAdminResponse;
+import com.skillsprint.dto.response.feedback.FeedbackSubmitResponse;
 import com.skillsprint.entity.Feedback;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.feedback.FeedbackStatus;
@@ -35,7 +36,7 @@ public class FeedbackService {
     UserRepository userRepository;
 
     @Transactional
-    public FeedbackResponse createFeedback(String userId, CreateFeedbackRequest request) {
+    public FeedbackSubmitResponse createFeedback(String userId, CreateFeedbackRequest request) {
         User user = findUser(userId);
 
         Feedback feedback = new Feedback();
@@ -46,11 +47,11 @@ public class FeedbackService {
         feedback.setRelatedUrl(normalizeBlank(request.getRelatedUrl()));
         feedback.setStatus(FeedbackStatus.OPEN);
 
-        return toResponse(feedbackRepository.save(feedback));
+        return toSubmitResponse(feedbackRepository.save(feedback));
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<FeedbackResponse> getAdminFeedback(
+    public PageResponse<FeedbackAdminResponse> getAdminFeedback(
             FeedbackType type,
             FeedbackStatus status,
             String search,
@@ -63,25 +64,25 @@ public class FeedbackService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<FeedbackResponse> feedback = feedbackRepository
+        Page<FeedbackAdminResponse> feedback = feedbackRepository
                 .searchAdminFeedback(type, status, normalizeSearch(search), pageable)
-                .map(this::toResponse);
+                .map(this::toAdminResponse);
 
         return PageResponse.from(feedback);
     }
 
     @Transactional(readOnly = true)
-    public FeedbackResponse getFeedback(UUID feedbackId) {
-        return toResponse(findFeedback(feedbackId));
+    public FeedbackAdminResponse getFeedback(UUID feedbackId) {
+        return toAdminResponse(findFeedback(feedbackId));
     }
 
     @Transactional
-    public FeedbackResponse updateFeedbackStatus(UUID feedbackId, UpdateFeedbackStatusRequest request) {
+    public FeedbackAdminResponse updateFeedbackStatus(UUID feedbackId, UpdateFeedbackStatusRequest request) {
         Feedback feedback = findFeedback(feedbackId);
         feedback.setStatus(request.getStatus());
         feedback.setAdminNote(normalizeBlank(request.getAdminNote()));
 
-        return toResponse(feedbackRepository.save(feedback));
+        return toAdminResponse(feedbackRepository.save(feedback));
     }
 
     private User findUser(String userId) {
@@ -112,9 +113,19 @@ public class FeedbackService {
         return value.trim();
     }
 
-    private FeedbackResponse toResponse(Feedback feedback) {
+    private FeedbackSubmitResponse toSubmitResponse(Feedback feedback) {
+        return FeedbackSubmitResponse.builder()
+                .feedbackId(feedback.getFeedbackId())
+                .type(feedback.getType())
+                .title(feedback.getTitle())
+                .status(feedback.getStatus())
+                .createdAt(feedback.getCreatedAt())
+                .build();
+    }
+
+    private FeedbackAdminResponse toAdminResponse(Feedback feedback) {
         User user = feedback.getUser();
-        return FeedbackResponse.builder()
+        return FeedbackAdminResponse.builder()
                 .feedbackId(feedback.getFeedbackId())
                 .userId(user.getUserId())
                 .userEmail(user.getEmail())
