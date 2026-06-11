@@ -64,7 +64,6 @@ public class FeedbackService {
                 Sort.by(Sort.Direction.DESC, "created_at")
         );
 
-        String searchPattern = buildSearchPattern(search);
         Page<FeedbackAdminResponse> feedback = feedbackRepository
                 .searchAdminFeedback(
                         type != null ? type.name() : null,
@@ -89,6 +88,12 @@ public class FeedbackService {
         feedback.setAdminNote(normalizeBlank(request.getAdminNote()));
 
         return toAdminResponse(feedbackRepository.save(feedback));
+    }
+
+    @Transactional
+    public void deleteFeedback(UUID feedbackId) {
+        Feedback feedback = findFeedback(feedbackId);
+        feedbackRepository.delete(feedback);
     }
 
     private User findUser(String userId) {

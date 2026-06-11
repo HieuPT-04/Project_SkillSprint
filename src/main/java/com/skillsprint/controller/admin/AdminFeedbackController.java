@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,5 +60,12 @@ public class AdminFeedbackController {
     ) {
         FeedbackAdminResponse response = feedbackService.updateFeedbackStatus(feedbackId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật feedback thành công", response));
+    }
+
+    @DeleteMapping("/{feedbackId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteFeedback(@PathVariable UUID feedbackId) {
+        feedbackService.deleteFeedback(feedbackId);
+        return ResponseEntity.ok(ApiResponse.success("Xóa feedback thành công", null));
     }
 }
