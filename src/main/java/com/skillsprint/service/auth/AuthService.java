@@ -24,6 +24,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
@@ -285,6 +286,32 @@ public class AuthService {
         }
     }
 
+    @Transactional
+    public AuthResponse createOAuthSession(Jwt jwt) {
+        String username = resolveCognitoUsername(jwt);
+        String fallbackEmail = jwt.getClaimAsString("email");
+
+        try {
+            AdminGetUserResponse cognitoUser = cognitoClient.adminGetUser(
+                    AdminGetUserRequest.builder()
+                            .userPoolId(cognitoProperties.userPoolId())
+                            .username(username)
+                            .build()
+            );
+
+            User user = syncLocalUser(cognitoUser, resolveRoleName(username), fallbackEmail);
+            ensureActiveUser(user);
+            subscriptionService.ensureDefaultFreeSubscription(user);
+
+            String sessionId = userSessionService.createSession(user.getUserId());
+            return AuthResponse.builder()
+                    .sessionId(sessionId)
+                    .build();
+        } catch (CognitoIdentityProviderException ex) {
+            throw new AppException(ErrorCode.COGNITO_SERVICE_ERROR);
+        }
+    }
+
     private String extractAccessToken(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
@@ -295,6 +322,22 @@ public class AuthService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         return accessToken;
+    }
+
+    private String resolveCognitoUsername(Jwt jwt) {
+        String username = jwt.getClaimAsString("username");
+        if (username == null || username.isBlank()) {
+            username = jwt.getClaimAsString("cognito:username");
+        }
+        if (username != null && !username.isBlank()) {
+            return username;
+        }
+
+        String subject = jwt.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new AppException(ErrorCode.COGNITO_ATTRIBUTE_MISSING);
+        }
+        return subject;
     }
 
     private User syncLocalUserByEmail(String email) {
