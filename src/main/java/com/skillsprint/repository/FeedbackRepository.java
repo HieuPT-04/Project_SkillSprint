@@ -19,16 +19,16 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             where (:type is null or feedback.type = :type)
               and (:status is null or feedback.status = :status)
               and (
-                    :search is null
-                    or lower(user.email) like lower(concat('%', :search, '%'))
-                    or lower(user.fullName) like lower(concat('%', :search, '%'))
-                    or lower(feedback.title) like lower(concat('%', :search, '%'))
+                    :searchPattern is null
+                    or lower(user.email) like :searchPattern
+                    or lower(user.fullName) like :searchPattern
+                    or lower(feedback.title) like :searchPattern
               )
             """)
     Page<Feedback> searchAdminFeedback(
             @Param("type") FeedbackType type,
             @Param("status") FeedbackStatus status,
-            @Param("search") String search,
+            @Param("searchPattern") String searchPattern,
             Pageable pageable
     );
 }

@@ -64,8 +64,9 @@ public class FeedbackService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
+        String searchPattern = buildSearchPattern(search);
         Page<FeedbackAdminResponse> feedback = feedbackRepository
-                .searchAdminFeedback(type, status, normalizeSearch(search), pageable)
+                .searchAdminFeedback(type, status, searchPattern, pageable)
                 .map(this::toAdminResponse);
 
         return PageResponse.from(feedback);
@@ -104,6 +105,14 @@ public class FeedbackService {
 
     private String normalizeSearch(String search) {
         return normalizeBlank(search);
+    }
+
+    private String buildSearchPattern(String search) {
+        String normalizedSearch = normalizeSearch(search);
+        if (normalizedSearch == null) {
+            return null;
+        }
+        return "%" + normalizedSearch.toLowerCase() + "%";
     }
 
     private String normalizeBlank(String value) {
