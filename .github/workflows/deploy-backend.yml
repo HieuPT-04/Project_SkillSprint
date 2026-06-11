@@ -33,16 +33,17 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/skillsprint_key
           chmod 600 ~/.ssh/skillsprint_key
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          test -s ~/.ssh/skillsprint_key
+          ssh-keyscan -T 20 -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts || true
 
       - name: Upload jar to EC2
         run: |
-          scp -i ~/.ssh/skillsprint_key target/*.jar \
+          scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -i ~/.ssh/skillsprint_key target/*.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/skillsprint.jar.tmp
 
       - name: Restart backend
         run: |
-          ssh -i ~/.ssh/skillsprint_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -i ~/.ssh/skillsprint_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             mv /home/${USER}/skillsprint.jar.tmp /home/${USER}/skillsprint.jar
             sudo systemctl restart skillsprint
