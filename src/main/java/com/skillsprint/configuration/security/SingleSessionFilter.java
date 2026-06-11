@@ -38,6 +38,11 @@ public class SingleSessionFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        if ("/api/auth/oauth/session".equals(request.getRequestURI())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
             filterChain.doFilter(request, response);

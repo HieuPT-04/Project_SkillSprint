@@ -100,6 +100,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", response));
     }
 
+    @PostMapping("/oauth/session")
+    public ResponseEntity<ApiResponse<AuthResponse>> createOAuthSession(@AuthenticationPrincipal Jwt jwt) {
+        AuthResponse response = authService.createOAuthSession(jwt);
+        return ResponseEntity.ok(ApiResponse.success("Tạo phiên đăng nhập thành công", response));
+    }
+
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
             @RequestHeader("X-Session-Id") String sessionId,
