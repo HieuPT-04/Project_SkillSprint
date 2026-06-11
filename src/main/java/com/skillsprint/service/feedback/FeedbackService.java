@@ -90,6 +90,12 @@ public class FeedbackService {
         return toAdminResponse(feedbackRepository.save(feedback));
     }
 
+    @Transactional
+    public void deleteFeedback(UUID feedbackId) {
+        Feedback feedback = findFeedback(feedbackId);
+        feedbackRepository.delete(feedback);
+    }
+
     private User findUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
