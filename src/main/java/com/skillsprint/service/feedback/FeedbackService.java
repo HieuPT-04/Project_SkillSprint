@@ -64,7 +64,6 @@ public class FeedbackService {
                 Sort.by(Sort.Direction.DESC, "created_at")
         );
 
-        String searchPattern = buildSearchPattern(search);
         Page<FeedbackAdminResponse> feedback = feedbackRepository
                 .searchAdminFeedback(
                         type != null ? type.name() : null,
