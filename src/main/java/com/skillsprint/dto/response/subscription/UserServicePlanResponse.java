@@ -1,6 +1,5 @@
 package com.skillsprint.dto.response.subscription;
 
-import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -12,19 +11,13 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ServicePlanResponse {
+public class UserServicePlanResponse {
 
     UUID planId;
     String planName;
     String description;
-    ServicePlanType planType;
     BigDecimal monthlyPrice;
     String currency;
-
     ServicePlanQuotaResponse quotas;
-
-    boolean active;
-    Boolean publicVisible;
-    Integer sortOrder;
-    List<ServicePlanFeatureResponse> features;
+    List<UserPlanFeatureResponse> features;
 }

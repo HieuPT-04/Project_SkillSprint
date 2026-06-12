@@ -7,7 +7,7 @@ import com.skillsprint.dto.request.admin.UpdatePlanFeaturesRequest;
 import com.skillsprint.dto.request.admin.UpdateServicePlanRequest;
 import com.skillsprint.dto.request.admin.UpdateServicePlanStatusRequest;
 import com.skillsprint.dto.response.admin.AdminAuditLogResponse;
-import com.skillsprint.dto.response.subscription.ServicePlanFeatureResponse;
+import com.skillsprint.dto.response.subscription.FeatureCatalogResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanResponse;
 import com.skillsprint.entity.BusinessActivityLog;
 import com.skillsprint.entity.Feature;
@@ -62,16 +62,15 @@ public class AdminServicePlanService {
     }
 
     @Transactional(readOnly = true)
-    public List<ServicePlanFeatureResponse> getFeatures() {
+    public List<FeatureCatalogResponse> getFeatures() {
         return featureRepository.findAllByOrderByFeatureNameAsc()
                 .stream()
-                .map(feature -> ServicePlanFeatureResponse.builder()
+                .map(feature -> FeatureCatalogResponse.builder()
                         .featureId(feature.getFeatureId())
                         .featureKey(feature.getFeatureKey())
                         .featureName(feature.getFeatureName())
                         .description(feature.getDescription())
                         .active(feature.isActive())
-                        .enabled(false)
                         .build())
                 .toList();
     }

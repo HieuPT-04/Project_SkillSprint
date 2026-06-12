@@ -2,7 +2,10 @@ package com.skillsprint.mapper;
 
 import com.skillsprint.dto.response.subscription.CurrentSubscriptionResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanFeatureResponse;
+import com.skillsprint.dto.response.subscription.ServicePlanQuotaResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanResponse;
+import com.skillsprint.dto.response.subscription.UserPlanFeatureResponse;
+import com.skillsprint.dto.response.subscription.UserServicePlanResponse;
 import com.skillsprint.entity.PlanFeature;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.Subscription;
@@ -24,15 +27,26 @@ public class SubscriptionMapper {
                 .planType(plan.getPlanType())
                 .monthlyPrice(plan.getMonthlyPrice())
                 .currency(defaultString(plan.getCurrency(), "VND"))
-                .maxWorkspaces(defaultValue(plan.getMaxWorkspaces(), 1))
-                .maxUploads(defaultValue(plan.getMaxUploads(), 5))
-                .aiGenerateLimit(defaultValue(plan.getAiParsingLimit(), 5))
-                .maxFileMb(defaultValue(plan.getMaxFileMb(), 20))
-                .maxWorkspaceMb(defaultValue(plan.getMaxWorkspaceMb(), 100))
+                .quotas(toQuotaResponse(plan))
                 .active(plan.isActive())
                 .publicVisible(defaultBoolean(plan.getPublicVisible(), true))
                 .sortOrder(defaultValue(plan.getSortOrder(), 0))
                 .features(features.stream().map(this::toFeatureResponse).toList())
+                .build();
+    }
+
+    public UserServicePlanResponse toUserServicePlanResponse(ServicePlan plan, List<PlanFeature> features) {
+        return UserServicePlanResponse.builder()
+                .planId(plan.getPlanId())
+                .planName(plan.getPlanName())
+                .description(plan.getDescription())
+                .monthlyPrice(plan.getMonthlyPrice())
+                .currency(defaultString(plan.getCurrency(), "VND"))
+                .quotas(toQuotaResponse(plan))
+                .features(features.stream()
+                        .filter(planFeature -> planFeature.isEnabled() && planFeature.getFeature().isActive())
+                        .map(this::toUserFeatureResponse)
+                        .toList())
                 .build();
     }
 
@@ -43,7 +57,7 @@ public class SubscriptionMapper {
     public CurrentSubscriptionResponse toCurrentSubscriptionResponse(Subscription subscription, List<PlanFeature> features) {
         return CurrentSubscriptionResponse.builder()
                 .subscriptionId(subscription.getSubscriptionId())
-                .plan(toServicePlanResponse(subscription.getPlan(), features))
+                .plan(toUserServicePlanResponse(subscription.getPlan(), features))
                 .startDate(subscription.getStartDate())
                 .endDate(subscription.getEndDate())
                 .startAt(subscription.getStartAt())
@@ -65,6 +79,16 @@ public class SubscriptionMapper {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private ServicePlanQuotaResponse toQuotaResponse(ServicePlan plan) {
+        return ServicePlanQuotaResponse.builder()
+                .maxWorkspaces(defaultValue(plan.getMaxWorkspaces(), 1))
+                .maxUploads(defaultValue(plan.getMaxUploads(), 5))
+                .aiGenerateLimit(defaultValue(plan.getAiParsingLimit(), 5))
+                .maxFileMb(defaultValue(plan.getMaxFileMb(), 20))
+                .maxWorkspaceMb(defaultValue(plan.getMaxWorkspaceMb(), 100))
+                .build();
+    }
+
     private ServicePlanFeatureResponse toFeatureResponse(PlanFeature planFeature) {
         return ServicePlanFeatureResponse.builder()
                 .featureId(planFeature.getFeature().getFeatureId())
@@ -73,6 +97,13 @@ public class SubscriptionMapper {
                 .description(planFeature.getFeature().getDescription())
                 .active(planFeature.getFeature().isActive())
                 .enabled(planFeature.isEnabled())
+                .build();
+    }
+
+    private UserPlanFeatureResponse toUserFeatureResponse(PlanFeature planFeature) {
+        return UserPlanFeatureResponse.builder()
+                .featureKey(planFeature.getFeature().getFeatureKey())
+                .featureName(planFeature.getFeature().getFeatureName())
                 .build();
     }
 }
