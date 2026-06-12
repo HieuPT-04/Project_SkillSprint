@@ -1,7 +1,7 @@
 package com.skillsprint.service.subscription;
 
 import com.skillsprint.dto.response.subscription.CurrentSubscriptionResponse;
-import com.skillsprint.dto.response.subscription.ServicePlanResponse;
+import com.skillsprint.dto.response.subscription.UserServicePlanResponse;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.Subscription;
 import com.skillsprint.entity.User;
@@ -43,10 +43,10 @@ public class SubscriptionService {
     SubscriptionMapper subscriptionMapper;
 
     @Transactional(readOnly = true)
-    public List<ServicePlanResponse> getActivePlans() {
+    public List<UserServicePlanResponse> getActivePlans() {
         return servicePlanRepository.findVisibleActivePlans()
                 .stream()
-                .map(plan -> subscriptionMapper.toServicePlanResponse(
+                .map(plan -> subscriptionMapper.toUserServicePlanResponse(
                         plan,
                         planFeatureRepository.findByPlanPlanId(plan.getPlanId())
                 ))

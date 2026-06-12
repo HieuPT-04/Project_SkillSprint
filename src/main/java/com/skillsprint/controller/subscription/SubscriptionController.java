@@ -3,7 +3,7 @@ package com.skillsprint.controller.subscription;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.subscription.CurrentSubscriptionResponse;
 import com.skillsprint.dto.response.subscription.QuotaStatusResponse;
-import com.skillsprint.dto.response.subscription.ServicePlanResponse;
+import com.skillsprint.dto.response.subscription.UserServicePlanResponse;
 import com.skillsprint.service.subscription.QuotaService;
 import com.skillsprint.service.subscription.SubscriptionService;
 import java.util.List;
@@ -27,8 +27,8 @@ public class SubscriptionController {
     QuotaService quotaService;
 
     @GetMapping("/plans")
-    public ResponseEntity<ApiResponse<List<ServicePlanResponse>>> getPlans() {
-        List<ServicePlanResponse> response = subscriptionService.getActivePlans();
+    public ResponseEntity<ApiResponse<List<UserServicePlanResponse>>> getPlans() {
+        List<UserServicePlanResponse> response = subscriptionService.getActivePlans();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách gói thành công", response));
     }
 
