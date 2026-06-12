@@ -1,7 +1,5 @@
-package com.skillsprint.dto.request.payment;
+package com.skillsprint.dto.request.admin;
 
-import com.skillsprint.enums.plan.ServicePlanType;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,9 +10,8 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CreateSepayPaymentRequest {
+public class UpdateServicePlanStatusRequest {
 
-    UUID planId;
-
-    ServicePlanType planType;
+    Boolean active;
+    Boolean publicVisible;
 }

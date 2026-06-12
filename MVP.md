@@ -97,13 +97,15 @@ Auth -> Workspace -> Onboarding -> Material -> Learning Structure -> Roadmap -> 
 - SePay payment flow cho thanh toán thật bằng chuyển khoản ngân hàng.
 - Admin payment APIs cho danh sách giao dịch và reconcile thủ công khi cần.
 - Admin Dashboard API gồm tổng quan user, workspace, subscription, payment, learning, chart và alert.
+- Notification/reminder basic APIs.
+- Feedback APIs cho user gửi góp ý/báo lỗi và admin quản lý feedback.
 
 Cần rà soát tiếp:
 
 - Test lại full core flow end-to-end bằng Postman.
 - Cập nhật Postman collection mỗi khi API/response đổi.
 - Chỉ sửa core nếu test phát hiện lỗi làm gãy flow.
-- Chưa ưu tiên thêm reminder, realtime notification và observability nâng cao.
+- Chưa ưu tiên realtime notification, AI Tutor chat history và observability nâng cao.
 
 ## 4. Kiến Trúc Kỹ Thuật
 
@@ -261,6 +263,25 @@ POST /api/admin/payments/{paymentId}/reconcile
 PATCH /api/admin/users/{userId}/subscription
 ```
 
+Notification/reminder endpoints:
+
+```text
+GET /api/notifications
+GET /api/notifications/unread
+PATCH /api/notifications/{notificationId}/read
+POST /api/workspaces/{workspaceId}/reminders
+```
+
+Feedback endpoints:
+
+```text
+POST /api/feedback
+GET /api/admin/feedback
+GET /api/admin/feedback/{feedbackId}
+PATCH /api/admin/feedback/{feedbackId}/status
+DELETE /api/admin/feedback/{feedbackId}
+```
+
 ## 6. API Response Chuẩn
 
 Success:
@@ -392,11 +413,18 @@ Nhóm payment/subscription:
 - `subscriptions`: gói hiện tại của user.
 - `payment_transactions`: giao dịch thanh toán SePay.
 
-Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
+Nhóm notification/reminder:
 
 - `reminders`.
 - `notifications`.
 - `notification_logs`.
+
+Nhóm feedback:
+
+- `feedbacks`: feedback/bug report của user để admin theo dõi và xử lý.
+
+Nhóm hỗ trợ có thể giữ nhưng chưa ưu tiên API:
+
 - `business_activity_logs`.
 
 ## 8. Learning Structure Review
@@ -620,6 +648,8 @@ FAILED | CANCELLED
 38. Quiz API theo roadmap step, tạo 5 câu, submit và xem attempt mới nhất.
 39. AI Tutor API theo workspace/roadmap step, response gọn cho FE.
 40. Giới hạn Quiz và AI Tutor chỉ cho gói `PREMIUM`.
+41. Notification/reminder basic APIs.
+42. Feedback user/admin APIs.
 
 Làm tiếp:
 
@@ -687,4 +717,4 @@ Login
 -> Track Progress
 ```
 
-Khi vòng này ổn, mới mở rộng sang reminder, notification realtime, audit/business log, observability và admin analytics nâng cao.
+Khi vòng này ổn, mới mở rộng sang realtime notification, AI Tutor chat history, audit/business log, observability và admin analytics nâng cao.

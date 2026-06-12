@@ -29,6 +29,7 @@ import com.skillsprint.service.quiz.ai.AiQuizDraft;
 import com.skillsprint.service.quiz.ai.AiQuizOptionDraft;
 import com.skillsprint.service.quiz.ai.AiQuizQuestionDraft;
 import com.skillsprint.service.quiz.ai.GeminiQuizClient;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -66,7 +67,7 @@ public class QuizService {
 
     @Transactional
     public QuizResponse generate(String userId, UUID stepId) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
 
@@ -81,7 +82,7 @@ public class QuizService {
 
     @Transactional(readOnly = true)
     public QuizResponse getCurrent(String userId, UUID stepId) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
 
@@ -97,7 +98,7 @@ public class QuizService {
 
     @Transactional
     public QuizAttemptResponse submit(String userId, UUID quizId, SubmitQuizRequest request) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
         Quiz quiz = findOwnedQuiz(userId, quizId);
         quotaService.validateCanAccessRoadmapStep(userId, quiz.getRoadmapStep());
 
@@ -179,7 +180,7 @@ public class QuizService {
 
     @Transactional(readOnly = true)
     public QuizAttemptResponse getLatestAttempt(String userId, UUID quizId) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
         Quiz quiz = findOwnedQuiz(userId, quizId);
         QuizAttempt attempt = quizAttemptRepository
                 .findFirstByQuizQuizIdAndUserUserIdOrderBySubmittedAtDesc(quiz.getQuizId(), userId)
