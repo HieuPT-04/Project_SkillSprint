@@ -8,6 +8,7 @@ import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.entity.Role;
 import com.skillsprint.entity.User;
 import com.skillsprint.entity.UserRole;
+import com.skillsprint.entity.Subscription;
 import com.skillsprint.enums.auth.RoleName;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -15,9 +16,13 @@ import com.skillsprint.mapper.UserMapper;
 import com.skillsprint.repository.RoleRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserRoleRepository;
+import com.skillsprint.repository.SubscriptionRepository;
+
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +49,7 @@ public class AdminUserService {
     UserRepository userRepository;
     UserRoleRepository userRoleRepository;
     RoleRepository roleRepository;
+    SubscriptionRepository subscriptionRepository; // Đã thêm mới repo này
     UserMapper userMapper;
     CognitoIdentityProviderClient cognitoClient;
     CognitoProperties cognitoProperties;
@@ -64,11 +70,30 @@ public class AdminUserService {
                         normalizedSearch,
                         pageable
                 );
+        
         Map<String, List<String>> rolesByUserId = getRolesByUserId(users.getContent());
+
+        // --- Bắt đầu đoạn tối ưu Batch-fetch lấy Subscription tránh N+1 Query ---
+        List<String> userIds = users.getContent().stream()
+                .map(User::getUserId)
+                .toList();
+
+        Map<String, Subscription> subscriptionsByUserId = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : subscriptionRepository.findByUserUserIdIn(userIds)
+                        .stream()
+                        .filter(sub -> sub.getUser() != null && sub.getUser().getUserId() != null)
+                        .collect(Collectors.toMap(
+                                sub -> sub.getUser().getUserId(),
+                                Function.identity(),
+                                (s1, s2) -> s1.getCreatedAt().isAfter(s2.getCreatedAt()) ? s1 : s2
+                        ));
+        // --- Kết thúc đoạn xử lý Subscription ---
 
         Page<AdminUserResponse> response = users.map(user -> userMapper.toAdminUserResponse(
                 user,
-                rolesByUserId.getOrDefault(user.getUserId(), List.of())
+                rolesByUserId.getOrDefault(user.getUserId(), List.of()),
+                subscriptionsByUserId.get(user.getUserId()) // Đã truyền thêm dữ liệu gói ở đây
         ));
 
         return PageResponse.from(response);
@@ -77,8 +102,14 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public AdminUserResponse getUser(String userId) {
         User user = findUser(userId);
+        
+        Subscription currentSubscription = subscriptionRepository
+                .findAllByUserUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .findFirst()
+                .orElse(null);
 
-        return userMapper.toAdminUserResponse(user, getGlobalRoles(userId));
+        return userMapper.toAdminUserResponse(user, getGlobalRoles(userId), currentSubscription);
     }
 
     @Transactional
@@ -91,7 +122,14 @@ public class AdminUserService {
         user.setStatus(request.getStatus());
 
         User savedUser = userRepository.save(user);
-        return userMapper.toAdminUserResponse(savedUser, getGlobalRoles(userId));
+        
+        Subscription currentSubscription = subscriptionRepository
+                .findAllByUserUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .findFirst()
+                .orElse(null);
+                
+        return userMapper.toAdminUserResponse(savedUser, getGlobalRoles(userId), currentSubscription);
     }
 
     @Transactional
@@ -109,7 +147,13 @@ public class AdminUserService {
         userRole.setRole(role);
         userRoleRepository.save(userRole);
 
-        return userMapper.toAdminUserResponse(user, List.of(request.getRole().name()));
+        Subscription currentSubscription = subscriptionRepository
+                .findAllByUserUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        return userMapper.toAdminUserResponse(user, List.of(request.getRole().name()), currentSubscription);
     }
 
     private User findUser(String userId) {
