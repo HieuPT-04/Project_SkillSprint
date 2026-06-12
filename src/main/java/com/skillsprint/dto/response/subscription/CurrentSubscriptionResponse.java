@@ -15,7 +15,7 @@ import lombok.experimental.FieldDefaults;
 public class CurrentSubscriptionResponse {
 
     UUID subscriptionId;
-    ServicePlanResponse plan;
+    UserServicePlanResponse plan;
     LocalDate startDate;
     LocalDate endDate;
     Instant startAt;

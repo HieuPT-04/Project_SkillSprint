@@ -6,7 +6,7 @@ import com.skillsprint.dto.request.admin.UpdatePlanFeaturesRequest;
 import com.skillsprint.dto.request.admin.UpdateServicePlanRequest;
 import com.skillsprint.dto.request.admin.UpdateServicePlanStatusRequest;
 import com.skillsprint.dto.response.admin.AdminAuditLogResponse;
-import com.skillsprint.dto.response.subscription.ServicePlanFeatureResponse;
+import com.skillsprint.dto.response.subscription.FeatureCatalogResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanResponse;
 import com.skillsprint.service.subscription.AdminServicePlanService;
 import jakarta.validation.Valid;
@@ -45,8 +45,8 @@ public class AdminServicePlanController {
 
     @GetMapping("/features")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<List<ServicePlanFeatureResponse>>> getFeatures() {
-        List<ServicePlanFeatureResponse> response = adminServicePlanService.getFeatures();
+    public ResponseEntity<ApiResponse<List<FeatureCatalogResponse>>> getFeatures() {
+        List<FeatureCatalogResponse> response = adminServicePlanService.getFeatures();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tính năng thành công", response));
     }
 
