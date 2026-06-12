@@ -13,6 +13,7 @@ import com.skillsprint.mapper.SubscriptionMapper;
 import com.skillsprint.repository.ServicePlanRepository;
 import com.skillsprint.repository.SubscriptionRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.repository.PlanFeatureRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -38,20 +39,24 @@ public class SubscriptionService {
     ServicePlanRepository servicePlanRepository;
     SubscriptionRepository subscriptionRepository;
     UserRepository userRepository;
+    PlanFeatureRepository planFeatureRepository;
     SubscriptionMapper subscriptionMapper;
 
     @Transactional(readOnly = true)
     public List<ServicePlanResponse> getActivePlans() {
-        return servicePlanRepository.findByActiveTrueOrderByMonthlyPriceAsc()
+        return servicePlanRepository.findVisibleActivePlans()
                 .stream()
-                .map(subscriptionMapper::toServicePlanResponse)
+                .map(plan -> subscriptionMapper.toServicePlanResponse(
+                        plan,
+                        planFeatureRepository.findByPlanPlanId(plan.getPlanId())
+                ))
                 .toList();
     }
 
     @Transactional
     public CurrentSubscriptionResponse getCurrentSubscription(String userId) {
         Subscription subscription = ensureDefaultFreeSubscription(userId);
-        return subscriptionMapper.toCurrentSubscriptionResponse(subscription);
+        return toCurrentSubscriptionResponse(subscription);
     }
 
     @Transactional
@@ -101,7 +106,7 @@ public class SubscriptionService {
         Subscription subscription = ServicePlanType.FREE.equals(planType)
                 ? createFreeSubscription(user)
                 : createOneMonthSubscription(user, planType, Instant.now());
-        return subscriptionMapper.toCurrentSubscriptionResponse(subscription);
+        return toCurrentSubscriptionResponse(subscription);
     }
 
     @Transactional
@@ -113,6 +118,10 @@ public class SubscriptionService {
         ServicePlan plan = servicePlanRepository.findByPlanType(planType)
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
 
+        return createSubscription(user, plan, startAt, endAt);
+    }
+
+    private Subscription createSubscription(User user, ServicePlan plan, Instant startAt, Instant endAt) {
         Instant resolvedStartAt = startAt == null ? Instant.now() : startAt;
 
         Subscription subscription = new Subscription();
@@ -129,27 +138,35 @@ public class SubscriptionService {
 
     @Transactional
     public CurrentSubscriptionResponse activatePaidPlan(String userId, ServicePlanType planType) {
+        ServicePlan targetPlan = servicePlanRepository.findByPlanType(planType)
+                .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
+
+        return activatePaidPlan(userId, targetPlan);
+    }
+
+    @Transactional
+    public CurrentSubscriptionResponse activatePaidPlan(String userId, ServicePlan targetPlan) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
 
         Subscription currentSubscription = ensureDefaultFreeSubscription(user);
         ServicePlan currentPlan = currentSubscription.getPlan();
 
-        if (planRank(planType) < planRank(currentPlan.getPlanType())) {
+        if (planRank(targetPlan) < planRank(currentPlan)) {
             throw new AppException(ErrorCode.SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED);
         }
 
-        if (planType.equals(currentPlan.getPlanType()) && currentSubscription.getEndAt() != null) {
+        if (isSamePlan(targetPlan, currentPlan) && currentSubscription.getEndAt() != null) {
             Instant extendedEndAt = currentSubscription.getEndAt().atZone(VN_ZONE)
                     .plusMonths(1)
                     .toInstant();
             currentSubscription.setEndAt(extendedEndAt);
             currentSubscription.setEndDate(extendedEndAt.atZone(VN_ZONE).toLocalDate());
-            return subscriptionMapper.toCurrentSubscriptionResponse(subscriptionRepository.save(currentSubscription));
+            return toCurrentSubscriptionResponse(subscriptionRepository.save(currentSubscription));
         }
 
         Instant startAt = Instant.now();
-        Instant endAt = isUpgradeFromPaidPlan(currentSubscription, planType)
+        Instant endAt = isUpgradeFromPaidPlan(currentSubscription, targetPlan)
                 ? currentSubscription.getEndAt()
                 : startAt.atZone(VN_ZONE).plusMonths(1).toInstant();
 
@@ -158,26 +175,25 @@ public class SubscriptionService {
         currentSubscription.setEndDate(startAt.atZone(VN_ZONE).toLocalDate());
         subscriptionRepository.save(currentSubscription);
 
-        Subscription subscription = createSubscription(user, planType, startAt, endAt);
+        Subscription subscription = createSubscription(user, targetPlan, startAt, endAt);
 
-        return subscriptionMapper.toCurrentSubscriptionResponse(subscription);
+        return toCurrentSubscriptionResponse(subscription);
     }
 
     @Transactional
     public BigDecimal calculatePaymentAmount(String userId, ServicePlan targetPlan) {
         Subscription currentSubscription = ensureDefaultFreeSubscription(userId);
         ServicePlan currentPlan = currentSubscription.getPlan();
-        ServicePlanType targetPlanType = targetPlan.getPlanType();
 
-        if (planRank(targetPlanType) < planRank(currentPlan.getPlanType())) {
+        if (planRank(targetPlan) < planRank(currentPlan)) {
             throw new AppException(ErrorCode.SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED);
         }
 
-        if (targetPlanType.equals(currentPlan.getPlanType())) {
+        if (isSamePlan(targetPlan, currentPlan)) {
             return roundVnd(targetPlan.getMonthlyPrice());
         }
 
-        if (!isUpgradeFromPaidPlan(currentSubscription, targetPlanType)) {
+        if (!isUpgradeFromPaidPlan(currentSubscription, targetPlan)) {
             return roundVnd(targetPlan.getMonthlyPrice());
         }
 
@@ -226,10 +242,10 @@ public class SubscriptionService {
         return createSubscription(user, planType, startAt, endAt);
     }
 
-    private boolean isUpgradeFromPaidPlan(Subscription currentSubscription, ServicePlanType targetPlanType) {
+    private boolean isUpgradeFromPaidPlan(Subscription currentSubscription, ServicePlan targetPlan) {
         return !ServicePlanType.FREE.equals(currentSubscription.getPlan().getPlanType())
                 && currentSubscription.getEndAt() != null
-                && planRank(targetPlanType) > planRank(currentSubscription.getPlan().getPlanType());
+                && planRank(targetPlan) > planRank(currentSubscription.getPlan());
     }
 
     private int planRank(ServicePlanType planType) {
@@ -238,6 +254,27 @@ public class SubscriptionService {
             case SKILL_BUILDER -> 1;
             case PREMIUM -> 2;
         };
+    }
+
+    private int planRank(ServicePlan plan) {
+        if (plan.getPlanType() != null) {
+            return planRank(plan.getPlanType());
+        }
+        return plan.getSortOrder() == null ? 0 : plan.getSortOrder();
+    }
+
+    private boolean isSamePlan(ServicePlan left, ServicePlan right) {
+        if (left.getPlanId() != null && right.getPlanId() != null) {
+            return left.getPlanId().equals(right.getPlanId());
+        }
+        return left.getPlanType() != null && left.getPlanType().equals(right.getPlanType());
+    }
+
+    private CurrentSubscriptionResponse toCurrentSubscriptionResponse(Subscription subscription) {
+        return subscriptionMapper.toCurrentSubscriptionResponse(
+                subscription,
+                planFeatureRepository.findByPlanPlanId(subscription.getPlan().getPlanId())
+        );
     }
 
     private BigDecimal roundVnd(BigDecimal amount) {

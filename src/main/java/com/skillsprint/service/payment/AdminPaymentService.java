@@ -83,7 +83,7 @@ public class AdminPaymentService {
 
         subscriptionService.activatePaidPlan(
                 savedTransaction.getUser().getUserId(),
-                savedTransaction.getPlan().getPlanType()
+                savedTransaction.getPlan()
         );
 
         return paymentMapper.toResponse(savedTransaction);

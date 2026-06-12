@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
 @Setter
@@ -33,12 +34,18 @@ public class ServicePlan {
     @Column(name = "plan_name", nullable = false, length = 100)
     private String planName;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "plan_type", nullable = false, unique = true, length = 20)
+    @Column(name = "plan_type", unique = true, length = 20)
     private ServicePlanType planType;
 
     @Column(name = "monthly_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal monthlyPrice = BigDecimal.ZERO;
+
+    @Column(name = "currency", length = 10)
+    private String currency = "VND";
 
     @Column(name = "ai_parsing_limit", nullable = false)
     private Integer aiParsingLimit = 5;
@@ -52,9 +59,19 @@ public class ServicePlan {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "public_visible")
+    private Boolean publicVisible = true;
+
+    @Column(name = "sort_order")
+    private Integer sortOrder = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @Column(name = "max_workspaces")
     private Integer maxWorkspaces = 1;

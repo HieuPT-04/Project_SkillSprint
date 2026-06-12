@@ -115,7 +115,7 @@ public enum ErrorCode {
     QUOTA_STORAGE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn dung lượng lưu trữ của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_ROADMAP_STEP_LOCKED("Vui lòng nâng cấp gói để học tiếp", HttpStatus.FORBIDDEN),
-    PREMIUM_FEATURE_REQUIRED("Vui lòng nâng cấp Premium để sử dụng tính năng này", HttpStatus.FORBIDDEN),
+    PREMIUM_FEATURE_REQUIRED("Vui lòng nâng cấp gói để sử dụng tính năng này", HttpStatus.FORBIDDEN),
 
     // Payment
     PAYMENT_TRANSACTION_NOT_FOUND("Không tìm thấy giao dịch thanh toán", HttpStatus.NOT_FOUND),

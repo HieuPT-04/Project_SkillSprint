@@ -1,34 +1,27 @@
-package com.skillsprint.dto.response.subscription;
+package com.skillsprint.dto.request.admin;
 
-import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 @Getter
-@Builder
+@Setter
+@NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ServicePlanResponse {
+public class UpdateServicePlanRequest {
 
-    UUID planId;
     String planName;
     String description;
-    ServicePlanType planType;
     BigDecimal monthlyPrice;
     String currency;
-
     Integer maxWorkspaces;
     Integer maxUploads;
     Integer aiGenerateLimit;
     Integer maxFileMb;
     Integer maxWorkspaceMb;
-
-    boolean active;
     Boolean publicVisible;
     Integer sortOrder;
-    List<ServicePlanFeatureResponse> features;
 }

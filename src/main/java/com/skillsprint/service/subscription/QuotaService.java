@@ -9,6 +9,7 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.CalendarScheduleRunRepository;
 import com.skillsprint.repository.LearningStructureVersionRepository;
+import com.skillsprint.repository.PlanFeatureRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.UploadedMaterialRepository;
@@ -32,6 +33,7 @@ public class QuotaService {
     LearningStructureVersionRepository learningStructureVersionRepository;
     RoadmapRepository roadmapRepository;
     CalendarScheduleRunRepository calendarScheduleRunRepository;
+    PlanFeatureRepository planFeatureRepository;
 
     @Transactional(readOnly = true)
     public QuotaStatusResponse getQuotaStatus(String userId) {
@@ -131,8 +133,13 @@ public class QuotaService {
 
     @Transactional(readOnly = true)
     public void validatePremiumFeature(String userId) {
+        validateFeature(userId, PlanFeatureKeys.AI_TUTOR);
+    }
+
+    @Transactional(readOnly = true)
+    public void validateFeature(String userId, String featureKey) {
         ServicePlan plan = subscriptionService.getCurrentPlan(userId);
-        if (plan.getPlanType() != ServicePlanType.PREMIUM) {
+        if (!isFeatureEnabled(plan, featureKey)) {
             throw new AppException(ErrorCode.PREMIUM_FEATURE_REQUIRED);
         }
     }
@@ -140,7 +147,7 @@ public class QuotaService {
     @Transactional(readOnly = true)
     public int getUnlockedRoadmapStepLimit(String userId) {
         ServicePlan plan = subscriptionService.getCurrentPlan(userId);
-        if (plan.getPlanType() == ServicePlanType.FREE) {
+        if (!isFeatureEnabled(plan, PlanFeatureKeys.ROADMAP_FULL_ACCESS)) {
             return FREE_ROADMAP_STEP_LIMIT;
         }
         return Integer.MAX_VALUE;
@@ -189,5 +196,27 @@ public class QuotaService {
 
     private double bytesToMb(long bytes) {
         return Math.round((bytes / 1024.0 / 1024.0) * 100.0) / 100.0;
+    }
+
+    private boolean isFeatureEnabled(ServicePlan plan, String featureKey) {
+        if (plan.getPlanId() == null) {
+            return false;
+        }
+
+        return planFeatureRepository.findByPlanPlanIdAndFeatureFeatureKey(plan.getPlanId(), featureKey)
+                .map(planFeature -> planFeature.isEnabled() && planFeature.getFeature().isActive())
+                .orElseGet(() -> isLegacyFeatureEnabled(plan, featureKey));
+    }
+
+    private boolean isLegacyFeatureEnabled(ServicePlan plan, String featureKey) {
+        if (plan.getPlanType() == null) {
+            return false;
+        }
+
+        return switch (featureKey) {
+            case PlanFeatureKeys.ROADMAP_FULL_ACCESS -> plan.getPlanType() != ServicePlanType.FREE;
+            case PlanFeatureKeys.AI_TUTOR, PlanFeatureKeys.QUIZ_GENERATION -> plan.getPlanType() == ServicePlanType.PREMIUM;
+            default -> false;
+        };
     }
 }

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.skillsprint.entity.BusinessActivityLog;
 import com.skillsprint.enums.log.BusinessActionType;
+import com.skillsprint.enums.log.BusinessEntityType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BusinessActivityLogRepository extends JpaRepository<BusinessActivityLog, UUID> {
@@ -14,4 +15,6 @@ public interface BusinessActivityLogRepository extends JpaRepository<BusinessAct
     List<BusinessActivityLog> findByWorkspaceWorkspaceIdOrderByCreatedAtDesc(UUID workspaceId);
 
     List<BusinessActivityLog> findByActionTypeOrderByCreatedAtDesc(BusinessActionType actionType);
+
+    List<BusinessActivityLog> findTop100ByEntityTypeOrderByCreatedAtDesc(BusinessEntityType entityType);
 }

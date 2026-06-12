@@ -7,5 +7,6 @@ public enum BusinessEntityType {
     ROADMAP,
     STEP,
     CALENDAR_TASK,
-    NOTIFICATION
+    NOTIFICATION,
+    SERVICE_PLAN
 }

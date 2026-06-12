@@ -17,6 +17,7 @@ import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.tutor.ai.AiTutorDraft;
 import com.skillsprint.service.tutor.ai.GeminiTutorClient;
 import java.time.LocalDate;
@@ -56,7 +57,7 @@ public class AiTutorService {
 
     @Transactional(readOnly = true)
     public TutorAskResponse askWorkspace(String userId, UUID workspaceId, TutorAskRequest request) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.AI_TUTOR);
         String question = request == null ? null : request.getQuestion();
         validateQuestion(question);
 
@@ -90,7 +91,7 @@ public class AiTutorService {
 
     @Transactional(readOnly = true)
     public TutorAskResponse ask(String userId, UUID stepId, TutorAskRequest request) {
-        quotaService.validatePremiumFeature(userId);
+        quotaService.validateFeature(userId, PlanFeatureKeys.AI_TUTOR);
         String question = request == null ? null : request.getQuestion();
         validateQuestion(question);
 

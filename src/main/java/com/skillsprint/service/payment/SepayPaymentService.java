@@ -59,7 +59,7 @@ public class SepayPaymentService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
-        ServicePlan plan = getPayablePlan(request.getPlanType());
+        ServicePlan plan = getPayablePlan(request);
 
         PaymentTransaction reusablePayment = findReusablePendingPayment(userId, plan);
         if (reusablePayment != null) {
@@ -134,7 +134,7 @@ public class SepayPaymentService {
 
         subscriptionService.activatePaidPlan(
                 transaction.getUser().getUserId(),
-                transaction.getPlan().getPlanType()
+                transaction.getPlan()
         );
     }
 
@@ -172,11 +172,20 @@ public class SepayPaymentService {
         }
     }
 
-    private ServicePlan getPayablePlan(ServicePlanType planType) {
-        ServicePlan plan = servicePlanRepository.findByPlanType(planType)
-                .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
+    private ServicePlan getPayablePlan(CreateSepayPaymentRequest request) {
+        ServicePlan plan;
 
-        if (!plan.isActive()) {
+        if (request.getPlanId() != null) {
+            plan = servicePlanRepository.findById(request.getPlanId())
+                    .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
+        } else if (request.getPlanType() != null) {
+            plan = servicePlanRepository.findByPlanType(request.getPlanType())
+                    .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
+        } else {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Cần chọn gói thanh toán");
+        }
+
+        if (!plan.isActive() || Boolean.FALSE.equals(plan.getPublicVisible())) {
             throw new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND);
         }
 
@@ -306,7 +315,9 @@ public class SepayPaymentService {
         return SepayPaymentResponse.builder()
                 .paymentId(transaction.getPaymentId())
                 .status(transaction.getStatus())
+                .planId(transaction.getPlan().getPlanId())
                 .plan(transaction.getPlan().getPlanType())
+                .planName(transaction.getPlan().getPlanName())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
                 .paymentCode(transaction.getTxnRef())

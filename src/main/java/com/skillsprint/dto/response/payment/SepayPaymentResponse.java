@@ -20,7 +20,9 @@ public class SepayPaymentResponse {
     UUID paymentId;
     PaymentStatus status;
 
+    UUID planId;
     ServicePlanType plan;
+    String planName;
 
     BigDecimal amount;
     String currency;
