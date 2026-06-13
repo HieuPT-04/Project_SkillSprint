@@ -31,6 +31,7 @@ public class SecurityConfig {
     CustomAccessDeniedHandler accessDeniedHandler;
     SingleSessionFilter singleSessionFilter;
     MaintenanceModeFilter maintenanceModeFilter;
+    AuthenticatedUserGuardFilter authenticatedUserGuardFilter;
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/health",
@@ -80,7 +81,8 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 )
                 .addFilterAfter(maintenanceModeFilter, BearerTokenAuthenticationFilter.class)
-                .addFilterAfter(singleSessionFilter, BearerTokenAuthenticationFilter.class);
+                .addFilterAfter(singleSessionFilter, MaintenanceModeFilter.class)
+                .addFilterAfter(authenticatedUserGuardFilter, SingleSessionFilter.class);
 
         return http.build();
     }
