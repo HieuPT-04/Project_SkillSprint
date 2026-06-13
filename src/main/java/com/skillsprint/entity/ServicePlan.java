@@ -2,6 +2,7 @@ package com.skillsprint.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.enums.plan.ServicePlanType;
@@ -17,7 +18,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
@@ -36,6 +39,10 @@ public class ServicePlan {
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "benefits")
+    private List<String> benefits = List.of();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_type", unique = true, length = 20)

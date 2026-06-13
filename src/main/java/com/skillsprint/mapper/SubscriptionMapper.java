@@ -24,6 +24,7 @@ public class SubscriptionMapper {
                 .planId(plan.getPlanId())
                 .planName(plan.getPlanName())
                 .description(plan.getDescription())
+                .benefits(defaultList(plan.getBenefits()))
                 .planType(plan.getPlanType())
                 .monthlyPrice(plan.getMonthlyPrice())
                 .currency(defaultString(plan.getCurrency(), "VND"))
@@ -40,6 +41,7 @@ public class SubscriptionMapper {
                 .planId(plan.getPlanId())
                 .planName(plan.getPlanName())
                 .description(plan.getDescription())
+                .benefits(defaultList(plan.getBenefits()))
                 .monthlyPrice(plan.getMonthlyPrice())
                 .currency(defaultString(plan.getCurrency(), "VND"))
                 .quotas(toQuotaResponse(plan))
@@ -77,6 +79,10 @@ public class SubscriptionMapper {
 
     private String defaultString(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private List<String> defaultList(List<String> values) {
+        return values == null ? List.of() : values;
     }
 
     private ServicePlanQuotaResponse toQuotaResponse(ServicePlan plan) {

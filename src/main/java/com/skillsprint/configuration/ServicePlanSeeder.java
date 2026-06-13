@@ -9,6 +9,7 @@ import com.skillsprint.repository.PlanFeatureRepository;
 import com.skillsprint.repository.ServicePlanRepository;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import java.math.BigDecimal;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -35,6 +36,12 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ServicePlanType.FREE,
                 "Free",
                 "Gói miễn phí cho người mới bắt đầu",
+                List.of(
+                        "Tạo 1 workspace học tập",
+                        "Upload tối đa 5 tài liệu",
+                        "Sinh roadmap cơ bản để trải nghiệm",
+                        "Phù hợp để bắt đầu với SkillSprint"
+                ),
                 BigDecimal.ZERO,
                 1,
                 5,
@@ -48,6 +55,13 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ServicePlanType.SKILL_BUILDER,
                 "Basic",
                 "Gói học cá nhân với quota cao hơn",
+                List.of(
+                        "Mở khóa toàn bộ roadmap",
+                        "Tạo tối đa 5 workspace",
+                        "Upload tối đa 50 tài liệu",
+                        "Giới hạn AI generate cao hơn",
+                        "Phù hợp cho học cá nhân nghiêm túc"
+                ),
                 new BigDecimal("89000"),
                 5,
                 50,
@@ -61,6 +75,13 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ServicePlanType.PREMIUM,
                 "Premium",
                 "Gói đầy đủ cho trải nghiệm học nâng cao",
+                List.of(
+                        "Mở khóa toàn bộ roadmap",
+                        "Hỏi AI Tutor trong workspace và từng bài học",
+                        "Tạo quiz luyện tập theo roadmap step",
+                        "Quota học tập và lưu trữ cao nhất",
+                        "Phù hợp cho người học chuyên sâu"
+                ),
                 new BigDecimal("199000"),
                 20,
                 300,
@@ -103,6 +124,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
             ServicePlanType planType,
             String planName,
             String description,
+            List<String> benefits,
             BigDecimal monthlyPrice,
             int maxWorkspaces,
             int maxUploads,
@@ -121,6 +143,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
         plan.setPlanType(planType);
         plan.setPlanName(planName);
         plan.setDescription(description);
+        plan.setBenefits(benefits);
         plan.setMonthlyPrice(monthlyPrice);
         plan.setCurrency("VND");
         plan.setMaxWorkspaces(maxWorkspaces);

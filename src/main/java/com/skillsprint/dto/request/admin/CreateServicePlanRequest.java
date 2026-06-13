@@ -22,6 +22,7 @@ public class CreateServicePlanRequest {
     String planName;
 
     String description;
+    List<String> benefits;
 
     @NotNull
     @DecimalMin("0.0")
