@@ -1,5 +1,6 @@
 package com.skillsprint.dto.request.admin;
 
+import com.skillsprint.enums.plan.ServicePlanType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -23,6 +24,10 @@ public class CreateServicePlanRequest {
 
     String description;
     List<String> benefits;
+
+    // Each ServicePlanType is unique per plan (DB constraint); required so it is never persisted null.
+    @NotNull
+    ServicePlanType planType;
 
     @NotNull
     @DecimalMin("0.0")
