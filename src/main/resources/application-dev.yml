@@ -2,6 +2,15 @@ spring:
   config:
     activate:
       on-profile: dev
+  devtools:
+    livereload:
+      enabled: false          # Vite owns frontend live-reload; disable the devtools LiveReload server
+    restart:
+      enabled: true
+      poll-interval: 2s        # how often the classpath is polled for changes
+      quiet-period: 1s         # wait until changes settle before restarting (debounce → no boot-loops)
+      # Adds to the built-in excludes (static/**, public/**, templates/**, …) rather than replacing them.
+      additional-exclude: "logs/**,*.log,**/*.sql"
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/skillsprint}
     username: ${DB_USERNAME}

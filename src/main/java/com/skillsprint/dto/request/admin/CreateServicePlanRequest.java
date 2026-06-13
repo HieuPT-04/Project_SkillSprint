@@ -29,6 +29,11 @@ public class CreateServicePlanRequest {
     @NotNull
     ServicePlanType planType;
 
+    // Optional badge styling.
+    String badgeColor;
+    String badgeIcon;
+    String animationType;
+
     @NotNull
     @DecimalMin("0.0")
     BigDecimal monthlyPrice;

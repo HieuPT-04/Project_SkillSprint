@@ -253,6 +253,7 @@ public class SubscriptionService {
             case FREE -> 0;
             case SKILL_BUILDER -> 1;
             case PREMIUM -> 2;
+            case ADMIN_DEFAULT -> 3;
         };
     }
 

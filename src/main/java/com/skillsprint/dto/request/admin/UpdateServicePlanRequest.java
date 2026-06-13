@@ -19,6 +19,9 @@ public class UpdateServicePlanRequest {
     String description;
     List<String> benefits;
     ServicePlanType planType;
+    String badgeColor;
+    String badgeIcon;
+    String animationType;
     BigDecimal monthlyPrice;
     String currency;
     Integer maxWorkspaces;

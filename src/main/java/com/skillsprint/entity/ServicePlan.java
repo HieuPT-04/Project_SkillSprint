@@ -48,6 +48,16 @@ public class ServicePlan {
     @Column(name = "plan_type", unique = true, length = 20)
     private ServicePlanType planType;
 
+    // Admin-customizable badge styling (Tailwind classes / Lucide icon name / animation keyword).
+    @Column(name = "badge_color", columnDefinition = "TEXT")
+    private String badgeColor;
+
+    @Column(name = "badge_icon", length = 50)
+    private String badgeIcon;
+
+    @Column(name = "animation_type", length = 20)
+    private String animationType;
+
     @Column(name = "monthly_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal monthlyPrice = BigDecimal.ZERO;
 
