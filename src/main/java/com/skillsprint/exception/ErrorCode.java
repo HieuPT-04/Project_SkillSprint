@@ -104,6 +104,7 @@ public enum ErrorCode {
     FORBIDDEN("Bạn không có quyền thực hiện thao tác này", HttpStatus.FORBIDDEN),
     VALIDATION_ERROR("Dữ liệu không hợp lệ", HttpStatus.BAD_REQUEST),
     RATE_LIMIT_EXCEEDED("Bạn thao tác quá nhanh, vui lòng thử lại sau", HttpStatus.TOO_MANY_REQUESTS),
+    MAINTENANCE_MODE("Hệ thống đang bảo trì. Vui lòng quay lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
     INTERNAL_SERVER_ERROR("Lỗi hệ thống", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Subscription / quota

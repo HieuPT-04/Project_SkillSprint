@@ -8,5 +8,6 @@ public enum BusinessEntityType {
     STEP,
     CALENDAR_TASK,
     NOTIFICATION,
-    SERVICE_PLAN
+    SERVICE_PLAN,
+    SYSTEM_MAINTENANCE
 }
