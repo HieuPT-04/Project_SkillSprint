@@ -4,7 +4,6 @@ import com.skillsprint.dto.response.subscription.CurrentSubscriptionResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanFeatureResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanQuotaResponse;
 import com.skillsprint.dto.response.subscription.ServicePlanResponse;
-import com.skillsprint.dto.response.subscription.UserPlanFeatureResponse;
 import com.skillsprint.dto.response.subscription.UserServicePlanResponse;
 import com.skillsprint.entity.PlanFeature;
 import com.skillsprint.entity.ServicePlan;
@@ -45,10 +44,6 @@ public class SubscriptionMapper {
                 .monthlyPrice(plan.getMonthlyPrice())
                 .currency(defaultString(plan.getCurrency(), "VND"))
                 .quotas(toQuotaResponse(plan))
-                .features(features.stream()
-                        .filter(planFeature -> planFeature.isEnabled() && planFeature.getFeature().isActive())
-                        .map(this::toUserFeatureResponse)
-                        .toList())
                 .build();
     }
 
@@ -106,10 +101,4 @@ public class SubscriptionMapper {
                 .build();
     }
 
-    private UserPlanFeatureResponse toUserFeatureResponse(PlanFeature planFeature) {
-        return UserPlanFeatureResponse.builder()
-                .featureKey(planFeature.getFeature().getFeatureKey())
-                .featureName(planFeature.getFeature().getFeatureName())
-                .build();
-    }
 }

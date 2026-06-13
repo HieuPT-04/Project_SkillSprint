@@ -20,5 +20,4 @@ public class UserServicePlanResponse {
     BigDecimal monthlyPrice;
     String currency;
     ServicePlanQuotaResponse quotas;
-    List<UserPlanFeatureResponse> features;
 }
