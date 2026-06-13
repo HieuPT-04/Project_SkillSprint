@@ -88,6 +88,7 @@ public class AdminServicePlanService {
         ServicePlan plan = new ServicePlan();
         plan.setPlanName(normalizeRequiredText(request.getPlanName(), "Tên gói không được để trống"));
         plan.setDescription(request.getDescription() == null ? null : normalizeNullableText(request.getDescription()));
+        plan.setBenefits(normalizeBenefits(request.getBenefits()));
         validateNonNegative(request.getMonthlyPrice(), "Giá gói không được âm");
         plan.setMonthlyPrice(request.getMonthlyPrice());
         plan.setCurrency(normalizeCurrency(request.getCurrency()));
@@ -130,6 +131,10 @@ public class AdminServicePlanService {
 
         if (request.getDescription() != null) {
             plan.setDescription(normalizeNullableText(request.getDescription()));
+        }
+
+        if (request.getBenefits() != null) {
+            plan.setBenefits(normalizeBenefits(request.getBenefits()));
         }
 
         if (request.getMonthlyPrice() != null) {
@@ -288,6 +293,7 @@ public class AdminServicePlanService {
         values.put("planId", plan.getPlanId());
         values.put("planName", plan.getPlanName());
         values.put("description", plan.getDescription());
+        values.put("benefits", plan.getBenefits());
         values.put("planType", plan.getPlanType());
         values.put("monthlyPrice", plan.getMonthlyPrice());
         values.put("currency", plan.getCurrency());
@@ -384,6 +390,18 @@ public class AdminServicePlanService {
             return null;
         }
         return value.trim();
+    }
+
+    private List<String> normalizeBenefits(List<String> benefits) {
+        if (benefits == null) {
+            return List.of();
+        }
+
+        return benefits.stream()
+                .filter(benefit -> benefit != null && !benefit.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
     }
 
     private String normalizeRequiredText(String value, String message) {

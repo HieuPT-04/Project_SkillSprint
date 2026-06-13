@@ -16,6 +16,7 @@ public class UserServicePlanResponse {
     UUID planId;
     String planName;
     String description;
+    List<String> benefits;
     BigDecimal monthlyPrice;
     String currency;
     ServicePlanQuotaResponse quotas;
