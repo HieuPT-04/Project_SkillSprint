@@ -30,6 +30,7 @@ public class SecurityConfig {
     CustomAuthenticationEntryPoint authenticationEntryPoint;
     CustomAccessDeniedHandler accessDeniedHandler;
     SingleSessionFilter singleSessionFilter;
+    MaintenanceModeFilter maintenanceModeFilter;
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/health",
@@ -41,6 +42,7 @@ public class SecurityConfig {
             "/api/auth/complete-new-password",
             "/api/auth/forgot-password",
             "/api/auth/confirm-forgot-password",
+            "/api/system/status",
             "/api/payments/sepay/webhook",
             "/ws/**"
     };
@@ -77,6 +79,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 )
+                .addFilterAfter(maintenanceModeFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(singleSessionFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
