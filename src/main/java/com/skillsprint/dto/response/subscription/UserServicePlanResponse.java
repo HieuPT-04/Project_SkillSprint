@@ -17,6 +17,9 @@ public class UserServicePlanResponse {
     String planName;
     String description;
     List<String> benefits;
+    String badgeColor;
+    String badgeIcon;
+    String animationType;
     BigDecimal monthlyPrice;
     String currency;
     ServicePlanQuotaResponse quotas;

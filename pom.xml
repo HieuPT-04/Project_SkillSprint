@@ -101,6 +101,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Dev-only: auto-restart on class changes. optional=true keeps it out of the fat JAR. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
