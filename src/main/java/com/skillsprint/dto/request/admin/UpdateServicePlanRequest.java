@@ -1,5 +1,6 @@
 package com.skillsprint.dto.request.admin;
 
+import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
 import java.util.List;
 import lombok.AccessLevel;
@@ -17,6 +18,7 @@ public class UpdateServicePlanRequest {
     String planName;
     String description;
     List<String> benefits;
+    ServicePlanType planType;
     BigDecimal monthlyPrice;
     String currency;
     Integer maxWorkspaces;

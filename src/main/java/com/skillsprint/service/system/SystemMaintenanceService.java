@@ -34,6 +34,7 @@ public class SystemMaintenanceService {
     SystemMaintenanceRepository maintenanceRepository;
     UserRepository userRepository;
     BusinessActivityLogRepository activityLogRepository;
+    MaintenanceStateHolder maintenanceStateHolder;
     ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -50,20 +51,6 @@ public class SystemMaintenanceService {
                 .startAt(maintenance.getStartAt())
                 .endAt(maintenance.getEndAt())
                 .build();
-    }
-
-    @Transactional(readOnly = true)
-    public boolean isMaintenanceActive() {
-        return maintenanceRepository.findTopByOrderByUpdatedAtDesc()
-                .map(maintenance -> isActive(maintenance, Instant.now()))
-                .orElse(false);
-    }
-
-    @Transactional(readOnly = true)
-    public String getActiveMessage() {
-        return maintenanceRepository.findTopByOrderByUpdatedAtDesc()
-                .map(this::resolveMessage)
-                .orElse(DEFAULT_MESSAGE);
     }
 
     @Transactional
@@ -96,6 +83,9 @@ public class SystemMaintenanceService {
         }
 
         SystemMaintenance savedMaintenance = maintenanceRepository.save(maintenance);
+        // Evict the cached snapshot immediately so this instance reflects the new config on the
+        // very next request, instead of waiting up to the holder's TTL.
+        maintenanceStateHolder.invalidate();
         logActivity(adminUserId, savedMaintenance, oldValue, snapshot(savedMaintenance));
         return toMaintenanceResponse(savedMaintenance);
     }

@@ -16,6 +16,7 @@ import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.log.BusinessActionType;
 import com.skillsprint.enums.log.BusinessEntityType;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.SubscriptionMapper;
@@ -89,6 +90,8 @@ public class AdminServicePlanService {
         plan.setPlanName(normalizeRequiredText(request.getPlanName(), "Tên gói không được để trống"));
         plan.setDescription(request.getDescription() == null ? null : normalizeNullableText(request.getDescription()));
         plan.setBenefits(normalizeBenefits(request.getBenefits()));
+        assertPlanTypeAvailable(request.getPlanType(), null);
+        plan.setPlanType(request.getPlanType());
         validateNonNegative(request.getMonthlyPrice(), "Giá gói không được âm");
         plan.setMonthlyPrice(request.getMonthlyPrice());
         plan.setCurrency(normalizeCurrency(request.getCurrency()));
@@ -135,6 +138,11 @@ public class AdminServicePlanService {
 
         if (request.getBenefits() != null) {
             plan.setBenefits(normalizeBenefits(request.getBenefits()));
+        }
+
+        if (request.getPlanType() != null) {
+            assertPlanTypeAvailable(request.getPlanType(), plan.getPlanId());
+            plan.setPlanType(request.getPlanType());
         }
 
         if (request.getMonthlyPrice() != null) {
@@ -237,6 +245,20 @@ public class AdminServicePlanService {
     private ServicePlan findPlan(UUID planId) {
         return servicePlanRepository.findById(planId)
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));
+    }
+
+    // plan_type is unique per plan; reject collisions with a clean 400 instead of a raw DB error.
+    private void assertPlanTypeAvailable(ServicePlanType planType, UUID currentPlanId) {
+        if (planType == null) {
+            return;
+        }
+        servicePlanRepository.findByPlanType(planType).ifPresent(existing -> {
+            if (!existing.getPlanId().equals(currentPlanId)) {
+                throw new AppException(
+                        ErrorCode.VALIDATION_ERROR,
+                        "Loại gói '" + planType + "' đã được sử dụng bởi một gói khác");
+            }
+        });
     }
 
     private ServicePlanResponse toResponse(ServicePlan plan) {
