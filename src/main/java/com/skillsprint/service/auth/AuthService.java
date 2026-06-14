@@ -11,6 +11,7 @@ import com.skillsprint.dto.request.auth.RegisterRequest;
 import com.skillsprint.dto.request.auth.RefreshTokenRequest;
 import com.skillsprint.dto.request.auth.ResendConfirmationCodeRequest;
 import com.skillsprint.dto.response.auth.AuthResponse;
+import com.skillsprint.dto.response.common.SystemStatusResponse;
 import com.skillsprint.enums.auth.RoleName;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
@@ -386,10 +387,11 @@ public class AuthService {
     }
 
     private void ensureLoginAllowedDuringMaintenance(RoleName roleName) {
-        if (RoleName.ADMIN.equals(roleName) || !maintenanceService.isMaintenanceActive()) {
+        SystemStatusResponse status = maintenanceService.getSystemStatus();
+        if (RoleName.ADMIN.equals(roleName) || !status.isMaintenance()) {
             return;
         }
-        throw new AppException(ErrorCode.MAINTENANCE_MODE, maintenanceService.getActiveMessage());
+        throw new AppException(ErrorCode.MAINTENANCE_MODE, status.getMessage());
     }
 
     private void putSecretHashIfNeeded(Map<String, String> authParams, String username) {
