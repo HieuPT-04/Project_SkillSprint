@@ -66,6 +66,7 @@ public class AuthenticatedUserGuardFilter extends OncePerRequestFilter {
         return HttpMethod.OPTIONS.matches(method)
                 || "/health".equals(path)
                 || "/api/system/status".equals(path)
+                || "/api/subscriptions/plans".equals(path)
                 || "/api/payments/sepay/webhook".equals(path)
                 || path.startsWith("/api/auth/")
                 || path.startsWith("/ws/");
