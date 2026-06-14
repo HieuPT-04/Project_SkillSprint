@@ -44,6 +44,7 @@ public class SecurityConfig {
             "/api/auth/forgot-password",
             "/api/auth/confirm-forgot-password",
             "/api/system/status",
+            "/api/subscriptions/plans",
             "/api/payments/sepay/webhook",
             "/ws/**"
     };
