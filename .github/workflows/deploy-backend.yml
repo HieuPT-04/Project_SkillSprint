@@ -47,10 +47,25 @@ jobs:
             set -e
             mv /home/${USER}/skillsprint.jar.tmp /home/${USER}/skillsprint.jar
             sudo systemctl restart skillsprint
-            sleep 25
-            curl -f http://127.0.0.1:8080/health
+
+            echo "Waiting for backend to be ready..."
+            for i in {1..30}; do
+              if curl -fsS http://127.0.0.1:8080/api/system/status > /tmp/skillsprint-health.json; then
+                cat /tmp/skillsprint-health.json
+                echo "Backend is ready"
+                exit 0
+              fi
+
+              echo "Backend not ready yet, retry $i/30..."
+              sleep 5
+            done
+
+            echo "Backend failed to become ready"
+            sudo systemctl status skillsprint --no-pager
+            sudo journalctl -u skillsprint -n 120 --no-pager
+            exit 1
           EOF
 
       - name: Public health check
         run: |
-          curl -f "${{ secrets.HEALTHCHECK_URL }}"
+          curl -fsS "${{ secrets.HEALTHCHECK_URL }}"
