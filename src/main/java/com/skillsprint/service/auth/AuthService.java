@@ -18,6 +18,7 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.AuthMapper;
 import com.skillsprint.service.user.UserSyncService;
+import com.skillsprint.service.system.SystemMaintenanceService;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.AccessLevel;
@@ -45,6 +46,7 @@ public class AuthService {
     AuthMapper authMapper;
     SubscriptionService subscriptionService;
     UserSessionService userSessionService;
+    SystemMaintenanceService maintenanceService;
 
     public void register(RegisterRequest request) {
         String email = request.getEmail().trim().toLowerCase();
@@ -179,11 +181,14 @@ public class AuthService {
                             .build()
             );
 
+            RoleName roleName = resolveRoleName(email);
+            ensureLoginAllowedDuringMaintenance(roleName);
+
             if (ChallengeNameType.NEW_PASSWORD_REQUIRED.equals(response.challengeName())) {
                 return authMapper.toNewPasswordRequiredResponse(response);
             }
 
-            User user = syncLocalUserByEmail(email);
+            User user = syncLocalUserByEmail(email, roleName);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
             String sessionId = userSessionService.createSession(user.getUserId());
@@ -217,7 +222,10 @@ public class AuthService {
                             .build()
             );
 
-            User user = syncLocalUserByEmail(email);
+            RoleName roleName = resolveRoleName(email);
+            ensureLoginAllowedDuringMaintenance(roleName);
+
+            User user = syncLocalUserByEmail(email, roleName);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
             String sessionId = userSessionService.createSession(user.getUserId());
@@ -234,7 +242,10 @@ public class AuthService {
         String email = request.getEmail().trim().toLowerCase();
 
         try {
-            User user = syncLocalUserByEmail(email);
+            RoleName roleName = resolveRoleName(email);
+            ensureLoginAllowedDuringMaintenance(roleName);
+
+            User user = syncLocalUserByEmail(email, roleName);
             ensureActiveUser(user);
 
             if (!userSessionService.isCurrentSession(user.getUserId(), sessionId)) {
@@ -299,7 +310,10 @@ public class AuthService {
                             .build()
             );
 
-            User user = syncLocalUser(cognitoUser, resolveRoleName(username), fallbackEmail);
+            RoleName roleName = resolveRoleName(username);
+            ensureLoginAllowedDuringMaintenance(roleName);
+
+            User user = syncLocalUser(cognitoUser, roleName, fallbackEmail);
             ensureActiveUser(user);
             subscriptionService.ensureDefaultFreeSubscription(user);
 
@@ -341,13 +355,17 @@ public class AuthService {
     }
 
     private User syncLocalUserByEmail(String email) {
+        return syncLocalUserByEmail(email, resolveRoleName(email));
+    }
+
+    private User syncLocalUserByEmail(String email, RoleName roleName) {
         AdminGetUserResponse cognitoUser = cognitoClient.adminGetUser(
                 AdminGetUserRequest.builder()
                         .userPoolId(cognitoProperties.userPoolId())
                         .username(email)
                         .build()
         );
-        return syncLocalUser(cognitoUser, resolveRoleName(email), email);
+        return syncLocalUser(cognitoUser, roleName, email);
     }
 
     private User syncLocalUser(AdminGetUserResponse cognitoUser, RoleName roleName, String fallbackEmail) {
@@ -365,6 +383,13 @@ public class AuthService {
         if (UserStatus.DISABLED.equals(user.getStatus())) {
             throw new AppException(ErrorCode.ACCOUNT_DISABLED);
         }
+    }
+
+    private void ensureLoginAllowedDuringMaintenance(RoleName roleName) {
+        if (RoleName.ADMIN.equals(roleName) || !maintenanceService.isMaintenanceActive()) {
+            return;
+        }
+        throw new AppException(ErrorCode.MAINTENANCE_MODE, maintenanceService.getActiveMessage());
     }
 
     private void putSecretHashIfNeeded(Map<String, String> authParams, String username) {
