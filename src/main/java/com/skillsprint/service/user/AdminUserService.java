@@ -65,8 +65,7 @@ public class AdminUserService {
         String normalizedSearch = normalizeSearch(search);
         Page<User> users = normalizedSearch == null
                 ? userRepository.findAll(pageable)
-                : userRepository.findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
-                        normalizedSearch,
+                : userRepository.searchAdminUsers(
                         normalizedSearch,
                         pageable
                 );
