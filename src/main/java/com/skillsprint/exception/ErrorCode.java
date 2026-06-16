@@ -72,6 +72,7 @@ public enum ErrorCode {
     INVALID_MATERIAL_OBJECT_KEY("Bạn không có quyền xác nhận tài liệu này", HttpStatus.FORBIDDEN),
     MATERIAL_NOT_UPLOADED("Tài liệu chưa được upload thành công lên S3", HttpStatus.BAD_REQUEST),
     MATERIAL_NOT_FOUND("Không tìm thấy tài liệu", HttpStatus.NOT_FOUND),
+    MATERIAL_WORKSPACE_LIMIT_EXCEEDED("Workspace này đã có tài liệu, vui lòng xóa tài liệu cũ trước khi tải tài liệu mới", HttpStatus.CONFLICT),
     MATERIAL_PROCESSING_JOB_NOT_FOUND("Không tìm thấy job xử lý tài liệu", HttpStatus.NOT_FOUND),
     MATERIAL_TEXT_EMPTY("Không đọc được nội dung tài liệu. File có thể là ảnh scan hoặc không chứa văn bản", HttpStatus.BAD_REQUEST),
     MATERIAL_PROCESSING_FAILED("Không thể xử lý tài liệu", HttpStatus.INTERNAL_SERVER_ERROR),

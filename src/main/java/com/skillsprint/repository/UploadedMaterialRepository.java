@@ -26,6 +26,8 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
             String userId
     );
 
+    boolean existsByWorkspaceWorkspaceIdAndUserUserId(UUID workspaceId, String userId);
+
     List<UploadedMaterial> findByUserUserId(String userId);
 
     List<UploadedMaterial> findByWorkspaceWorkspaceIdAndProcessingStatus(

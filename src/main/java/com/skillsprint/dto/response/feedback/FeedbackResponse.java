@@ -12,21 +12,15 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class FeedbackAdminResponse {
+public class FeedbackResponse {
 
     UUID feedbackId;
-    String userId;
-    String userEmail;
-    String userFullName;
     FeedbackType type;
     String title;
     String content;
     String relatedUrl;
     FeedbackStatus status;
-    String adminNote;
     String adminReply;
-    String repliedByUserId;
-    String repliedByFullName;
     Instant repliedAt;
     Instant createdAt;
     Instant updatedAt;

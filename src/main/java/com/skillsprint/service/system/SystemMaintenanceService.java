@@ -45,8 +45,11 @@ public class SystemMaintenanceService {
     @Transactional(readOnly = true)
     public SystemStatusResponse getSystemStatus() {
         SystemMaintenance maintenance = currentOrDefault();
+        Instant now = Instant.now();
         return SystemStatusResponse.builder()
-                .maintenance(isActive(maintenance, Instant.now()))
+                .enabled(maintenance.isEnabled())
+                .maintenance(isActive(maintenance, now))
+                .scheduled(isScheduled(maintenance, now))
                 .message(resolveMessage(maintenance))
                 .startAt(maintenance.getStartAt())
                 .endAt(maintenance.getEndAt())
@@ -117,6 +120,13 @@ public class SystemMaintenanceService {
             return false;
         }
         return maintenance.getEndAt() == null || !now.isAfter(maintenance.getEndAt());
+    }
+
+    private boolean isScheduled(SystemMaintenance maintenance, Instant now) {
+        return maintenance.isEnabled()
+                && maintenance.getStartAt() != null
+                && now.isBefore(maintenance.getStartAt())
+                && (maintenance.getEndAt() == null || now.isBefore(maintenance.getEndAt()));
     }
 
     private String resolveMessage(SystemMaintenance maintenance) {

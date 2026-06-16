@@ -12,4 +12,6 @@ public interface ExtractedDocumentRepository extends JpaRepository<ExtractedDocu
     Optional<ExtractedDocument> findByMaterialMaterialId(UUID materialId);
 
     List<ExtractedDocument> findByWorkspaceWorkspaceId(UUID workspaceId);
+
+    void deleteByMaterialMaterialId(UUID materialId);
 }

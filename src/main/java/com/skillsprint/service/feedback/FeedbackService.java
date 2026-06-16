@@ -1,18 +1,22 @@
 package com.skillsprint.service.feedback;
 
 import com.skillsprint.dto.request.feedback.CreateFeedbackRequest;
+import com.skillsprint.dto.request.feedback.ReplyFeedbackRequest;
 import com.skillsprint.dto.request.feedback.UpdateFeedbackStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.feedback.FeedbackAdminResponse;
+import com.skillsprint.dto.response.feedback.FeedbackResponse;
 import com.skillsprint.dto.response.feedback.FeedbackSubmitResponse;
 import com.skillsprint.entity.Feedback;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.feedback.FeedbackStatus;
 import com.skillsprint.enums.feedback.FeedbackType;
+import com.skillsprint.enums.notification.NotificationType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.FeedbackRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.notification.NotificationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class FeedbackService {
 
     FeedbackRepository feedbackRepository;
     UserRepository userRepository;
+    NotificationService notificationService;
 
     @Transactional
     public FeedbackSubmitResponse createFeedback(String userId, CreateFeedbackRequest request) {
@@ -48,6 +54,27 @@ public class FeedbackService {
         feedback.setStatus(FeedbackStatus.OPEN);
 
         return toSubmitResponse(feedbackRepository.save(feedback));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FeedbackResponse> getMyFeedback(String userId) {
+        findUser(userId);
+
+        return feedbackRepository.findByUserUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toFeedbackResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public FeedbackResponse getMyFeedbackDetail(String userId, UUID feedbackId) {
+        findUser(userId);
+
+        Feedback feedback = feedbackRepository
+                .findByFeedbackIdAndUserUserId(feedbackId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.FEEDBACK_NOT_FOUND));
+
+        return toFeedbackResponse(feedback);
     }
 
     @Transactional(readOnly = true)
@@ -88,6 +115,21 @@ public class FeedbackService {
         feedback.setAdminNote(normalizeBlank(request.getAdminNote()));
 
         return toAdminResponse(feedbackRepository.save(feedback));
+    }
+
+    @Transactional
+    public FeedbackAdminResponse replyFeedback(String adminUserId, UUID feedbackId, ReplyFeedbackRequest request) {
+        Feedback feedback = findFeedback(feedbackId);
+        User admin = findUser(adminUserId);
+
+        feedback.setAdminReply(request.getMessage().trim());
+        feedback.setRepliedBy(admin);
+        feedback.setRepliedAt(java.time.Instant.now());
+
+        Feedback savedFeedback = feedbackRepository.save(feedback);
+        notifyFeedbackReply(savedFeedback);
+
+        return toAdminResponse(savedFeedback);
     }
 
     @Transactional
@@ -141,8 +183,24 @@ public class FeedbackService {
                 .build();
     }
 
+    private FeedbackResponse toFeedbackResponse(Feedback feedback) {
+        return FeedbackResponse.builder()
+                .feedbackId(feedback.getFeedbackId())
+                .type(feedback.getType())
+                .title(feedback.getTitle())
+                .content(feedback.getContent())
+                .relatedUrl(feedback.getRelatedUrl())
+                .status(feedback.getStatus())
+                .adminReply(feedback.getAdminReply())
+                .repliedAt(feedback.getRepliedAt())
+                .createdAt(feedback.getCreatedAt())
+                .updatedAt(feedback.getUpdatedAt())
+                .build();
+    }
+
     private FeedbackAdminResponse toAdminResponse(Feedback feedback) {
         User user = feedback.getUser();
+        User repliedBy = feedback.getRepliedBy();
 
         return FeedbackAdminResponse.builder()
                 .feedbackId(feedback.getFeedbackId())
@@ -155,8 +213,27 @@ public class FeedbackService {
                 .relatedUrl(feedback.getRelatedUrl())
                 .status(feedback.getStatus())
                 .adminNote(feedback.getAdminNote())
+                .adminReply(feedback.getAdminReply())
+                .repliedByUserId(repliedBy != null ? repliedBy.getUserId() : null)
+                .repliedByFullName(repliedBy != null ? repliedBy.getFullName() : null)
+                .repliedAt(feedback.getRepliedAt())
                 .createdAt(feedback.getCreatedAt())
                 .updatedAt(feedback.getUpdatedAt())
                 .build();
+    }
+
+    private void notifyFeedbackReply(Feedback feedback) {
+        User user = feedback.getUser();
+        if (user == null) {
+            return;
+        }
+
+        notificationService.createAndDispatch(
+                user,
+                null,
+                NotificationType.FEEDBACK_REPLIED,
+                "Feedback của bạn đã được phản hồi",
+                "Admin đã phản hồi feedback \"%s\".".formatted(feedback.getTitle())
+        );
     }
 }
