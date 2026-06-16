@@ -1,6 +1,7 @@
 package com.skillsprint.controller.admin;
 
 import com.skillsprint.common.ApiResponse;
+import com.skillsprint.dto.request.feedback.ReplyFeedbackRequest;
 import com.skillsprint.dto.request.feedback.UpdateFeedbackStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.feedback.FeedbackAdminResponse;
@@ -13,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -60,6 +63,17 @@ public class AdminFeedbackController {
     ) {
         FeedbackAdminResponse response = feedbackService.updateFeedbackStatus(feedbackId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật feedback thành công", response));
+    }
+
+    @PatchMapping("/{feedbackId}/reply")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<FeedbackAdminResponse>> replyFeedback(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID feedbackId,
+            @Valid @RequestBody ReplyFeedbackRequest request
+    ) {
+        FeedbackAdminResponse response = feedbackService.replyFeedback(jwt.getSubject(), feedbackId, request);
+        return ResponseEntity.ok(ApiResponse.success("Phản hồi feedback thành công", response));
     }
 
     @DeleteMapping("/{feedbackId}")

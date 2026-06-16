@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -85,5 +86,15 @@ public class MaterialController {
                 materialId
         );
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/{materialId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMaterial(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID materialId
+    ) {
+        materialService.deleteMaterial(jwt.getSubject(), workspaceId, materialId);
+        return ResponseEntity.ok(ApiResponse.success("Xóa tài liệu thành công", null));
     }
 }

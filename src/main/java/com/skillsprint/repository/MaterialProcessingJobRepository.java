@@ -19,4 +19,6 @@ public interface MaterialProcessingJobRepository extends JpaRepository<MaterialP
     List<MaterialProcessingJob> findByUserUserId(String userId);
 
     List<MaterialProcessingJob> findByStatus(ProcessingJobStatus status);
+
+    void deleteByMaterialMaterialId(UUID materialId);
 }

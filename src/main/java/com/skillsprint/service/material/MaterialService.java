@@ -18,6 +18,8 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.MaterialMapper;
 import com.skillsprint.repository.MaterialProcessingJobRepository;
+import com.skillsprint.repository.ExtractedDocumentRepository;
+import com.skillsprint.repository.MaterialChunkRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.UploadedMaterialRepository;
 import java.text.Normalizer;
@@ -28,9 +30,11 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
@@ -41,6 +45,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import com.skillsprint.service.subscription.QuotaService;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MaterialService {
@@ -60,6 +65,8 @@ public class MaterialService {
     StudyWorkspaceRepository workspaceRepository;
     UploadedMaterialRepository uploadedMaterialRepository;
     MaterialProcessingJobRepository materialProcessingJobRepository;
+    MaterialChunkRepository materialChunkRepository;
+    ExtractedDocumentRepository extractedDocumentRepository;
     MaterialMapper materialMapper;
     QuotaService quotaService;
 
@@ -70,6 +77,7 @@ public class MaterialService {
             CreateMaterialUploadUrlRequest request
     ) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        validateWorkspaceHasNoMaterial(userId, workspaceId);
         quotaService.validateCanStartMaterialUpload(userId);
         String contentType = normalizeContentType(request.getContentType());
         FileType fileType = resolveFileType(contentType);
@@ -105,6 +113,7 @@ public class MaterialService {
             ConfirmMaterialUploadRequest request
     ) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        validateWorkspaceHasNoMaterial(userId, workspaceId);
         String objectKey = request.getObjectKey().trim();
         validateObjectKeyOwner(userId, workspaceId, objectKey);
 
@@ -150,6 +159,22 @@ public class MaterialService {
                 .toList();
     }
 
+    @Transactional
+    public void deleteMaterial(String userId, UUID workspaceId, UUID materialId) {
+        findOwnedWorkspace(userId, workspaceId);
+
+        UploadedMaterial material = uploadedMaterialRepository
+                .findByMaterialIdAndWorkspaceWorkspaceIdAndUserUserId(materialId, workspaceId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MATERIAL_NOT_FOUND));
+
+        materialChunkRepository.deleteByMaterialMaterialId(materialId);
+        extractedDocumentRepository.deleteByMaterialMaterialId(materialId);
+        materialProcessingJobRepository.deleteByMaterialMaterialId(materialId);
+        uploadedMaterialRepository.delete(material);
+
+        deleteS3ObjectBestEffort(material);
+    }
+
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {
         return workspaceRepository.findByWorkspaceIdAndUserUserIdAndStatusNot(
                         workspaceId,
@@ -157,6 +182,30 @@ public class MaterialService {
                         WorkspaceStatus.DELETED
                 )
                 .orElseThrow(() -> new AppException(ErrorCode.WORKSPACE_NOT_FOUND));
+    }
+
+    private void validateWorkspaceHasNoMaterial(String userId, UUID workspaceId) {
+        if (uploadedMaterialRepository.existsByWorkspaceWorkspaceIdAndUserUserId(workspaceId, userId)) {
+            throw new AppException(ErrorCode.MATERIAL_WORKSPACE_LIMIT_EXCEEDED);
+        }
+    }
+
+    private void deleteS3ObjectBestEffort(UploadedMaterial material) {
+        String objectKey = material.getS3ObjectKey();
+        if (objectKey == null || objectKey.isBlank()) {
+            return;
+        }
+
+        try {
+            s3Client.deleteObject(
+                    DeleteObjectRequest.builder()
+                            .bucket(s3Properties.bucket())
+                            .key(objectKey)
+                            .build()
+            );
+        } catch (Exception ex) {
+            log.warn("[MATERIAL] Failed to delete S3 object for material {}", material.getMaterialId(), ex);
+        }
     }
 
     private MaterialProcessingJob createProcessingJob(UploadedMaterial material, StudyWorkspace workspace) {

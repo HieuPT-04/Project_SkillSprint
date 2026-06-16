@@ -6,5 +6,6 @@ public enum NotificationType {
     ROADMAP_READY,
     TASK_REMINDER,
     TASK_OVERDUE,
-    AI_SCHEDULE_READY
+    AI_SCHEDULE_READY,
+    FEEDBACK_REPLIED
 }
