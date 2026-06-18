@@ -217,7 +217,6 @@ public class CalendarService {
             task.setStatus(CalendarTaskStatus.COMPLETED);
             task.setCompletedAt(Instant.now());
             calendarTaskRepository.save(task);
-            awardStandaloneTaskPoints(task);
         }
 
         if (task.getRoadmapStep() != null) {
@@ -277,23 +276,12 @@ public class CalendarService {
         CalendarTask savedTask = calendarTaskRepository.save(task);
 
         if (oldStatus != CalendarTaskStatus.COMPLETED && newStatus == CalendarTaskStatus.COMPLETED) {
-            awardStandaloneTaskPoints(savedTask);
             if (savedTask.getRoadmapStep() != null) {
                 completeRoadmapStepIfReady(savedTask.getRoadmapStep());
             }
         }
 
         return calendarMapper.toTaskResponse(savedTask);
-    }
-
-    private void awardStandaloneTaskPoints(CalendarTask task) {
-        if (task.getRoadmapStep() != null) {
-            return;
-        }
-        if (task.getSource() == CalendarTaskSource.USER_CREATED) {
-            return;
-        }
-        pointService.awardTaskCompleted(task.getUser(), task.getWorkspace(), task.getTaskId());
     }
 
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {

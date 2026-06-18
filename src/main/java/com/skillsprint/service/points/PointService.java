@@ -39,31 +39,16 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PointService {
 
-    static int TASK_COMPLETED_POINTS = 20;
-    static int ROADMAP_STEP_COMPLETED_POINTS = 50;
-    static int ROADMAP_COMPLETED_POINTS = 200;
-    static int QUIZ_PASSED_POINTS = 30;
-    static int QUIZ_EXCELLENT_POINTS = 50;
-    static int DAILY_CAP_POINTS = 500;
+    static int ROADMAP_STEP_COMPLETED_POINTS = 120;
+    static int ROADMAP_COMPLETED_POINTS = 700;
+    static int QUIZ_PASSED_POINTS = 80;
+    static int QUIZ_EXCELLENT_POINTS = 120;
     static ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     PointEventRepository pointEventRepository;
     UserPointSummaryRepository userPointSummaryRepository;
     UserQuizScoreRepository userQuizScoreRepository;
     UserRepository userRepository;
-
-    @Transactional
-    public void awardTaskCompleted(User user, StudyWorkspace workspace, UUID taskId) {
-        awardUnique(
-                user,
-                workspace,
-                PointEventType.TASK_COMPLETED,
-                PointSourceType.CALENDAR_TASK,
-                taskId.toString(),
-                TASK_COMPLETED_POINTS,
-                "Hoàn thành task học"
-        );
-    }
 
     @Transactional
     public void awardRoadmapStepCompleted(User user, StudyWorkspace workspace, UUID stepId) {
@@ -220,10 +205,6 @@ public class PointService {
         }
 
         LocalDate today = LocalDate.now(DEFAULT_ZONE);
-        int awardPoints = applyDailyCap(user.getUserId(), today, eventType, points);
-        if (awardPoints <= 0) {
-            return;
-        }
 
         PointEvent event = new PointEvent();
         event.setUser(user);
@@ -231,7 +212,7 @@ public class PointService {
         event.setEventType(eventType);
         event.setSourceType(sourceType);
         event.setSourceId(sourceId);
-        event.setPoints(awardPoints);
+        event.setPoints(points);
         event.setDescription(description);
         event.setEventDate(today);
         event.setWeekStartDate(weekStart(today));
@@ -243,17 +224,7 @@ public class PointService {
             return;
         }
 
-        updateSummary(user, awardPoints, today);
-    }
-
-    private int applyDailyCap(String userId, LocalDate eventDate, PointEventType eventType, int points) {
-        if (!PointEventType.TASK_COMPLETED.equals(eventType)) {
-            return points;
-        }
-
-        int usedToday = safe(pointEventRepository.sumDailyPoints(userId, eventDate));
-        int remaining = DAILY_CAP_POINTS - usedToday;
-        return Math.min(points, Math.max(0, remaining));
+        updateSummary(user, points, today);
     }
 
     private void updateSummary(User user, int points, LocalDate eventDate) {
