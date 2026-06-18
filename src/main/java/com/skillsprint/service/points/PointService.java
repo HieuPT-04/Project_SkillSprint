@@ -28,12 +28,14 @@ import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import lombok.experimental.FieldDefaults;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -90,6 +92,13 @@ public class PointService {
     public void awardQuizScore(Quiz quiz, QuizAttempt attempt) {
         int targetPoints = resolveQuizPoints(attempt.getScore());
         if (targetPoints <= 0) {
+            log.info(
+                    "[POINTS] Skip quiz XP because score is below threshold user={} quiz={} attempt={} score={}",
+                    quiz.getUser().getUserId(),
+                    quiz.getQuizId(),
+                    attempt.getAttemptId(),
+                    attempt.getScore()
+            );
             upsertQuizScore(quiz, attempt, 0);
             return;
         }
@@ -99,6 +108,14 @@ public class PointService {
                 .orElseGet(() -> newQuizScore(quiz));
 
         if (targetPoints <= safe(score.getEarnedPoints())) {
+            log.info(
+                    "[POINTS] Skip quiz XP because best earned points did not increase user={} quiz={} attempt={} score={} earnedPoints={}",
+                    quiz.getUser().getUserId(),
+                    quiz.getQuizId(),
+                    attempt.getAttemptId(),
+                    attempt.getScore(),
+                    safe(score.getEarnedPoints())
+            );
             updateBestAttemptIfNeeded(score, attempt, targetPoints);
             return;
         }
@@ -195,12 +212,31 @@ public class PointService {
             int points,
             String description
     ) {
-        if (points <= 0 || pointEventRepository.existsByUserUserIdAndEventTypeAndSourceTypeAndSourceId(
+        if (points <= 0) {
+            log.info(
+                    "[POINTS] Skip XP because points is not positive user={} eventType={} sourceType={} sourceId={} points={}",
+                    user.getUserId(),
+                    eventType,
+                    sourceType,
+                    sourceId,
+                    points
+            );
+            return;
+        }
+
+        if (pointEventRepository.existsByUserUserIdAndEventTypeAndSourceTypeAndSourceId(
                 user.getUserId(),
                 eventType,
                 sourceType,
                 sourceId
         )) {
+            log.info(
+                    "[POINTS] Skip duplicate XP user={} eventType={} sourceType={} sourceId={}",
+                    user.getUserId(),
+                    eventType,
+                    sourceType,
+                    sourceId
+            );
             return;
         }
 
@@ -221,10 +257,26 @@ public class PointService {
         try {
             pointEventRepository.saveAndFlush(event);
         } catch (DataIntegrityViolationException ignored) {
+            log.info(
+                    "[POINTS] Skip duplicate XP after database constraint user={} eventType={} sourceType={} sourceId={}",
+                    user.getUserId(),
+                    eventType,
+                    sourceType,
+                    sourceId
+            );
             return;
         }
 
         updateSummary(user, points, today);
+        log.info(
+                "[POINTS] Awarded XP user={} workspace={} eventType={} sourceType={} sourceId={} points={}",
+                user.getUserId(),
+                workspace == null ? null : workspace.getWorkspaceId(),
+                eventType,
+                sourceType,
+                sourceId,
+                points
+        );
     }
 
     private void updateSummary(User user, int points, LocalDate eventDate) {
