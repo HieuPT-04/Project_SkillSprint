@@ -46,14 +46,6 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
             """)
     Long sumMonthlyPoints(@Param("userId") String userId, @Param("monthStartDate") LocalDate monthStartDate);
 
-    @Query("""
-            select coalesce(sum(pointEvent.points), 0)
-            from PointEvent pointEvent
-            where pointEvent.user.userId = :userId
-              and pointEvent.eventDate = :eventDate
-            """)
-    Long sumDailyPoints(@Param("userId") String userId, @Param("eventDate") LocalDate eventDate);
-
     @Query(
             value = """
                     select count(*) + 1
