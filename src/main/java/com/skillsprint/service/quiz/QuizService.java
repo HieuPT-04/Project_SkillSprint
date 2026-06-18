@@ -29,6 +29,7 @@ import com.skillsprint.service.quiz.ai.AiQuizDraft;
 import com.skillsprint.service.quiz.ai.AiQuizOptionDraft;
 import com.skillsprint.service.quiz.ai.AiQuizQuestionDraft;
 import com.skillsprint.service.quiz.ai.GeminiQuizClient;
+import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
@@ -64,6 +65,7 @@ public class QuizService {
     QuizAttemptAnswerRepository quizAttemptAnswerRepository;
     GeminiQuizClient geminiQuizClient;
     QuotaService quotaService;
+    PointService pointService;
 
     @Transactional
     public QuizResponse generate(String userId, UUID stepId) {
@@ -174,6 +176,7 @@ public class QuizService {
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
         attemptAnswers.forEach(answer -> answer.setAttempt(savedAttempt));
         quizAttemptAnswerRepository.saveAll(attemptAnswers);
+        pointService.awardQuizScore(quiz, savedAttempt);
 
         return toAttemptResponse(savedAttempt, results);
     }

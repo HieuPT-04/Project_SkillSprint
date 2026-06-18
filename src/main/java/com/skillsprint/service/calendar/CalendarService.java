@@ -31,6 +31,7 @@ import com.skillsprint.enums.learningstructure.DifficultyLevel;
 import com.skillsprint.enums.roadmap.RoadmapProgressActionType;
 import com.skillsprint.enums.roadmap.RoadmapStatus;
 import com.skillsprint.enums.roadmap.RoadmapStepStatus;
+import com.skillsprint.enums.session.StudySessionStatus;
 import com.skillsprint.enums.workspace.WorkspaceStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -41,11 +42,13 @@ import com.skillsprint.repository.OnboardingProfileRepository;
 import com.skillsprint.repository.RoadmapProgressLogRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
+import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.service.calendar.ai.AiCalendarPlanDraft;
 import com.skillsprint.service.calendar.ai.AiCalendarTaskInput;
 import com.skillsprint.service.calendar.ai.AiCalendarTaskSuggestion;
 import com.skillsprint.service.calendar.ai.GeminiCalendarPlannerClient;
+import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.QuotaService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -80,6 +83,7 @@ public class CalendarService {
     static int DEFAULT_SESSION_MINUTES = 60;
     static int DEFAULT_SESSIONS_PER_DAY = 1;
     static int MAX_SESSIONS_PER_DAY = 8;
+    static int MIN_STEP_POINT_STUDY_MINUTES = 20;
     static int TITLE_LENGTH = 90;
     static int SAFE_VARCHAR_LENGTH = 250;
     static Pattern DISPLAY_STEP_PREFIX_PATTERN = Pattern.compile(
@@ -94,11 +98,13 @@ public class CalendarService {
     OnboardingProfileRepository onboardingProfileRepository;
     CalendarScheduleRunRepository scheduleRunRepository;
     CalendarTaskRepository calendarTaskRepository;
+    StudySessionRepository studySessionRepository;
     CalendarMapper calendarMapper;
     GeminiCalendarPlannerClient geminiCalendarPlannerClient;
     ObjectMapper objectMapper;
     QuotaService quotaService;
     com.skillsprint.service.notification.NotificationService notificationService;
+    PointService pointService;
 
     @Transactional
     public CalendarScheduleRunResponse generate(
@@ -211,6 +217,7 @@ public class CalendarService {
             task.setStatus(CalendarTaskStatus.COMPLETED);
             task.setCompletedAt(Instant.now());
             calendarTaskRepository.save(task);
+            awardStandaloneTaskPoints(task);
         }
 
         if (task.getRoadmapStep() != null) {
@@ -264,10 +271,29 @@ public class CalendarService {
         CalendarTask task = findOwnedTask(userId, taskId);
 
         CalendarTaskStatus newStatus = resolveStatus(request.getStatus());
+        CalendarTaskStatus oldStatus = task.getStatus();
         task.setStatus(newStatus);
         task.setCompletedAt(newStatus == CalendarTaskStatus.COMPLETED ? Instant.now() : null);
+        CalendarTask savedTask = calendarTaskRepository.save(task);
 
-        return calendarMapper.toTaskResponse(calendarTaskRepository.save(task));
+        if (oldStatus != CalendarTaskStatus.COMPLETED && newStatus == CalendarTaskStatus.COMPLETED) {
+            awardStandaloneTaskPoints(savedTask);
+            if (savedTask.getRoadmapStep() != null) {
+                completeRoadmapStepIfReady(savedTask.getRoadmapStep());
+            }
+        }
+
+        return calendarMapper.toTaskResponse(savedTask);
+    }
+
+    private void awardStandaloneTaskPoints(CalendarTask task) {
+        if (task.getRoadmapStep() != null) {
+            return;
+        }
+        if (task.getSource() == CalendarTaskSource.USER_CREATED) {
+            return;
+        }
+        pointService.awardTaskCompleted(task.getUser(), task.getWorkspace(), task.getTaskId());
     }
 
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {
@@ -888,17 +914,24 @@ public class CalendarService {
         boolean stepReady = activeStepTasks.stream()
                 .allMatch(task -> task.getStatus() == CalendarTaskStatus.COMPLETED);
 
-        if (!stepReady || step.getStatus() == RoadmapStepStatus.COMPLETED) {
+        if (!stepReady) {
             return;
         }
 
         Roadmap roadmap = step.getRoadmap();
+        if (step.getStatus() == RoadmapStepStatus.COMPLETED) {
+            awardRoadmapStepPointsIfEligible(step);
+            awardRoadmapPointsIfEligible(roadmap);
+            return;
+        }
+
         RoadmapStepStatus oldStatus = step.getStatus();
         boolean wasCurrentStep = oldStatus == RoadmapStepStatus.CURRENT;
         step.setStatus(RoadmapStepStatus.COMPLETED);
         step.setCompletedAt(Instant.now());
         roadmapStepRepository.save(step);
         createProgressLog(roadmap, step, RoadmapProgressActionType.STEP_COMPLETED, oldStatus, RoadmapStepStatus.COMPLETED);
+        awardRoadmapStepPointsIfEligible(step);
 
         List<RoadmapStep> completedSteps = roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
                 roadmap.getRoadmapId(),
@@ -910,7 +943,47 @@ public class CalendarService {
         if (wasCurrentStep) {
             activateNextStepIfNeeded(roadmap);
         }
+        awardRoadmapPointsIfEligible(roadmap);
         roadmapRepository.save(roadmap);
+    }
+
+    private void awardRoadmapStepPointsIfEligible(RoadmapStep step) {
+        if (!hasEnoughStudyMinutesForStep(step)) {
+            return;
+        }
+        pointService.awardRoadmapStepCompleted(step.getWorkspace().getUser(), step.getWorkspace(), step.getStepId());
+    }
+
+    private void awardRoadmapPointsIfEligible(Roadmap roadmap) {
+        if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
+            return;
+        }
+
+        List<RoadmapStep> completedSteps = roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        );
+        boolean everyCompletedStepEarnedPoints = completedSteps.stream()
+                .allMatch(step -> pointService.hasRoadmapStepCompletedPoints(
+                        roadmap.getUser().getUserId(),
+                        step.getStepId()
+                ));
+        if (everyCompletedStepEarnedPoints) {
+            pointService.awardRoadmapCompleted(roadmap.getUser(), roadmap.getWorkspace(), roadmap.getRoadmapId());
+        }
+    }
+
+    private boolean hasEnoughStudyMinutesForStep(RoadmapStep step) {
+        Long studiedMinutes = studySessionRepository.sumDurationMinutesByUserAndRoadmapStepAndStatus(
+                step.getWorkspace().getUser().getUserId(),
+                step.getStepId(),
+                StudySessionStatus.COMPLETED
+        );
+        return safeLong(studiedMinutes) >= MIN_STEP_POINT_STUDY_MINUTES;
+    }
+
+    private long safeLong(Long value) {
+        return value == null ? 0L : value;
     }
 
     private void activateNextStepIfNeeded(Roadmap roadmap) {
