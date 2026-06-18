@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -106,12 +107,132 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
             """)
     List<LeaderboardRow> findMonthlyLeaderboard(@Param("monthStartDate") LocalDate monthStartDate, Pageable pageable);
 
+    @Query(
+            value = """
+                    select pointEvent.user.userId as userId,
+                           pointEvent.user.fullName as fullName,
+                           pointEvent.user.email as email,
+                           pointEvent.user.avatarObjectKey as avatarObjectKey,
+                           coalesce(summary.streakDays, 0) as streakDays,
+                           summary.lastPointDate as lastPointDate,
+                           sum(pointEvent.points) as points
+                    from PointEvent pointEvent
+                    left join UserPointSummary summary on summary.user = pointEvent.user
+                    where pointEvent.weekStartDate = :weekStartDate
+                      and (
+                            :search is null
+                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
+                      )
+                    group by pointEvent.user.userId,
+                             pointEvent.user.fullName,
+                             pointEvent.user.email,
+                             pointEvent.user.avatarObjectKey,
+                             summary.streakDays,
+                             summary.lastPointDate
+                    order by sum(pointEvent.points) desc, pointEvent.user.fullName asc
+                    """,
+            countQuery = """
+                    select count(distinct pointEvent.user.userId)
+                    from PointEvent pointEvent
+                    where pointEvent.weekStartDate = :weekStartDate
+                      and (
+                            :search is null
+                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
+                      )
+                    """
+    )
+    Page<AdminLeaderboardRow> searchWeeklyAdminLeaderboard(
+            @Param("weekStartDate") LocalDate weekStartDate,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    select pointEvent.user.userId as userId,
+                           pointEvent.user.fullName as fullName,
+                           pointEvent.user.email as email,
+                           pointEvent.user.avatarObjectKey as avatarObjectKey,
+                           coalesce(summary.streakDays, 0) as streakDays,
+                           summary.lastPointDate as lastPointDate,
+                           sum(pointEvent.points) as points
+                    from PointEvent pointEvent
+                    left join UserPointSummary summary on summary.user = pointEvent.user
+                    where pointEvent.monthStartDate = :monthStartDate
+                      and (
+                            :search is null
+                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
+                      )
+                    group by pointEvent.user.userId,
+                             pointEvent.user.fullName,
+                             pointEvent.user.email,
+                             pointEvent.user.avatarObjectKey,
+                             summary.streakDays,
+                             summary.lastPointDate
+                    order by sum(pointEvent.points) desc, pointEvent.user.fullName asc
+                    """,
+            countQuery = """
+                    select count(distinct pointEvent.user.userId)
+                    from PointEvent pointEvent
+                    where pointEvent.monthStartDate = :monthStartDate
+                      and (
+                            :search is null
+                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
+                            or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
+                      )
+                    """
+    )
+    Page<AdminLeaderboardRow> searchMonthlyAdminLeaderboard(
+            @Param("monthStartDate") LocalDate monthStartDate,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query("""
+            select pointEvent
+            from PointEvent pointEvent
+            where pointEvent.user.userId = :userId
+              and (:eventType is null or pointEvent.eventType = :eventType)
+              and (:fromDate is null or pointEvent.eventDate >= :fromDate)
+              and (:toDate is null or pointEvent.eventDate <= :toDate)
+            """)
+    Page<PointEvent> searchUserPointEvents(
+            @Param("userId") String userId,
+            @Param("eventType") PointEventType eventType,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            Pageable pageable
+    );
+
     interface LeaderboardRow {
         String getUserId();
 
         String getFullName();
 
         String getAvatarObjectKey();
+
+        Long getPoints();
+    }
+
+    interface AdminLeaderboardRow {
+        String getUserId();
+
+        String getFullName();
+
+        String getEmail();
+
+        String getAvatarObjectKey();
+
+        Integer getStreakDays();
+
+        LocalDate getLastPointDate();
 
         Long getPoints();
     }
