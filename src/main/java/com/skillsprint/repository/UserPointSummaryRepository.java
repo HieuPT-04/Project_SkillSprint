@@ -23,8 +23,7 @@ public interface UserPointSummaryRepository extends JpaRepository<UserPointSumma
             from UserPointSummary summary
             where summary.totalPoints > 0
               and (
-                    :search is null
-                    or lower(summary.user.userId) like lower(concat('%', :search, '%'))
+                    :search = ''
                     or lower(summary.user.email) like lower(concat('%', :search, '%'))
                     or lower(summary.user.fullName) like lower(concat('%', :search, '%'))
               )

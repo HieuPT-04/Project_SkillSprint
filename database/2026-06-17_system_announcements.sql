@@ -16,3 +16,5 @@ CREATE TABLE IF NOT EXISTS system_announcements (
 
 CREATE INDEX IF NOT EXISTS idx_system_announcements_updated_at
     ON system_announcements(updated_at DESC);
+
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
