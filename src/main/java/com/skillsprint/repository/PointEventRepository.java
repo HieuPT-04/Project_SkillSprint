@@ -120,8 +120,7 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
                     left join UserPointSummary summary on summary.user = pointEvent.user
                     where pointEvent.weekStartDate = :weekStartDate
                       and (
-                            :search is null
-                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            :search = ''
                             or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
                             or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
                       )
@@ -138,8 +137,7 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
                     from PointEvent pointEvent
                     where pointEvent.weekStartDate = :weekStartDate
                       and (
-                            :search is null
-                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            :search = ''
                             or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
                             or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
                       )
@@ -164,8 +162,7 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
                     left join UserPointSummary summary on summary.user = pointEvent.user
                     where pointEvent.monthStartDate = :monthStartDate
                       and (
-                            :search is null
-                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            :search = ''
                             or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
                             or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
                       )
@@ -182,8 +179,7 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
                     from PointEvent pointEvent
                     where pointEvent.monthStartDate = :monthStartDate
                       and (
-                            :search is null
-                            or lower(pointEvent.user.userId) like lower(concat('%', :search, '%'))
+                            :search = ''
                             or lower(pointEvent.user.email) like lower(concat('%', :search, '%'))
                             or lower(pointEvent.user.fullName) like lower(concat('%', :search, '%'))
                       )

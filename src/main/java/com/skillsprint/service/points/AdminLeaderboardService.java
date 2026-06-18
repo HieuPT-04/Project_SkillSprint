@@ -25,6 +25,8 @@ import java.util.stream.IntStream;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +35,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -44,6 +47,7 @@ public class AdminLeaderboardService {
     PointEventRepository pointEventRepository;
     UserPointSummaryRepository userPointSummaryRepository;
     UserRepository userRepository;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional(readOnly = true)
     public AdminLeaderboardResponse getLeaderboard(
@@ -101,7 +105,7 @@ public class AdminLeaderboardService {
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
-                .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarObjectKey(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .totalPoints(totalPoints)
                 .weeklyPoints(weeklyPoints)
                 .monthlyPoints(monthlyPoints)
@@ -167,7 +171,7 @@ public class AdminLeaderboardService {
                 .userId(row.getUserId())
                 .fullName(row.getFullName())
                 .email(row.getEmail())
-                .avatarObjectKey(row.getAvatarObjectKey())
+                .avatarObjectKey(s3PresignedUrlService.createViewUrl(row.getAvatarObjectKey()))
                 .points(safe(row.getPoints()))
                 .streakDays(safe(row.getStreakDays()))
                 .lastPointDate(row.getLastPointDate())
@@ -181,7 +185,7 @@ public class AdminLeaderboardService {
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
-                .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarObjectKey(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .points(safe(summary.getTotalPoints()))
                 .streakDays(safe(summary.getStreakDays()))
                 .lastPointDate(summary.getLastPointDate())
@@ -223,7 +227,7 @@ public class AdminLeaderboardService {
 
     private String normalizeSearch(String search) {
         if (search == null || search.isBlank()) {
-            return null;
+            return "";
         }
         return search.trim();
     }

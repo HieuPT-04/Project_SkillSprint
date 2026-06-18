@@ -34,6 +34,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 
 @Slf4j
 @Service
@@ -51,6 +52,7 @@ public class PointService {
     UserPointSummaryRepository userPointSummaryRepository;
     UserQuizScoreRepository userQuizScoreRepository;
     UserRepository userRepository;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional
     public void awardRoadmapStepCompleted(User user, StudyWorkspace workspace, UUID stepId) {
@@ -358,9 +360,18 @@ public class PointService {
     }
 
     private UserPointSummary emptySummary(User user) {
+        // `user` may be an uninitialized Hibernate proxy (e.g. from quiz.getUser()).
+        // Re-fetch the concrete, managed instance so @MapsId can derive the shared
+        // primary key from a real identifier at persist time. Reading the id off the
+        // proxy via getUserId() is safe — it does not force proxy initialization.
+        User managedUser = userRepository.findById(user.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         UserPointSummary summary = new UserPointSummary();
-        summary.setUser(user);
-        summary.setUserId(user.getUserId());
+        summary.setUser(managedUser);
+        // Intentionally DO NOT call summary.setUserId(...). Leaving the @Id null lets
+        // Spring Data evaluate isNew() == true and route to persist() instead of
+        // merge(); @MapsId then copies the id from managedUser during the insert.
         return summary;
     }
 
@@ -371,7 +382,7 @@ public class PointService {
                         .rank(rank[0]++)
                         .userId(row.getUserId())
                         .fullName(row.getFullName())
-                        .avatarObjectKey(row.getAvatarObjectKey())
+                        .avatarObjectKey(s3PresignedUrlService.createViewUrl(row.getAvatarObjectKey()))
                         .points(safe(row.getPoints()))
                         .build())
                 .toList();
@@ -384,7 +395,7 @@ public class PointService {
                         .rank(rank[0]++)
                         .userId(summary.getUserId())
                         .fullName(summary.getUser().getFullName())
-                        .avatarObjectKey(summary.getUser().getAvatarObjectKey())
+                        .avatarObjectKey(s3PresignedUrlService.createViewUrl(summary.getUser().getAvatarObjectKey()))
                         .points(safe(summary.getTotalPoints()))
                         .build())
                 .toList();
