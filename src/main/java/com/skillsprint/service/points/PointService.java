@@ -39,10 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PointService {
 
-    static int ROADMAP_STEP_COMPLETED_POINTS = 50;
-    static int ROADMAP_COMPLETED_POINTS = 200;
-    static int QUIZ_PASSED_POINTS = 30;
-    static int QUIZ_EXCELLENT_POINTS = 50;
+    static int ROADMAP_STEP_COMPLETED_POINTS = 120;
+    static int ROADMAP_COMPLETED_POINTS = 700;
+    static int QUIZ_PASSED_POINTS = 80;
+    static int QUIZ_EXCELLENT_POINTS = 120;
     static ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     PointEventRepository pointEventRepository;
