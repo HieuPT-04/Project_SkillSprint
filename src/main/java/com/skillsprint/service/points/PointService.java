@@ -118,7 +118,7 @@ public class PointService {
         score.setBestAttempt(attempt);
         score.setBestScorePercent(Math.max(safe(score.getBestScorePercent()), attempt.getScore()));
         score.setEarnedPoints(targetPoints);
-        userQuizScoreRepository.save(score);
+        userQuizScoreRepository.saveAndFlush(score);
     }
 
     @Transactional(readOnly = true)
@@ -219,7 +219,7 @@ public class PointService {
         event.setMonthStartDate(today.withDayOfMonth(1));
 
         try {
-            pointEventRepository.save(event);
+            pointEventRepository.saveAndFlush(event);
         } catch (DataIntegrityViolationException ignored) {
             return;
         }

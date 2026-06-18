@@ -44,10 +44,12 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -176,7 +178,15 @@ public class QuizService {
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
         attemptAnswers.forEach(answer -> answer.setAttempt(savedAttempt));
         quizAttemptAnswerRepository.saveAll(attemptAnswers);
-        pointService.awardQuizScore(quiz, savedAttempt);
+        try {
+            pointService.awardQuizScore(quiz, savedAttempt);
+        } catch (RuntimeException ex) {
+            log.warn("[POINTS] Failed to award quiz XP for quiz {} attempt {}: {}",
+                    quiz.getQuizId(),
+                    savedAttempt.getAttemptId(),
+                    ex.getMessage()
+            );
+        }
 
         return toAttemptResponse(savedAttempt, results);
     }
