@@ -384,6 +384,7 @@ public class PointService {
                         .fullName(row.getFullName())
                         .avatarObjectKey(s3PresignedUrlService.createViewUrl(row.getAvatarObjectKey()))
                         .points(safe(row.getPoints()))
+                        .streakDays(safe(row.getStreakDays()))
                         .build())
                 .toList();
     }
@@ -397,6 +398,7 @@ public class PointService {
                         .fullName(summary.getUser().getFullName())
                         .avatarObjectKey(s3PresignedUrlService.createViewUrl(summary.getUser().getAvatarObjectKey()))
                         .points(safe(summary.getTotalPoints()))
+                        .streakDays(safe(summary.getStreakDays()))
                         .build())
                 .toList();
     }

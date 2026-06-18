@@ -15,4 +15,5 @@ public class LeaderboardEntryResponse {
     String fullName;
     String avatarObjectKey;
     int points;
+    int streakDays;
 }

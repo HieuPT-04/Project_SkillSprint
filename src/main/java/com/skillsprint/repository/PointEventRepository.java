@@ -87,10 +87,12 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
             select pointEvent.user.userId as userId,
                    pointEvent.user.fullName as fullName,
                    pointEvent.user.avatarObjectKey as avatarObjectKey,
+                   coalesce(summary.streakDays, 0) as streakDays,
                    sum(pointEvent.points) as points
             from PointEvent pointEvent
+            left join UserPointSummary summary on summary.user = pointEvent.user
             where pointEvent.weekStartDate = :weekStartDate
-            group by pointEvent.user.userId, pointEvent.user.fullName, pointEvent.user.avatarObjectKey
+            group by pointEvent.user.userId, pointEvent.user.fullName, pointEvent.user.avatarObjectKey, summary.streakDays
             order by sum(pointEvent.points) desc, pointEvent.user.fullName asc
             """)
     List<LeaderboardRow> findWeeklyLeaderboard(@Param("weekStartDate") LocalDate weekStartDate, Pageable pageable);
@@ -99,10 +101,12 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
             select pointEvent.user.userId as userId,
                    pointEvent.user.fullName as fullName,
                    pointEvent.user.avatarObjectKey as avatarObjectKey,
+                   coalesce(summary.streakDays, 0) as streakDays,
                    sum(pointEvent.points) as points
             from PointEvent pointEvent
+            left join UserPointSummary summary on summary.user = pointEvent.user
             where pointEvent.monthStartDate = :monthStartDate
-            group by pointEvent.user.userId, pointEvent.user.fullName, pointEvent.user.avatarObjectKey
+            group by pointEvent.user.userId, pointEvent.user.fullName, pointEvent.user.avatarObjectKey, summary.streakDays
             order by sum(pointEvent.points) desc, pointEvent.user.fullName asc
             """)
     List<LeaderboardRow> findMonthlyLeaderboard(@Param("monthStartDate") LocalDate monthStartDate, Pageable pageable);
@@ -213,6 +217,8 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
         String getFullName();
 
         String getAvatarObjectKey();
+        
+        Integer getStreakDays();
 
         Long getPoints();
     }
