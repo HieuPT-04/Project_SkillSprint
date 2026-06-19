@@ -17,6 +17,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.FeedbackRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.notification.NotificationService;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -40,6 +41,7 @@ public class FeedbackService {
     FeedbackRepository feedbackRepository;
     UserRepository userRepository;
     NotificationService notificationService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional
     public FeedbackSubmitResponse createFeedback(String userId, CreateFeedbackRequest request) {
@@ -51,6 +53,7 @@ public class FeedbackService {
         feedback.setTitle(request.getTitle().trim());
         feedback.setContent(request.getContent().trim());
         feedback.setRelatedUrl(normalizeBlank(request.getRelatedUrl()));
+        feedback.setImageObjectKey(resolveImageObjectKey(userId, request.getImageObjectKey()));
         feedback.setStatus(FeedbackStatus.OPEN);
 
         return toSubmitResponse(feedbackRepository.save(feedback));
@@ -165,6 +168,15 @@ public class FeedbackService {
         return normalized != null ? "%" + normalized + "%" : null;
     }
 
+    private String resolveImageObjectKey(String userId, String imageObjectKey) {
+        String normalized = normalizeBlank(imageObjectKey);
+        if (normalized == null) {
+            return null;
+        }
+
+        return s3PresignedUrlService.confirmFeedbackImage(userId, normalized);
+    }
+
     private String normalizeBlank(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -178,6 +190,7 @@ public class FeedbackService {
                 .feedbackId(feedback.getFeedbackId())
                 .type(feedback.getType())
                 .title(feedback.getTitle())
+                .imageUrl(s3PresignedUrlService.createViewUrl(feedback.getImageObjectKey()))
                 .status(feedback.getStatus())
                 .createdAt(feedback.getCreatedAt())
                 .build();
@@ -190,6 +203,7 @@ public class FeedbackService {
                 .title(feedback.getTitle())
                 .content(feedback.getContent())
                 .relatedUrl(feedback.getRelatedUrl())
+                .imageUrl(s3PresignedUrlService.createViewUrl(feedback.getImageObjectKey()))
                 .status(feedback.getStatus())
                 .adminReply(feedback.getAdminReply())
                 .repliedAt(feedback.getRepliedAt())
@@ -211,6 +225,7 @@ public class FeedbackService {
                 .title(feedback.getTitle())
                 .content(feedback.getContent())
                 .relatedUrl(feedback.getRelatedUrl())
+                .imageUrl(s3PresignedUrlService.createViewUrl(feedback.getImageObjectKey()))
                 .status(feedback.getStatus())
                 .adminNote(feedback.getAdminNote())
                 .adminReply(feedback.getAdminReply())

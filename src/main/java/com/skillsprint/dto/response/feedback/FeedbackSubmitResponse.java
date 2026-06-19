@@ -17,6 +17,7 @@ public class FeedbackSubmitResponse {
     UUID feedbackId;
     FeedbackType type;
     String title;
+    String imageUrl;
     FeedbackStatus status;
     Instant createdAt;
 }

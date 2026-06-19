@@ -2,9 +2,12 @@ package com.skillsprint.controller.feedback;
 
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.feedback.CreateFeedbackRequest;
+import com.skillsprint.dto.request.feedback.CreateFeedbackUploadUrlRequest;
 import com.skillsprint.dto.response.feedback.FeedbackResponse;
 import com.skillsprint.dto.response.feedback.FeedbackSubmitResponse;
+import com.skillsprint.dto.response.feedback.FeedbackUploadUrlResponse;
 import com.skillsprint.service.feedback.FeedbackService;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FeedbackController {
 
     FeedbackService feedbackService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<FeedbackResponse>>> getMyFeedback(
@@ -53,5 +57,15 @@ public class FeedbackController {
     ) {
         FeedbackSubmitResponse response = feedbackService.createFeedback(jwt.getSubject(), request);
         return ResponseEntity.ok(ApiResponse.success("Gửi feedback thành công", response));
+    }
+
+    @PostMapping("/upload-url")
+    public ResponseEntity<ApiResponse<FeedbackUploadUrlResponse>> createFeedbackImageUploadUrl(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateFeedbackUploadUrlRequest request
+    ) {
+        FeedbackUploadUrlResponse response =
+                s3PresignedUrlService.createFeedbackImageUploadUrl(jwt.getSubject(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
