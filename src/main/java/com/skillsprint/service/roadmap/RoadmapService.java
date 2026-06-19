@@ -23,6 +23,7 @@ import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.TopicRepository;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.points.PointService;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -52,6 +53,7 @@ public class RoadmapService {
     RoadmapStepResourceRepository roadmapStepResourceRepository;
     RoadmapMapper roadmapMapper;
     QuotaService quotaService;
+    PointService pointService;
     com.skillsprint.service.notification.NotificationService notificationService;
 
     @Transactional
@@ -80,7 +82,7 @@ public class RoadmapService {
 
         notificationService.notifyRoadmapReady(workspace.getUser(), workspace);
         int unlockedStepLimit = quotaService.getUnlockedRoadmapStepLimit(userId);
-        return roadmapMapper.toResponse(updatedRoadmap, steps, resources, unlockedStepLimit);
+        return roadmapMapper.toResponse(updatedRoadmap, steps, resources, unlockedStepLimit, false);
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +99,37 @@ public class RoadmapService {
                 .toList();
 
         int unlockedStepLimit = quotaService.getUnlockedRoadmapStepLimit(userId);
-        return roadmapMapper.toResponse(roadmap, steps, resources, unlockedStepLimit);
+        boolean isRewardClaimed = pointService.hasRoadmapCompletedPoints(userId, roadmap.getRoadmapId());
+        return roadmapMapper.toResponse(roadmap, steps, resources, unlockedStepLimit, isRewardClaimed);
+    }
+
+
+    @Transactional
+    public void claimReward(String userId, UUID workspaceId) {
+        StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        Roadmap roadmap = roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspaceId)
+                .orElseThrow(() -> new AppException(ErrorCode.ROADMAP_NOT_FOUND));
+
+        if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
+            throw new AppException(ErrorCode.ROADMAP_NOT_FOUND, "Lộ trình học chưa được hoàn thành.");
+        }
+
+        List<RoadmapStep> completedSteps = roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        );
+
+        boolean allStepsEarnedPoints = completedSteps.size() == roadmap.getTotalSteps()
+                && completedSteps.stream().allMatch(step -> pointService.hasRoadmapStepCompletedPoints(
+                        userId,
+                        step.getStepId()
+                ));
+
+        if (!allStepsEarnedPoints) {
+            throw new AppException(ErrorCode.ROADMAP_NOT_FOUND, "Chưa đủ điều kiện nhận phần thưởng (chưa hoàn thành đủ thời gian học).");
+        }
+
+        pointService.awardRoadmapCompleted(workspace.getUser(), workspace, roadmap.getRoadmapId());
     }
 
     private StudyWorkspace findOwnedWorkspace(String userId, UUID workspaceId) {

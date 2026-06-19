@@ -26,6 +26,8 @@ import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.service.calendar.CalendarService;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.subscription.SubscriptionService;
+import com.skillsprint.enums.plan.ServicePlanType;
 import java.util.EnumSet;
 import java.util.List;
 import java.time.Duration;
@@ -65,6 +67,7 @@ public class StudySessionService {
     StudySessionMapper studySessionMapper;
     CalendarService calendarService;
     QuotaService quotaService;
+    SubscriptionService subscriptionService;
 
     @Transactional(readOnly = true)
     public StudySessionDetailResponse getStudySessionDetail(String userId, UUID taskId) {
@@ -129,7 +132,19 @@ public class StudySessionService {
         if (session.getStatus() != StudySessionStatus.COMPLETED) {
             Instant endedAt = Instant.now();
             session.setEndedAt(endedAt);
-            session.setDurationMinutes(calculateDurationMinutes(session.getStartedAt(), endedAt));
+            
+            int duration = calculateDurationMinutes(session.getStartedAt(), endedAt);
+            try {
+                com.skillsprint.entity.ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+                if (plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT) {
+                    int required = calculateMinimumRequiredMinutes(session.getCalendarTask());
+                    duration = Math.max(Math.max(20, required), duration);
+                }
+            } catch (Exception e) {
+                // Ignore and use actual duration
+            }
+            
+            session.setDurationMinutes(duration);
             session.setStatus(StudySessionStatus.COMPLETED);
             session.setNotes(request == null ? null : request.getNotes());
             session.setFocusScore(request == null ? null : request.getFocusScore());

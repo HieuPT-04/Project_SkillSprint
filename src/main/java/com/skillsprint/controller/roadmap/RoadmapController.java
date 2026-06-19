@@ -41,4 +41,14 @@ public class RoadmapController {
         RoadmapResponse response = roadmapService.getCurrent(jwt.getSubject(), workspaceId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @PostMapping("/claim-reward")
+    public ResponseEntity<ApiResponse<Void>> claimReward(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId
+    ) {
+        roadmapService.claimReward(jwt.getSubject(), workspaceId);
+        return ResponseEntity.ok(ApiResponse.success("Nhận phần thưởng thành công", null));
+    }
+
 }

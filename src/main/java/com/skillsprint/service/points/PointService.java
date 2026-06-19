@@ -90,6 +90,16 @@ public class PointService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasRoadmapCompletedPoints(String userId, UUID roadmapId) {
+        return pointEventRepository.existsByUserUserIdAndEventTypeAndSourceTypeAndSourceId(
+                userId,
+                PointEventType.ROADMAP_COMPLETED,
+                PointSourceType.ROADMAP,
+                roadmapId.toString()
+        );
+    }
+
     @Transactional
     public void awardQuizScore(Quiz quiz, QuizAttempt attempt) {
         int targetPoints = resolveQuizPoints(attempt.getScore());

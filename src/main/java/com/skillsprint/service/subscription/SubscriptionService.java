@@ -77,6 +77,13 @@ public class SubscriptionService {
             return createFreeSubscription(user);
         }
 
+        // ADMIN_DEFAULT subscriptions never expire — mirrors the FE JWT-role bypass.
+        // Admins are granted unlimited access regardless of end_at.
+        if (activeSubscription.getPlan() != null
+                && activeSubscription.getPlan().getPlanType() == ServicePlanType.ADMIN_DEFAULT) {
+            return activeSubscription;
+        }
+
         normalizeTimestamps(activeSubscription);
 
         if (isExpired(activeSubscription)) {

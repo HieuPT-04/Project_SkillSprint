@@ -13,6 +13,8 @@ import com.skillsprint.entity.QuizAttemptAnswer;
 import com.skillsprint.entity.QuizOption;
 import com.skillsprint.entity.QuizQuestion;
 import com.skillsprint.entity.RoadmapStep;
+import com.skillsprint.entity.ServicePlan;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.quiz.QuizAttemptStatus;
 import com.skillsprint.enums.quiz.QuizQuestionType;
 import com.skillsprint.enums.quiz.QuizStatus;
@@ -32,6 +34,7 @@ import com.skillsprint.service.quiz.ai.GeminiQuizClient;
 import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.subscription.SubscriptionService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -68,6 +71,7 @@ public class QuizService {
     GeminiQuizClient geminiQuizClient;
     QuotaService quotaService;
     PointService pointService;
+    SubscriptionService subscriptionService;
 
     @Transactional
     public QuizResponse generate(String userId, UUID stepId) {
@@ -75,13 +79,14 @@ public class QuizService {
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
 
+        boolean includeCorrectAnswers = isAdminDefault(userId);
         return quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
                         stepId,
                         userId,
                         QuizStatus.ACTIVE
                 )
-                .map(this::toQuizResponse)
-                .orElseGet(() -> createQuiz(userId, step));
+                .map(quiz -> toQuizResponse(quiz, includeCorrectAnswers))
+                .orElseGet(() -> createQuiz(step, includeCorrectAnswers));
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +102,7 @@ public class QuizService {
                 )
                 .orElseThrow(() -> new AppException(ErrorCode.QUIZ_NOT_FOUND));
 
-        return toQuizResponse(quiz);
+        return toQuizResponse(quiz, isAdminDefault(userId));
     }
 
     @Transactional
@@ -213,7 +218,7 @@ public class QuizService {
         return toAttemptResponse(attempt, results);
     }
 
-    private QuizResponse createQuiz(String userId, RoadmapStep step) {
+    private QuizResponse createQuiz(RoadmapStep step, boolean includeCorrectAnswers) {
         List<MaterialChunk> chunks = materialChunkRepository
                 .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(step.getWorkspace().getWorkspaceId());
         AiQuizDraft draft = geminiQuizClient.generate(step, chunks);
@@ -255,7 +260,7 @@ public class QuizService {
             }
         }
 
-        return toQuizResponse(savedQuiz);
+        return toQuizResponse(savedQuiz, includeCorrectAnswers);
     }
 
     private List<AiQuizQuestionDraft> normalizeDraft(AiQuizDraft draft) {
@@ -405,7 +410,7 @@ public class QuizService {
         );
     }
 
-    private QuizResponse toQuizResponse(Quiz quiz) {
+    private QuizResponse toQuizResponse(Quiz quiz, boolean includeCorrectAnswers) {
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizQuizIdOrderBySequenceNoAsc(quiz.getQuizId());
         Map<UUID, List<QuizOption>> optionsByQuestionId = quizOptionRepository
                 .findByQuestionQuizQuizIdOrderByQuestionSequenceNoAscSequenceNoAsc(quiz.getQuizId())
@@ -445,6 +450,9 @@ public class QuizService {
                                                 .optionId(option.getOptionId())
                                                 .label(option.getLabel())
                                                 .text(option.getOptionText())
+                                                // Only admins get the answer key; null is
+                                                // omitted from the JSON for everyone else.
+                                                .correct(includeCorrectAnswers ? option.isCorrect() : null)
                                                 .build())
                                         .toList())
                                 .build())
@@ -467,6 +475,11 @@ public class QuizService {
                 .submittedAt(attempt.getSubmittedAt())
                 .results(results)
                 .build();
+    }
+
+    private boolean isAdminDefault(String userId) {
+        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+        return plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT;
     }
 
     private RoadmapStep findOwnedStep(String userId, UUID stepId) {

@@ -26,7 +26,9 @@ public class RoadmapResponse {
     BigDecimal progressPercent;
     Integer versionNo;
     RoadmapStatus status;
+    Boolean isRewardClaimed;
     Instant generatedAt;
     Instant updatedAt;
     List<RoadmapStepResponse> steps;
 }
+
