@@ -19,6 +19,7 @@ public class FeedbackResponse {
     String title;
     String content;
     String relatedUrl;
+    String imageUrl;
     FeedbackStatus status;
     String adminReply;
     Instant repliedAt;

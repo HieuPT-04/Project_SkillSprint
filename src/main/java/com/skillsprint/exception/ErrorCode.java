@@ -134,7 +134,12 @@ public enum ErrorCode {
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
 
     // Feedback
-    FEEDBACK_NOT_FOUND("Không tìm thấy feedback", HttpStatus.NOT_FOUND);
+    FEEDBACK_NOT_FOUND("Không tìm thấy feedback", HttpStatus.NOT_FOUND),
+
+    // Feedback / S3
+    INVALID_FEEDBACK_IMAGE_CONTENT_TYPE("Ảnh phản hồi chỉ hỗ trợ JPG, PNG, WEBP hoặc GIF", HttpStatus.BAD_REQUEST),
+    INVALID_FEEDBACK_IMAGE_OBJECT_KEY("Bạn không có quyền đính kèm ảnh này", HttpStatus.FORBIDDEN),
+    FEEDBACK_IMAGE_NOT_UPLOADED("Ảnh phản hồi chưa được upload thành công lên S3", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;

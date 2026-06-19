@@ -48,6 +48,9 @@ public class Feedback extends BaseAuditEntity {
     @Column(name = "related_url", length = 1000)
     private String relatedUrl;
 
+    @Column(name = "image_object_key", length = 512)
+    private String imageObjectKey;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private FeedbackStatus status = FeedbackStatus.OPEN;

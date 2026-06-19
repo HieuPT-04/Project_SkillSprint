@@ -22,6 +22,7 @@ public class FeedbackAdminResponse {
     String title;
     String content;
     String relatedUrl;
+    String imageUrl;
     FeedbackStatus status;
     String adminNote;
     String adminReply;

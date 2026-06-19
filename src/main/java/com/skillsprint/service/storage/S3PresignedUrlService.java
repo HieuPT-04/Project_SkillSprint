@@ -1,8 +1,10 @@
 package com.skillsprint.service.storage;
 
 import com.skillsprint.configuration.s3.S3Properties;
+import com.skillsprint.dto.request.feedback.CreateFeedbackUploadUrlRequest;
 import com.skillsprint.dto.request.user.ConfirmAvatarUploadRequest;
 import com.skillsprint.dto.request.user.CreateAvatarUploadUrlRequest;
+import com.skillsprint.dto.response.feedback.FeedbackUploadUrlResponse;
 import com.skillsprint.dto.response.user.AvatarUploadUrlResponse;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -32,6 +34,13 @@ public class S3PresignedUrlService {
             "image/jpeg",
             "image/png",
             "image/webp"
+    );
+
+    private static final Set<String> ALLOWED_FEEDBACK_IMAGE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif"
     );
 
     S3Presigner s3Presigner;
@@ -67,6 +76,62 @@ public class S3PresignedUrlService {
                 .objectKey(objectKey)
                 .expiresAt(expiresAt)
                 .build();
+    }
+
+    public FeedbackUploadUrlResponse createFeedbackImageUploadUrl(String userId, CreateFeedbackUploadUrlRequest request) {
+        String contentType = request.getContentType().trim().toLowerCase();
+        if (!ALLOWED_FEEDBACK_IMAGE_CONTENT_TYPES.contains(contentType)) {
+            throw new AppException(ErrorCode.INVALID_FEEDBACK_IMAGE_CONTENT_TYPE);
+        }
+
+        String objectKey = buildFeedbackImageObjectKey(userId, contentType);
+        Duration signatureDuration = Duration.ofMinutes(properties.uploadUrlExpirationMinutes());
+        Instant expiresAt = Instant.now().plus(signatureDuration);
+
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(objectKey)
+                .contentType(contentType)
+                .build();
+
+        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(signatureDuration)
+                .putObjectRequest(putObjectRequest)
+                .build();
+
+        String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
+
+        return FeedbackUploadUrlResponse.builder()
+                .uploadUrl(uploadUrl)
+                .fileUrl(createViewUrl(objectKey))
+                .objectKey(objectKey)
+                .expiresAt(expiresAt)
+                .build();
+    }
+
+    /**
+     * Validates that {@code objectKey} belongs to {@code userId} and that the file was actually
+     * uploaded to S3, then returns the normalized key. Mirrors {@link #confirmAvatarUpload}.
+     */
+    public String confirmFeedbackImage(String userId, String objectKey) {
+        String key = objectKey.trim();
+        String expectedPrefix = "feedback/%s/".formatted(userId);
+        if (!key.startsWith(expectedPrefix)) {
+            throw new AppException(ErrorCode.INVALID_FEEDBACK_IMAGE_OBJECT_KEY);
+        }
+
+        try {
+            s3Client.headObject(
+                    HeadObjectRequest.builder()
+                            .bucket(properties.bucket())
+                            .key(key)
+                            .build()
+            );
+        } catch (S3Exception ex) {
+            throw new AppException(ErrorCode.FEEDBACK_IMAGE_NOT_UPLOADED);
+        }
+
+        return key;
     }
 
     public String createViewUrl(String objectKey) {
@@ -106,6 +171,17 @@ public class S3PresignedUrlService {
         }
 
         return objectKey;
+    }
+
+    private String buildFeedbackImageObjectKey(String userId, String contentType) {
+        String extension = switch (contentType) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            case "image/gif" -> "gif";
+            default -> throw new AppException(ErrorCode.INVALID_FEEDBACK_IMAGE_CONTENT_TYPE);
+        };
+        return "feedback/%s/%s.%s".formatted(userId, UUID.randomUUID(), extension);
     }
 
     private String buildAvatarObjectKey(String userId, String fileName, String contentType) {

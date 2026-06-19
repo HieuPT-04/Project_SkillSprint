@@ -1,8 +1,6 @@
 package com.skillsprint.dto.request.feedback;
 
-import com.skillsprint.enums.feedback.FeedbackType;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -14,22 +12,13 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CreateFeedbackRequest {
-
-    @NotNull
-    FeedbackType type;
+public class CreateFeedbackUploadUrlRequest {
 
     @NotBlank
     @Size(max = 255)
-    String title;
+    String fileName;
 
     @NotBlank
-    @Size(max = 5000)
-    String content;
-
-    @Size(max = 1000)
-    String relatedUrl;
-
-    @Size(max = 512)
-    String imageObjectKey;
+    @Size(max = 100)
+    String contentType;
 }

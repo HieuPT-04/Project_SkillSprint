@@ -20,3 +20,5 @@ END $$;
 UPDATE feedbacks
 SET status = 'CLOSED'
 WHERE status IN ('DONE', 'RESOLVED');
+
+ALTER TABLE feedbacks ADD COLUMN image_object_key VARCHAR(512);
