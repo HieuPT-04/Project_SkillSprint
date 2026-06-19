@@ -30,14 +30,15 @@ public class RoadmapMapper {
             List<RoadmapStep> steps,
             List<RoadmapStepResource> resources
     ) {
-        return toResponse(roadmap, steps, resources, Integer.MAX_VALUE);
+        return toResponse(roadmap, steps, resources, Integer.MAX_VALUE, false);
     }
 
     public RoadmapResponse toResponse(
             Roadmap roadmap,
             List<RoadmapStep> steps,
             List<RoadmapStepResource> resources,
-            int unlockedStepLimit
+            int unlockedStepLimit,
+            boolean isRewardClaimed
     ) {
         Map<UUID, List<RoadmapStepResource>> resourcesByStepId = resources.stream()
                 .collect(Collectors.groupingBy(resource -> resource.getStep().getStepId()));
@@ -54,6 +55,7 @@ public class RoadmapMapper {
                 .progressPercent(roadmap.getProgressPercent())
                 .versionNo(roadmap.getVersionNo())
                 .status(roadmap.getStatus())
+                .isRewardClaimed(isRewardClaimed)
                 .generatedAt(roadmap.getGeneratedAt())
                 .updatedAt(roadmap.getUpdatedAt())
                 .steps(steps.stream()
@@ -64,6 +66,7 @@ public class RoadmapMapper {
                         ))
                         .toList())
                 .build();
+
     }
 
     private RoadmapStepResponse toStepResponse(

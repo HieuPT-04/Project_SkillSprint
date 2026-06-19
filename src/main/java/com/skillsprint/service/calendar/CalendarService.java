@@ -50,6 +50,9 @@ import com.skillsprint.service.calendar.ai.AiCalendarTaskSuggestion;
 import com.skillsprint.service.calendar.ai.GeminiCalendarPlannerClient;
 import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.subscription.SubscriptionService;
+import com.skillsprint.enums.plan.ServicePlanType;
+import com.skillsprint.entity.ServicePlan;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -105,6 +108,7 @@ public class CalendarService {
     QuotaService quotaService;
     com.skillsprint.service.notification.NotificationService notificationService;
     PointService pointService;
+    SubscriptionService subscriptionService;
 
     @Transactional
     public CalendarScheduleRunResponse generate(
@@ -943,27 +947,59 @@ public class CalendarService {
     }
 
     private void awardRoadmapPointsIfEligible(Roadmap roadmap) {
-        if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
-            return;
-        }
-
         List<RoadmapStep> completedSteps = roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
                 roadmap.getRoadmapId(),
                 RoadmapStepStatus.COMPLETED
         );
-        boolean everyCompletedStepEarnedPoints = completedSteps.stream()
-                .allMatch(step -> pointService.hasRoadmapStepCompletedPoints(
-                        roadmap.getUser().getUserId(),
-                        step.getStepId()
-                ));
-        if (everyCompletedStepEarnedPoints) {
-            pointService.awardRoadmapCompleted(roadmap.getUser(), roadmap.getWorkspace(), roadmap.getRoadmapId());
+
+        // Gate on the actual "every step is done" condition rather than on the
+        // roadmap's own status flag. The status was previously only promoted to
+        // COMPLETED inside activateNextStepIfNeeded(), which runs solely when the
+        // step just finished was the CURRENT one. Re-completion (the early-return
+        // path above) and any non-linear final-step completion therefore left the
+        // roadmap stuck ACTIVE, and this guard then silently blocked the +700 award
+        // forever — the symptom being a chest that never writes a ROADMAP_COMPLETED
+        // ledger row for the client to verify.
+        boolean allStepsCompleted = roadmap.getTotalSteps() != null
+                && roadmap.getTotalSteps() > 0
+                && completedSteps.size() == roadmap.getTotalSteps();
+        if (!allStepsCompleted) {
+            return;
         }
+
+        // Promote the roadmap itself the moment every step is done (idempotent).
+        if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
+            roadmap.setStatus(RoadmapStatus.COMPLETED);
+            roadmap.setCurrentStep(null);
+            roadmapRepository.save(roadmap);
+        }
+
+        // Anti-cheat backfill. A step can be marked COMPLETED before its study time
+        // crosses MIN_STEP_POINT_STUDY_MINUTES (e.g. the step is closed out by a quiz
+        // pass, or the user logs the qualifying study session only afterwards). When
+        // that happens the per-step 120 XP event is never written, which used to
+        // permanently block the 700 XP roadmap reward below. Re-attempt the award for
+        // every completed step here: awardRoadmapStepCompleted -> awardUnique is
+        // idempotent (it skips when the event already exists and saveAndFlush makes
+        // the new rows visible to the eligibility check that follows), so already
+        // rewarded steps are a no-op and now-eligible steps finally earn their XP.
+        completedSteps.forEach(this::awardRoadmapStepPointsIfEligible);
+
+        // Reward is now manually claimed by clicking the chest via `/claim-reward` endpoint.
     }
 
     private boolean hasEnoughStudyMinutesForStep(RoadmapStep step) {
+        String userId = step.getWorkspace().getUser().getUserId();
+        try {
+            ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+            if (plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT) {
+                return true;
+            }
+        } catch (Exception e) {
+            // Fallback to standard validation
+        }
         Long studiedMinutes = studySessionRepository.sumDurationMinutesByUserAndRoadmapStepAndStatus(
-                step.getWorkspace().getUser().getUserId(),
+                userId,
                 step.getStepId(),
                 StudySessionStatus.COMPLETED
         );

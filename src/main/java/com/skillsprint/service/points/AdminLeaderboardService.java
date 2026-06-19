@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.IntStream;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -123,6 +124,7 @@ public class AdminLeaderboardService {
             PointEventType eventType,
             LocalDate from,
             LocalDate to,
+            UUID workspaceId,
             int page,
             int size
     ) {
@@ -135,7 +137,7 @@ public class AdminLeaderboardService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
         Page<AdminPointEventResponse> events = pointEventRepository
-                .searchUserPointEvents(userId, eventType, from, to, pageable)
+                .searchUserPointEvents(userId, eventType, from, to, workspaceId, pageable)
                 .map(this::toAdminPointEventResponse);
         return PageResponse.from(events);
     }

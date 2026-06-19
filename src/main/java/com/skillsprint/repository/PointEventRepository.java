@@ -202,12 +202,14 @@ public interface PointEventRepository extends JpaRepository<PointEvent, UUID> {
               and (:eventType is null or pointEvent.eventType = :eventType)
               and (:fromDate is null or pointEvent.eventDate >= :fromDate)
               and (:toDate is null or pointEvent.eventDate <= :toDate)
+              and (:workspaceId is null or pointEvent.workspace.workspaceId = :workspaceId)
             """)
     Page<PointEvent> searchUserPointEvents(
             @Param("userId") String userId,
             @Param("eventType") PointEventType eventType,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate,
+            @Param("workspaceId") UUID workspaceId,
             Pageable pageable
     );
 

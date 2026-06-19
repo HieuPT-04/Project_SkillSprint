@@ -9,6 +9,7 @@ import com.skillsprint.enums.points.LeaderboardPeriod;
 import com.skillsprint.enums.points.PointEventType;
 import com.skillsprint.service.points.AdminLeaderboardService;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -57,11 +58,12 @@ public class AdminLeaderboardController {
             @RequestParam(required = false) PointEventType type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) UUID workspaceId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         PageResponse<AdminPointEventResponse> response = adminLeaderboardService
-                .getUserPointEvents(userId, type, from, to, page, size);
+                .getUserPointEvents(userId, type, from, to, workspaceId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử điểm người dùng thành công", response));
     }
 }
