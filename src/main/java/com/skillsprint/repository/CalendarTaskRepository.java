@@ -1,12 +1,15 @@
 package com.skillsprint.repository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
 import com.skillsprint.entity.CalendarTask;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID> {
 
@@ -47,4 +50,9 @@ public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID
     List<CalendarTask> findByWorkspaceWorkspaceIdAndStatus(UUID workspaceId, CalendarTaskStatus status);
 
     long countByStatus(CalendarTaskStatus status);
+
+    @Query("SELECT t FROM CalendarTask t WHERE t.status = com.skillsprint.enums.calendar.CalendarTaskStatus.TODO "
+            + "AND (t.overdueNotified IS NULL OR t.overdueNotified = false) "
+            + "AND (t.taskDate < :today OR (t.taskDate = :today AND t.endTime IS NOT NULL AND t.endTime < :time))")
+    List<CalendarTask> findOverdueUnnotifiedTasks(@Param("today") LocalDate today, @Param("time") LocalTime time);
 }
