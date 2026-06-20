@@ -22,6 +22,8 @@ public class UploadedMaterialResponse {
     FileType fileType;
     Long fileSizeBytes;
     String fileUrl;
+    String viewUrl;
+    Instant viewUrlExpiresAt;
     UploadStatus uploadStatus;
     MaterialProcessingStatus processingStatus;
     MaterialProcessingJobResponse processingJob;

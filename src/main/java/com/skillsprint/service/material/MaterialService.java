@@ -35,12 +35,14 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import com.skillsprint.service.subscription.QuotaService;
 
@@ -49,6 +51,8 @@ import com.skillsprint.service.subscription.QuotaService;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MaterialService {
+
+    static long VIEW_URL_EXPIRATION_MINUTES = 15;
 
     static Map<String, FileType> FILE_TYPE_BY_CONTENT_TYPE = Map.ofEntries(
             Map.entry("application/pdf", FileType.PDF),
@@ -159,6 +163,27 @@ public class MaterialService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public UploadedMaterialResponse getMaterialDetail(String userId, UUID workspaceId, UUID materialId) {
+        findOwnedWorkspace(userId, workspaceId);
+
+        UploadedMaterial material = uploadedMaterialRepository
+                .findByMaterialIdAndWorkspaceWorkspaceIdAndUserUserId(materialId, workspaceId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MATERIAL_NOT_FOUND));
+
+        MaterialProcessingJob job = materialProcessingJobRepository
+                .findTopByMaterialMaterialIdOrderByCreatedAtDesc(materialId)
+                .orElse(null);
+        MaterialViewUrl viewUrl = createMaterialViewUrl(material);
+
+        return materialMapper.toUploadedMaterialResponse(
+                material,
+                job,
+                viewUrl.url(),
+                viewUrl.expiresAt()
+        );
+    }
+
     @Transactional
     public void deleteMaterial(String userId, UUID workspaceId, UUID materialId) {
         findOwnedWorkspace(userId, workspaceId);
@@ -232,6 +257,31 @@ public class MaterialService {
         }
     }
 
+    private MaterialViewUrl createMaterialViewUrl(UploadedMaterial material) {
+        String objectKey = material.getS3ObjectKey();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new AppException(ErrorCode.MATERIAL_NOT_UPLOADED);
+        }
+
+        getUploadedObject(objectKey);
+
+        Duration signatureDuration = Duration.ofMinutes(VIEW_URL_EXPIRATION_MINUTES);
+        Instant expiresAt = Instant.now().plus(signatureDuration);
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(s3Properties.bucket())
+                .key(objectKey)
+                .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(signatureDuration)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return new MaterialViewUrl(
+                s3Presigner.presignGetObject(presignRequest).url().toString(),
+                expiresAt
+        );
+    }
+
     private void validateObjectKeyOwner(String userId, UUID workspaceId, String objectKey) {
         String expectedPrefix = "users/%s-".formatted(userId);
         String expectedWorkspaceSegment = "/workspaces/%s-".formatted(workspaceId);
@@ -298,5 +348,8 @@ public class MaterialService {
                 .replaceAll("^-|-$", "");
 
         return sanitized.isBlank() ? "unknown" : sanitized;
+    }
+
+    private record MaterialViewUrl(String url, Instant expiresAt) {
     }
 }

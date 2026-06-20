@@ -5,6 +5,7 @@ import com.skillsprint.dto.response.material.MaterialProcessingJobResponse;
 import com.skillsprint.dto.response.material.UploadedMaterialResponse;
 import com.skillsprint.entity.MaterialProcessingJob;
 import com.skillsprint.entity.UploadedMaterial;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,6 +22,15 @@ public class MaterialMapper {
             UploadedMaterial material,
             MaterialProcessingJob job
     ) {
+        return toUploadedMaterialResponse(material, job, null, null);
+    }
+
+    public UploadedMaterialResponse toUploadedMaterialResponse(
+            UploadedMaterial material,
+            MaterialProcessingJob job,
+            String viewUrl,
+            Instant viewUrlExpiresAt
+    ) {
         return UploadedMaterialResponse.builder()
                 .materialId(material.getMaterialId())
                 .workspaceId(material.getWorkspace().getWorkspaceId())
@@ -29,6 +39,8 @@ public class MaterialMapper {
                 .fileType(material.getFileType())
                 .fileSizeBytes(material.getFileSizeBytes())
                 .fileUrl(buildFileUrl(material.getS3ObjectKey()))
+                .viewUrl(viewUrl)
+                .viewUrlExpiresAt(viewUrlExpiresAt)
                 .uploadStatus(material.getUploadStatus())
                 .processingStatus(material.getProcessingStatus())
                 .processingJob(toMaterialProcessingJobResponse(job))

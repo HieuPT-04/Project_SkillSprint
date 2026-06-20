@@ -74,6 +74,20 @@ public class MaterialController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/{materialId}")
+    public ResponseEntity<ApiResponse<UploadedMaterialResponse>> getMaterialDetail(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID materialId
+    ) {
+        UploadedMaterialResponse response = materialService.getMaterialDetail(
+                jwt.getSubject(),
+                workspaceId,
+                materialId
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/{materialId}/processing-job")
     public ResponseEntity<ApiResponse<MaterialProcessingJobResponse>> getProcessingJob(
             @AuthenticationPrincipal Jwt jwt,
