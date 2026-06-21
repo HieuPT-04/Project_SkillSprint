@@ -15,6 +15,7 @@ public class CommunityPinResponse {
     private CommunityPinItemType itemType;
     private String title;
     private String content;
+    private String linkUrl;
     private UUID messageId;
     private CommunityAuthorResponse pinnedBy;
     private int displayOrder;

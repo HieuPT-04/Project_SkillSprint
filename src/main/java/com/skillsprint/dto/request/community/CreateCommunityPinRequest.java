@@ -21,4 +21,7 @@ public class CreateCommunityPinRequest {
     private String content;
 
     private UUID messageId;
+
+    @Size(max = 2048, message = "Link đính kèm tối đa 2048 ký tự")
+    private String linkUrl;
 }
