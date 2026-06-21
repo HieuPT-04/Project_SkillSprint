@@ -120,4 +120,7 @@ public class CalendarTask extends BaseAuditEntity {
 
     @Column(name = "completed_at")
     private Instant completedAt;
+
+    @Column(name = "overdue_notified")
+    private Boolean overdueNotified = false;
 }
