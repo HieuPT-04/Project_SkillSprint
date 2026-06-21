@@ -64,6 +64,14 @@ public class CommunityPinService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<CommunityPinResponse> getAdminPins(UUID roomId) {
+        return pinRepository.findByRoomRoomIdOrderByDisplayOrderAscCreatedAtDesc(roomId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public CommunityPinResponse createPin(String userId, UUID roomId, CreateCommunityPinRequest request) {
         validateCommunityPin(userId);

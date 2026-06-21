@@ -11,7 +11,9 @@ import com.skillsprint.enums.community.CommunityRoomStatus;
 import com.skillsprint.service.community.CommunityChatService;
 import com.skillsprint.service.community.CommunityPinService;
 import com.skillsprint.service.community.CommunityRoomService;
+import com.skillsprint.dto.response.community.CommunityPinResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -87,6 +89,15 @@ public class AdminCommunityRoomController {
         CommunityChatMessageResponse response =
                 chatService.hideMessage(jwt.getSubject(), roomId, messageId, request, true);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái tin nhắn thành công", response));
+    }
+
+    @GetMapping("/{roomId}/pins")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<CommunityPinResponse>>> getPins(
+            @PathVariable UUID roomId
+    ) {
+        List<CommunityPinResponse> response = pinService.getAdminPins(roomId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @DeleteMapping("/{roomId}/pins/{pinId}")
