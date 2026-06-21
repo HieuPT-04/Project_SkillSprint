@@ -35,8 +35,8 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
             select post
             from CommunityPost post
             where post.status = :status
-              and (:search is null or lower(post.content) like lower(concat('%', :search, '%')))
-              and (:hashtag is null or lower(post.hashtags) like lower(concat('%', :hashtag, '%')))
+              and (cast(:search as text) is null or lower(post.content) like lower(concat('%', cast(:search as text), '%')))
+              and (cast(:hashtag as text) is null or lower(post.hashtags) like lower(concat('%', cast(:hashtag as text), '%')))
             """)
     @EntityGraph(attributePaths = "author")
     Page<CommunityPost> searchByStatus(
@@ -51,7 +51,7 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
             from CommunityPost post
             where post.author.userId = :userId
               and post.status <> com.skillsprint.enums.community.CommunityPostStatus.DELETED
-              and (:status is null or post.status = :status)
+              and (cast(:status as text) is null or post.status = :status)
             """)
     @EntityGraph(attributePaths = "author")
     Page<CommunityPost> findMyPosts(
@@ -63,12 +63,12 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
     @Query("""
             select post
             from CommunityPost post
-            where (:status is null or post.status = :status)
+            where (cast(:status as text) is null or post.status = :status)
               and (
-                    :search is null
-                    or lower(post.content) like lower(concat('%', :search, '%'))
-                    or lower(post.author.email) like lower(concat('%', :search, '%'))
-                    or lower(post.author.fullName) like lower(concat('%', :search, '%'))
+                    cast(:search as text) is null
+                    or lower(post.content) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(post.author.email) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(post.author.fullName) like lower(concat('%', cast(:search as text), '%'))
               )
             """)
     @EntityGraph(attributePaths = "author")
