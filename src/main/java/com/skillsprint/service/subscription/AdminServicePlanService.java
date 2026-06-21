@@ -103,6 +103,7 @@ public class AdminServicePlanService {
         plan.setCurrency(normalizeCurrency(request.getCurrency()));
         plan.setMaxWorkspaces(validateNonNegative(defaultValue(request.getMaxWorkspaces(), 1), "Số workspace không được âm"));
         plan.setMaxUploads(validateNonNegative(defaultValue(request.getMaxUploads(), 5), "Số upload không được âm"));
+        plan.setMaxCommunityRooms(validateNonNegative(defaultValue(request.getMaxCommunityRooms(), 0), "Số phòng cộng đồng không được âm"));
         plan.setAiParsingLimit(validateNonNegative(defaultValue(request.getAiGenerateLimit(), 5), "Giới hạn AI generate không được âm"));
         plan.setMaxFileMb(validatePositive(defaultValue(request.getMaxFileMb(), 20), "Dung lượng file phải lớn hơn 0"));
         plan.setMaxWorkspaceMb(validatePositive(defaultValue(request.getMaxWorkspaceMb(), 100), "Dung lượng workspace phải lớn hơn 0"));
@@ -178,6 +179,10 @@ public class AdminServicePlanService {
 
         if (request.getMaxUploads() != null) {
             plan.setMaxUploads(validateNonNegative(request.getMaxUploads(), "Số upload không được âm"));
+        }
+
+        if (request.getMaxCommunityRooms() != null) {
+            plan.setMaxCommunityRooms(validateNonNegative(request.getMaxCommunityRooms(), "Số phòng cộng đồng không được âm"));
         }
 
         if (request.getAiGenerateLimit() != null) {
@@ -303,6 +308,7 @@ public class AdminServicePlanService {
             plan.setCurrency("VND");
             plan.setMaxWorkspaces(999999);
             plan.setMaxUploads(999999);
+            plan.setMaxCommunityRooms(999999);
             plan.setAiParsingLimit(999999);
             plan.setMaxFileMb(999999);
             plan.setMaxWorkspaceMb(999999);
@@ -379,6 +385,7 @@ public class AdminServicePlanService {
         values.put("currency", plan.getCurrency());
         values.put("maxWorkspaces", plan.getMaxWorkspaces());
         values.put("maxUploads", plan.getMaxUploads());
+        values.put("maxCommunityRooms", plan.getMaxCommunityRooms());
         values.put("aiGenerateLimit", plan.getAiParsingLimit());
         values.put("maxFileMb", plan.getMaxFileMb());
         values.put("maxWorkspaceMb", plan.getMaxWorkspaceMb());

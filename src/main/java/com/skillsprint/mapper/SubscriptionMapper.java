@@ -90,6 +90,7 @@ public class SubscriptionMapper {
         return ServicePlanQuotaResponse.builder()
                 .maxWorkspaces(defaultValue(plan.getMaxWorkspaces(), 1))
                 .maxUploads(defaultValue(plan.getMaxUploads(), 5))
+                .maxCommunityRooms(defaultValue(plan.getMaxCommunityRooms(), 0))
                 .aiGenerateLimit(defaultValue(plan.getAiParsingLimit(), 5))
                 .maxFileMb(defaultValue(plan.getMaxFileMb(), 20))
                 .maxWorkspaceMb(defaultValue(plan.getMaxWorkspaceMb(), 100))

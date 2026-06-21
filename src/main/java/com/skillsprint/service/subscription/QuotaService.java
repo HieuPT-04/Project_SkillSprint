@@ -3,11 +3,13 @@ package com.skillsprint.service.subscription;
 import com.skillsprint.dto.response.subscription.QuotaStatusResponse;
 import com.skillsprint.entity.RoadmapStep;
 import com.skillsprint.entity.ServicePlan;
+import com.skillsprint.enums.community.CommunityRoomStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.workspace.WorkspaceStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.CalendarScheduleRunRepository;
+import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.LearningStructureVersionRepository;
 import com.skillsprint.repository.PlanFeatureRepository;
 import com.skillsprint.repository.RoadmapRepository;
@@ -34,6 +36,7 @@ public class QuotaService {
     RoadmapRepository roadmapRepository;
     CalendarScheduleRunRepository calendarScheduleRunRepository;
     PlanFeatureRepository planFeatureRepository;
+    CommunityRoomRepository communityRoomRepository;
 
     @Transactional(readOnly = true)
     public QuotaStatusResponse getQuotaStatus(String userId) {
@@ -41,11 +44,13 @@ public class QuotaService {
 
         long usedWorkspaces = countUsedWorkspaces(userId);
         long usedUploads = countUsedUploads(userId);
+        long usedCommunityRooms = countUsedCommunityRooms(userId);
         long usedAiGenerate = countUsedAiGenerate(userId);
         long usedStorageBytes = safeLong(uploadedMaterialRepository.sumFileSizeByUserId(userId));
 
         int maxWorkspaces = valueOrDefault(plan.getMaxWorkspaces(), 1);
         int maxUploads = valueOrDefault(plan.getMaxUploads(), 5);
+        int maxCommunityRooms = valueOrDefault(plan.getMaxCommunityRooms(), 0);
         int aiGenerateLimit = valueOrDefault(plan.getAiParsingLimit(), 5);
         int maxFileMb = valueOrDefault(plan.getMaxFileMb(), 20);
         int maxWorkspaceMb = valueOrDefault(plan.getMaxWorkspaceMb(), 100);
@@ -62,6 +67,10 @@ public class QuotaService {
                 .maxUploads(maxUploads)
                 .usedUploads(usedUploads)
                 .remainingUploads(remaining(maxUploads, usedUploads))
+
+                .maxCommunityRooms(maxCommunityRooms)
+                .usedCommunityRooms(usedCommunityRooms)
+                .remainingCommunityRooms(remaining(maxCommunityRooms, usedCommunityRooms))
 
                 .aiGenerateLimit(aiGenerateLimit)
                 .usedAiGenerate(usedAiGenerate)
@@ -132,6 +141,17 @@ public class QuotaService {
     }
 
     @Transactional(readOnly = true)
+    public void validateCanCreateCommunityRoom(String userId) {
+        validateFeature(userId, PlanFeatureKeys.COMMUNITY_ROOM);
+        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+        int maxCommunityRooms = valueOrDefault(plan.getMaxCommunityRooms(), 0);
+
+        if (countUsedCommunityRooms(userId) >= maxCommunityRooms) {
+            throw new AppException(ErrorCode.QUOTA_COMMUNITY_ROOM_LIMIT_EXCEEDED);
+        }
+    }
+
+    @Transactional(readOnly = true)
     public void validatePremiumFeature(String userId) {
         validateFeature(userId, PlanFeatureKeys.AI_TUTOR);
     }
@@ -178,6 +198,10 @@ public class QuotaService {
         return learningStructureCount + roadmapCount + calendarGenerateCount;
     }
 
+    private long countUsedCommunityRooms(String userId) {
+        return communityRoomRepository.countByOwnerUserIdAndStatusNot(userId, CommunityRoomStatus.DELETED);
+    }
+
     private int valueOrDefault(Integer value, int fallback) {
         return value == null ? fallback : value;
     }
@@ -216,6 +240,9 @@ public class QuotaService {
         return switch (featureKey) {
             case PlanFeatureKeys.ROADMAP_FULL_ACCESS -> plan.getPlanType() != ServicePlanType.FREE;
             case PlanFeatureKeys.AI_TUTOR, PlanFeatureKeys.QUIZ_GENERATION -> plan.getPlanType() == ServicePlanType.PREMIUM;
+            case PlanFeatureKeys.COMMUNITY_FEED -> true;
+            case PlanFeatureKeys.COMMUNITY_ROOM, PlanFeatureKeys.COMMUNITY_CHAT -> plan.getPlanType() != ServicePlanType.FREE;
+            case PlanFeatureKeys.COMMUNITY_PIN -> plan.getPlanType() == ServicePlanType.PREMIUM;
             default -> false;
         };
     }

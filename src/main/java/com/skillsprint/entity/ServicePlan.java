@@ -95,4 +95,7 @@ public class ServicePlan {
 
     @Column(name = "max_uploads")
     private Integer maxUploads = 5;
+
+    @Column(name = "max_community_rooms")
+    private Integer maxCommunityRooms = 0;
 }

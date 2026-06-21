@@ -62,7 +62,8 @@ class RateLimitServiceTest {
                 new RateLimitProperties.Rule(3, 3600),
                 new RateLimitProperties.Rule(3, 900),
                 new RateLimitProperties.Rule(3, 900),
-                paymentCreateRule
+                paymentCreateRule,
+                new RateLimitProperties.Rule(3, 5)
         );
     }
 }

@@ -47,6 +47,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 5,
                                 20,
                                 100,
+                                0,
                                 1);
 
                 ServicePlan basic = ensurePlan(
@@ -65,6 +66,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 50,
                                 50,
                                 1000,
+                                3,
                                 2);
 
                 ServicePlan premium = ensurePlan(
@@ -83,6 +85,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 300,
                                 100,
                                 10000,
+                                20,
                                 3);
 
                 Feature roadmapFullAccess = ensureFeature(
@@ -97,18 +100,46 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 PlanFeatureKeys.QUIZ_GENERATION,
                                 "Quiz generation",
                                 "Cho phép tạo và làm quiz từ roadmap step");
+                Feature communityFeed = ensureFeature(
+                                PlanFeatureKeys.COMMUNITY_FEED,
+                                "Community feed",
+                                "Cho phép xem, đăng bài, bình luận, like và report trong cộng đồng");
+                Feature communityRoom = ensureFeature(
+                                PlanFeatureKeys.COMMUNITY_ROOM,
+                                "Community room",
+                                "Cho phép tạo, tham gia và quản lý phòng cộng đồng");
+                Feature communityChat = ensureFeature(
+                                PlanFeatureKeys.COMMUNITY_CHAT,
+                                "Community chat",
+                                "Cho phép xem lịch sử và gửi tin nhắn trong phòng cộng đồng");
+                Feature communityPin = ensureFeature(
+                                PlanFeatureKeys.COMMUNITY_PIN,
+                                "Community pin",
+                                "Cho phép ghim thông báo, tài liệu hoặc tin nhắn quan trọng trong phòng");
 
                 ensurePlanFeature(free, roadmapFullAccess, false);
                 ensurePlanFeature(free, aiTutor, false);
                 ensurePlanFeature(free, quizGeneration, false);
+                ensurePlanFeature(free, communityFeed, true);
+                ensurePlanFeature(free, communityRoom, false);
+                ensurePlanFeature(free, communityChat, false);
+                ensurePlanFeature(free, communityPin, false);
 
                 ensurePlanFeature(basic, roadmapFullAccess, true);
                 ensurePlanFeature(basic, aiTutor, false);
                 ensurePlanFeature(basic, quizGeneration, false);
+                ensurePlanFeature(basic, communityFeed, true);
+                ensurePlanFeature(basic, communityRoom, true);
+                ensurePlanFeature(basic, communityChat, true);
+                ensurePlanFeature(basic, communityPin, false);
 
                 ensurePlanFeature(premium, roadmapFullAccess, true);
                 ensurePlanFeature(premium, aiTutor, true);
                 ensurePlanFeature(premium, quizGeneration, true);
+                ensurePlanFeature(premium, communityFeed, true);
+                ensurePlanFeature(premium, communityRoom, true);
+                ensurePlanFeature(premium, communityChat, true);
+                ensurePlanFeature(premium, communityPin, true);
 
                 // --- SEED ADMIN PLAN ---
                 ServicePlan adminPlan = ensurePlan(
@@ -125,6 +156,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 999999, // aiGenerateLimit
                                 5000, // maxFileMb
                                 999999, // maxWorkspaceMb
+                                999999, // maxCommunityRooms
                                 4 // sortOrder
                 );
 
@@ -136,6 +168,10 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ensurePlanFeature(adminPlan, roadmapFullAccess, true);
                 ensurePlanFeature(adminPlan, aiTutor, true);
                 ensurePlanFeature(adminPlan, quizGeneration, true);
+                ensurePlanFeature(adminPlan, communityFeed, true);
+                ensurePlanFeature(adminPlan, communityRoom, true);
+                ensurePlanFeature(adminPlan, communityChat, true);
+                ensurePlanFeature(adminPlan, communityPin, true);
         }
 
         private ServicePlan ensurePlan(
@@ -149,9 +185,15 @@ public class ServicePlanSeeder implements ApplicationRunner {
                         int aiGenerateLimit,
                         int maxFileMb,
                         int maxWorkspaceMb,
+                        int maxCommunityRooms,
                         int sortOrder) {
                 ServicePlan existingPlan = servicePlanRepository.findByPlanType(planType).orElse(null);
                 if (existingPlan != null) {
+                        if (existingPlan.getMaxCommunityRooms() == null) {
+                                existingPlan.setMaxCommunityRooms(maxCommunityRooms);
+                                servicePlanRepository.save(existingPlan);
+                                log.info("Backfilled maxCommunityRooms for existing service plan {}", planType);
+                        }
                         log.info("Skipped existing service plan {}", planType);
                         return existingPlan;
                 }
@@ -168,6 +210,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 plan.setAiParsingLimit(aiGenerateLimit);
                 plan.setMaxFileMb(maxFileMb);
                 plan.setMaxWorkspaceMb(maxWorkspaceMb);
+                plan.setMaxCommunityRooms(maxCommunityRooms);
                 plan.setPublicVisible(true);
                 plan.setSortOrder(sortOrder);
                 plan.setActive(true);

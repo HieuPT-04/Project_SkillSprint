@@ -26,6 +26,7 @@ public class UpdateServicePlanRequest {
     String currency;
     Integer maxWorkspaces;
     Integer maxUploads;
+    Integer maxCommunityRooms;
     Integer aiGenerateLimit;
     Integer maxFileMb;
     Integer maxWorkspaceMb;

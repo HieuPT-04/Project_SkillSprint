@@ -16,10 +16,25 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
             from CommunityPost post
             where post.status = :status
               and (:search is null or lower(post.content) like lower(concat('%', :search, '%')))
+              and (:hashtag is null or lower(post.hashtags) like lower(concat('%', :hashtag, '%')))
             """)
     Page<CommunityPost> searchByStatus(
             @Param("status") CommunityPostStatus status,
             @Param("search") String search,
+            @Param("hashtag") String hashtag,
+            Pageable pageable
+    );
+
+    @Query("""
+            select post
+            from CommunityPost post
+            where post.author.userId = :userId
+              and post.status <> com.skillsprint.enums.community.CommunityPostStatus.DELETED
+              and (:status is null or post.status = :status)
+            """)
+    Page<CommunityPost> findMyPosts(
+            @Param("userId") String userId,
+            @Param("status") CommunityPostStatus status,
             Pageable pageable
     );
 
