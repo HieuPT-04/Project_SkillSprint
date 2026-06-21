@@ -36,6 +36,7 @@ import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -110,11 +111,10 @@ public class CommunityRoomService {
     ) {
         validateCommunityRoom(userId);
         Pageable pageable = pageable(page, size);
-        Page<CommunityRoomResponse> rooms = roomRepository
-                .searchDiscoverableRooms(mode, normalizeBlank(search), pageable)
-                .map(room -> toRoomResponse(room, userId));
+        Page<CommunityRoom> rooms = roomRepository
+                .searchDiscoverableRooms(mode, normalizeBlank(search), pageable);
 
-        return PageResponse.from(rooms);
+        return toRoomPage(rooms, userId);
     }
 
     @Transactional(readOnly = true)
@@ -123,11 +123,13 @@ public class CommunityRoomService {
         findUser(userId);
 
         Pageable pageable = pageable(page, size);
-        Page<CommunityRoomResponse> rooms = memberRepository
-                .findByUserUserIdAndBannedFalse(userId, pageable)
-                .map(member -> toRoomResponse(member.getRoom(), userId));
+        Page<CommunityRoomMember> memberships = memberRepository
+                .findByUserUserIdAndBannedFalse(userId, pageable);
 
-        return PageResponse.from(rooms);
+        List<CommunityRoomResponse> items = memberships.getContent().stream()
+                .map(member -> toRoomResponse(member.getRoom(), member))
+                .toList();
+        return toPageResponse(memberships, items);
     }
 
     @Transactional(readOnly = true)
@@ -448,7 +450,7 @@ public class CommunityRoomService {
     ) {
         Page<CommunityRoomResponse> rooms = roomRepository
                 .searchAdminRooms(status, mode, normalizeBlank(search), pageable(page, size))
-                .map(room -> toRoomResponse(room, null));
+                .map(room -> toRoomResponse(room, (CommunityRoomMember) null));
 
         return PageResponse.from(rooms);
     }
@@ -476,7 +478,7 @@ public class CommunityRoomService {
                 roomSnapshot(saved)
         );
 
-        return toRoomResponse(saved, null);
+        return toRoomResponse(saved, (CommunityRoomMember) null);
     }
 
     private CommunityRoomMember createMember(CommunityRoom room, User user, CommunityRoomRole role) {
@@ -599,7 +601,10 @@ public class CommunityRoomService {
         CommunityRoomMember member = currentUserId != null
                 ? memberRepository.findByRoomRoomIdAndUserUserId(room.getRoomId(), currentUserId).orElse(null)
                 : null;
+        return toRoomResponse(room, member);
+    }
 
+    private CommunityRoomResponse toRoomResponse(CommunityRoom room, CommunityRoomMember member) {
         return CommunityRoomResponse.builder()
                 .roomId(room.getRoomId())
                 .name(room.getName())
@@ -616,6 +621,41 @@ public class CommunityRoomService {
                 .adminNote(room.getAdminNote())
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
+                .build();
+    }
+
+    private PageResponse<CommunityRoomResponse> toRoomPage(Page<CommunityRoom> rooms, String currentUserId) {
+        Map<UUID, CommunityRoomMember> memberships = findMemberships(rooms.getContent(), currentUserId);
+        List<CommunityRoomResponse> items = rooms.getContent().stream()
+                .map(room -> toRoomResponse(room, memberships.get(room.getRoomId())))
+                .toList();
+
+        return toPageResponse(rooms, items);
+    }
+
+    private Map<UUID, CommunityRoomMember> findMemberships(List<CommunityRoom> rooms, String currentUserId) {
+        Map<UUID, CommunityRoomMember> memberships = new LinkedHashMap<>();
+        if (currentUserId == null || rooms.isEmpty()) {
+            return memberships;
+        }
+
+        List<UUID> roomIds = rooms.stream()
+                .map(CommunityRoom::getRoomId)
+                .toList();
+        memberRepository.findByRoomRoomIdInAndUserUserId(roomIds, currentUserId)
+                .forEach(member -> memberships.put(member.getRoom().getRoomId(), member));
+        return memberships;
+    }
+
+    private <T> PageResponse<T> toPageResponse(Page<?> page, List<T> items) {
+        return PageResponse.<T>builder()
+                .items(items)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalItems(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
                 .build();
     }
 
