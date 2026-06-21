@@ -32,6 +32,7 @@ import com.skillsprint.repository.CommunityRoomInviteRepository;
 import com.skillsprint.repository.CommunityRoomMemberRepository;
 import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
@@ -66,6 +67,7 @@ public class CommunityRoomService {
     ObjectMapper objectMapper;
     CommunityBlacklistService blacklistService;
     QuotaService quotaService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional
     public CommunityRoomResponse createRoom(String userId, CreateCommunityRoomRequest request) {
@@ -764,6 +766,7 @@ public class CommunityRoomService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .build();
     }
 

@@ -11,4 +11,5 @@ public class CommunityAuthorResponse {
     private String email;
     private String fullName;
     private String avatarObjectKey;
+    private String avatarUrl;
 }

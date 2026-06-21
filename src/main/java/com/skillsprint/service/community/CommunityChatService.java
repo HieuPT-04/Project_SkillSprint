@@ -24,6 +24,7 @@ import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.ratelimit.RateLimitService;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
@@ -56,6 +57,7 @@ public class CommunityChatService {
     CommunityBlacklistService blacklistService;
     RateLimitService rateLimitService;
     QuotaService quotaService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional
     public CommunityChatMessageResponse sendMessage(
@@ -335,6 +337,7 @@ public class CommunityChatService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .build();
     }
 }

@@ -25,6 +25,7 @@ import com.skillsprint.repository.CommunityPinnedItemRepository;
 import com.skillsprint.repository.CommunityRoomMemberRepository;
 import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.util.LinkedHashMap;
@@ -50,6 +51,7 @@ public class CommunityPinService {
     BusinessActivityLogRepository activityLogRepository;
     ObjectMapper objectMapper;
     QuotaService quotaService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional(readOnly = true)
     public List<CommunityPinResponse> getPins(String userId, UUID roomId) {
@@ -243,6 +245,7 @@ public class CommunityPinService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .build();
     }
 
