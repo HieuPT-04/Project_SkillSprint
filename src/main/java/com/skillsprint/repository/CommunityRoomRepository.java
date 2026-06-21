@@ -32,9 +32,9 @@ public interface CommunityRoomRepository extends JpaRepository<CommunityRoom, UU
               and room.mode <> com.skillsprint.enums.community.CommunityRoomMode.PRIVATE
               and (:mode is null or room.mode = :mode)
               and (
-                    :search is null
-                    or lower(room.name) like lower(concat('%', :search, '%'))
-                    or lower(room.description) like lower(concat('%', :search, '%'))
+                    cast(:search as text) is null
+                    or lower(room.name) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(room.description) like lower(concat('%', cast(:search as text), '%'))
               )
             """)
     @EntityGraph(attributePaths = "owner")
@@ -50,11 +50,11 @@ public interface CommunityRoomRepository extends JpaRepository<CommunityRoom, UU
             where (:status is null or room.status = :status)
               and (:mode is null or room.mode = :mode)
               and (
-                    :search is null
-                    or lower(room.name) like lower(concat('%', :search, '%'))
-                    or lower(room.description) like lower(concat('%', :search, '%'))
-                    or lower(room.owner.email) like lower(concat('%', :search, '%'))
-                    or lower(room.owner.fullName) like lower(concat('%', :search, '%'))
+                    cast(:search as text) is null
+                    or lower(room.name) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(room.description) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(room.owner.email) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(room.owner.fullName) like lower(concat('%', cast(:search as text), '%'))
               )
             """)
     @EntityGraph(attributePaths = "owner")
