@@ -151,7 +151,20 @@ public enum ErrorCode {
     COMMUNITY_REPORT_DUPLICATED("Bạn đã báo cáo nội dung này trước đó", HttpStatus.CONFLICT),
     COMMUNITY_REPORT_NOT_FOUND("Không tìm thấy báo cáo cộng đồng", HttpStatus.NOT_FOUND),
     BLACKLIST_KEYWORD_NOT_FOUND("Không tìm thấy từ khóa blacklist", HttpStatus.NOT_FOUND),
-    BLACKLIST_KEYWORD_DUPLICATED("Từ khóa blacklist đã tồn tại", HttpStatus.CONFLICT);
+    BLACKLIST_KEYWORD_DUPLICATED("Từ khóa blacklist đã tồn tại", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_NOT_FOUND("Không tìm thấy phòng cộng đồng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_NAME_REQUIRED("Tên phòng không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_ROOM_NOT_ACTIVE("Phòng hiện không mở để tham gia", HttpStatus.BAD_REQUEST),
+    COMMUNITY_ROOM_ALREADY_JOINED("Bạn đã tham gia phòng này", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_MEMBER_NOT_FOUND("Không tìm thấy thành viên trong phòng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_MEMBER_BANNED("Bạn đã bị chặn khỏi phòng này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_OWNER_REQUIRED("Chỉ owner phòng mới được thực hiện thao tác này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_MODERATOR_REQUIRED("Chỉ owner hoặc moderator mới được thực hiện thao tác này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_OWNER_CANNOT_LEAVE("Owner cần chuyển quyền hoặc xóa phòng trước khi rời", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_OWNER_ACTION_NOT_ALLOWED("Không thể thao tác quyền này với owner phòng", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_INVITE_NOT_FOUND("Không tìm thấy lời mời vào phòng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_INVITE_DUPLICATED("Người dùng này đã có lời mời đang chờ", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_INVITE_NOT_PENDING("Lời mời này không còn hiệu lực", HttpStatus.CONFLICT);
 
     private final String message;
     private final HttpStatus status;
