@@ -13,6 +13,7 @@ import com.skillsprint.entity.CommunityRoomMember;
 import com.skillsprint.entity.ContentReport;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.community.CommunityRoomStatus;
+import com.skillsprint.enums.community.CommunityRoomMemberStatus;
 import com.skillsprint.enums.community.ContentReportStatus;
 import com.skillsprint.enums.community.ContentReportTargetType;
 import com.skillsprint.exception.AppException;
@@ -212,6 +213,9 @@ public class CommunityChatService {
                 .orElseThrow(() -> new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND));
         if (member.isBanned()) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
+        }
+        if (member.getStatus() != null && member.getStatus() != CommunityRoomMemberStatus.ACTIVE) {
+            throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND);
         }
         return member;
     }

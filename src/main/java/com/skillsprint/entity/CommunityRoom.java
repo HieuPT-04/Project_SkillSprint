@@ -17,12 +17,14 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "community_rooms")
+@DynamicUpdate
 public class CommunityRoom extends BaseAuditEntity {
 
     @Id

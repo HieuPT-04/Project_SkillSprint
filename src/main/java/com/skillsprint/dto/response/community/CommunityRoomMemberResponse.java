@@ -1,5 +1,6 @@
 package com.skillsprint.dto.response.community;
 
+import com.skillsprint.enums.community.CommunityRoomMemberStatus;
 import com.skillsprint.enums.community.CommunityRoomRole;
 import java.time.Instant;
 import java.util.UUID;
@@ -14,8 +15,13 @@ public class CommunityRoomMemberResponse {
     private UUID roomId;
     private CommunityAuthorResponse user;
     private CommunityRoomRole role;
+    private CommunityRoomMemberStatus status;
     private Instant muteUntil;
     private boolean banned;
+    private Instant leftAt;
+    private Instant removedAt;
+    private CommunityAuthorResponse removedBy;
+    private String removalReason;
     private Instant joinedAt;
     private Instant updatedAt;
 }

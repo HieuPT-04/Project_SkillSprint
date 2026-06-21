@@ -1,18 +1,19 @@
 package com.skillsprint.configuration.websocket;
 
-import com.skillsprint.enums.community.CommunityRoomStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
-import com.skillsprint.repository.CommunityRoomMemberRepository;
-import com.skillsprint.service.subscription.PlanFeatureKeys;
-import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.community.CommunityWebSocketAccessService;
 import java.security.Principal;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -39,17 +40,20 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     static String COMMUNITY_ROOM_TOPIC_PREFIX = "/topic/community.rooms.";
 
     JwtDecoder jwtDecoder;
-    QuotaService quotaService;
-    CommunityRoomMemberRepository roomMemberRepository;
+    CommunityWebSocketAccessService communityWebSocketAccessService;
+
+    @Value("${app.cors.allowed-origins}")
+    @NonFinal
+    String allowedOrigins;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOrigins(parseOrigins())
                 .withSockJS();
 
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOrigins(parseOrigins());
     }
 
     @Override
@@ -103,20 +107,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
 
         String userId = principal.getName();
-        quotaService.validateFeature(userId, PlanFeatureKeys.COMMUNITY_CHAT);
-        boolean activeMember = roomMemberRepository
-                .existsByRoomRoomIdAndUserUserIdAndBannedFalseAndRoomStatus(
-                        roomId,
-                        userId,
-                        CommunityRoomStatus.ACTIVE
-                );
-        if (!activeMember) {
-            throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND);
-        }
+        communityWebSocketAccessService.validateRoomSubscription(userId, roomId);
     }
 
     private String firstHeader(StompHeaderAccessor accessor, String name) {
         return accessor.getFirstNativeHeader(name);
+    }
+
+    private String[] parseOrigins() {
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .toList();
+        return origins.toArray(String[]::new);
     }
 
     private Collection<GrantedAuthority> authorities(Jwt jwt) {

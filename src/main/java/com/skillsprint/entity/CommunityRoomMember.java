@@ -1,6 +1,7 @@
 package com.skillsprint.entity;
 
 import com.skillsprint.enums.community.CommunityRoomRole;
+import com.skillsprint.enums.community.CommunityRoomMemberStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -54,4 +55,21 @@ public class CommunityRoomMember extends BaseAuditEntity {
 
     @Column(name = "banned", nullable = false)
     private boolean banned = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private CommunityRoomMemberStatus status = CommunityRoomMemberStatus.ACTIVE;
+
+    @Column(name = "left_at")
+    private Instant leftAt;
+
+    @Column(name = "removed_at")
+    private Instant removedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "removed_by")
+    private User removedBy;
+
+    @Column(name = "removal_reason", length = 500)
+    private String removalReason;
 }

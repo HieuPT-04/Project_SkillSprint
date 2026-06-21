@@ -8,12 +8,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CommunityRoomRepository extends JpaRepository<CommunityRoom, UUID> {
 
     long countByOwnerUserIdAndStatusNot(String ownerId, CommunityRoomStatus status);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CommunityRoom room
+            set room.memberCount =
+                case when room.memberCount + :delta < 0 then 0 else room.memberCount + :delta end
+            where room.roomId = :roomId
+            """)
+    int adjustMemberCount(@Param("roomId") UUID roomId, @Param("delta") int delta);
 
     @Query("""
             select room

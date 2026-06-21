@@ -192,10 +192,9 @@ public class CommunityService {
             PostLike like = new PostLike();
             like.setPost(post);
             like.setUser(user);
-            postLikeRepository.save(like);
-
-            post.setLikeCount(post.getLikeCount() + 1);
-            communityPostRepository.save(post);
+            postLikeRepository.saveAndFlush(like);
+            communityPostRepository.adjustLikeCount(postId, 1);
+            post = findVisiblePost(postId);
         }
 
         return toUserPostResponse(post, userId);
@@ -209,10 +208,11 @@ public class CommunityService {
         postLikeRepository.findByPostPostIdAndUserUserId(postId, userId)
                 .ifPresent(like -> {
                     postLikeRepository.delete(like);
-                    post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
-                    communityPostRepository.save(post);
+                    postLikeRepository.flush();
+                    communityPostRepository.adjustLikeCount(postId, -1);
                 });
 
+        post = findVisiblePost(postId);
         return toUserPostResponse(post, userId);
     }
 
@@ -247,10 +247,9 @@ public class CommunityService {
         comment.setContent(content);
         comment.setStatus(resolveCommentStatus(content));
 
-        PostComment saved = postCommentRepository.save(comment);
+        PostComment saved = postCommentRepository.saveAndFlush(comment);
         if (saved.getStatus() == PostCommentStatus.VISIBLE) {
-            post.setCommentCount(post.getCommentCount() + 1);
-            communityPostRepository.save(post);
+            communityPostRepository.adjustCommentCount(postId, 1);
         }
 
         return toUserCommentResponse(saved);
@@ -271,8 +270,9 @@ public class CommunityService {
         comment.setStatus(resolveCommentStatus(content));
         comment.setAdminNote(null);
 
-        adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
-        return toUserCommentResponse(postCommentRepository.save(comment));
+        PostComment saved = postCommentRepository.saveAndFlush(comment);
+        adjustCommentCountOnStatusChange(saved.getPost(), oldStatus, saved.getStatus());
+        return toUserCommentResponse(saved);
     }
 
     @Transactional
@@ -283,8 +283,8 @@ public class CommunityService {
 
         PostCommentStatus oldStatus = comment.getStatus();
         comment.setStatus(PostCommentStatus.DELETED);
-        adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
-        postCommentRepository.save(comment);
+        PostComment saved = postCommentRepository.saveAndFlush(comment);
+        adjustCommentCountOnStatusChange(saved.getPost(), oldStatus, saved.getStatus());
     }
 
     @Transactional
@@ -385,9 +385,9 @@ public class CommunityService {
         Map<String, Object> oldValue = statusSnapshot(oldStatus, comment.getAdminNote());
         comment.setStatus(request.getStatus());
         comment.setAdminNote(normalizeBlank(request.getAdminNote()));
-        adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
 
-        PostComment saved = postCommentRepository.save(comment);
+        PostComment saved = postCommentRepository.saveAndFlush(comment);
+        adjustCommentCountOnStatusChange(saved.getPost(), oldStatus, saved.getStatus());
         logActivity(
                 adminUserId,
                 BusinessEntityType.COMMUNITY_COMMENT,
@@ -481,8 +481,8 @@ public class CommunityService {
             comment.setStatus(PostCommentStatus.HIDDEN);
             comment.setAdminNote("Tự ẩn do vượt ngưỡng report");
         }
-        adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
-        postCommentRepository.save(comment);
+        PostComment saved = postCommentRepository.saveAndFlush(comment);
+        adjustCommentCountOnStatusChange(saved.getPost(), oldStatus, saved.getStatus());
     }
 
     private CommunityPost findVisiblePost(UUID postId) {
@@ -545,9 +545,7 @@ public class CommunityService {
             return;
         }
 
-        int nextCount = post.getCommentCount() + (isVisible ? 1 : -1);
-        post.setCommentCount(Math.max(0, nextCount));
-        communityPostRepository.save(post);
+        communityPostRepository.adjustCommentCount(post.getPostId(), isVisible ? 1 : -1);
     }
 
     private Pageable adminPageable(int page, int size) {
