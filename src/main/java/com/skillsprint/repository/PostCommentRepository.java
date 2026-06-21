@@ -28,10 +28,10 @@ public interface PostCommentRepository extends JpaRepository<PostComment, UUID> 
             from PostComment comment
             where (:status is null or comment.status = :status)
               and (
-                    :search is null
-                    or lower(comment.content) like lower(concat('%', :search, '%'))
-                    or lower(comment.author.email) like lower(concat('%', :search, '%'))
-                    or lower(comment.author.fullName) like lower(concat('%', :search, '%'))
+                    cast(:search as text) is null
+                    or lower(comment.content) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(comment.author.email) like lower(concat('%', cast(:search as text), '%'))
+                    or lower(comment.author.fullName) like lower(concat('%', cast(:search as text), '%'))
               )
             """)
     Page<PostComment> searchAdmin(
