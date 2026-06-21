@@ -15,6 +15,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.BlacklistKeywordRepository;
 import com.skillsprint.repository.BusinessActivityLogRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import jakarta.annotation.PostConstruct;
 import java.text.Normalizer;
 import java.util.Comparator;
@@ -39,6 +40,7 @@ public class CommunityBlacklistService {
     final UserRepository userRepository;
     final BusinessActivityLogRepository activityLogRepository;
     final ObjectMapper objectMapper;
+    final S3PresignedUrlService s3PresignedUrlService;
 
     volatile Set<String> cachedKeywords = ConcurrentHashMap.newKeySet();
 
@@ -165,6 +167,7 @@ public class CommunityBlacklistService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .build();
     }
 

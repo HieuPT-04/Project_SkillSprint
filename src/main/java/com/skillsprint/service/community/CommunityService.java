@@ -37,6 +37,7 @@ import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.PostCommentRepository;
 import com.skillsprint.repository.PostLikeRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
@@ -78,6 +79,7 @@ public class CommunityService {
     BusinessActivityLogRepository activityLogRepository;
     ObjectMapper objectMapper;
     QuotaService quotaService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional
     public CommunityUserPostResponse createPost(String userId, CreateCommunityPostRequest request) {
@@ -774,6 +776,7 @@ public class CommunityService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
+                .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
                 .build();
     }
 
