@@ -7,10 +7,29 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, UUID> {
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CommunityPost post
+            set post.likeCount =
+                case when post.likeCount + :delta < 0 then 0 else post.likeCount + :delta end
+            where post.postId = :postId
+            """)
+    int adjustLikeCount(@Param("postId") UUID postId, @Param("delta") int delta);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CommunityPost post
+            set post.commentCount =
+                case when post.commentCount + :delta < 0 then 0 else post.commentCount + :delta end
+            where post.postId = :postId
+            """)
+    int adjustCommentCount(@Param("postId") UUID postId, @Param("delta") int delta);
 
     @Query("""
             select post

@@ -13,6 +13,7 @@ import com.skillsprint.entity.CommunityRoom;
 import com.skillsprint.entity.CommunityRoomMember;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.community.CommunityPinItemType;
+import com.skillsprint.enums.community.CommunityRoomMemberStatus;
 import com.skillsprint.enums.community.CommunityRoomRole;
 import com.skillsprint.enums.log.BusinessActionType;
 import com.skillsprint.enums.log.BusinessEntityType;
@@ -197,6 +198,9 @@ public class CommunityPinService {
                 .orElseThrow(() -> new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND));
         if (member.isBanned()) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
+        }
+        if (member.getStatus() != null && member.getStatus() != CommunityRoomMemberStatus.ACTIVE) {
+            throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND);
         }
         return member;
     }

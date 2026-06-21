@@ -19,6 +19,7 @@ import com.skillsprint.entity.CommunityRoomInvite;
 import com.skillsprint.entity.CommunityRoomMember;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.community.CommunityRoomInviteStatus;
+import com.skillsprint.enums.community.CommunityRoomMemberStatus;
 import com.skillsprint.enums.community.CommunityRoomMode;
 import com.skillsprint.enums.community.CommunityRoomRole;
 import com.skillsprint.enums.community.CommunityRoomStatus;
@@ -124,7 +125,7 @@ public class CommunityRoomService {
 
         Pageable pageable = pageable(page, size);
         Page<CommunityRoomMember> memberships = memberRepository
-                .findByUserUserIdAndBannedFalse(userId, pageable);
+                .findActiveByUserId(userId, CommunityRoomMemberStatus.ACTIVE, pageable);
 
         List<CommunityRoomResponse> items = memberships.getContent().stream()
                 .map(member -> toRoomResponse(member.getRoom(), member))
@@ -137,7 +138,7 @@ public class CommunityRoomService {
         validateCommunityRoom(userId);
         CommunityRoom room = findRoom(roomId);
         CommunityRoomMember member = memberRepository.findByRoomRoomIdAndUserUserId(roomId, userId).orElse(null);
-        boolean joined = member != null && !member.isBanned();
+        boolean joined = isActive(member);
         boolean visible = room.getStatus() == CommunityRoomStatus.ACTIVE
                 && room.getMode() != CommunityRoomMode.PRIVATE;
         if (!joined && !visible) {
@@ -211,15 +212,20 @@ public class CommunityRoomService {
 
         CommunityRoomMember existing = memberRepository.findByRoomRoomIdAndUserUserId(roomId, userId).orElse(null);
         if (existing != null) {
-            if (existing.isBanned()) {
+            if (isBanned(existing)) {
                 throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
             }
-            throw new AppException(ErrorCode.COMMUNITY_ROOM_ALREADY_JOINED);
+            if (isActive(existing)) {
+                throw new AppException(ErrorCode.COMMUNITY_ROOM_ALREADY_JOINED);
+            }
+            activateMembership(existing, CommunityRoomRole.MEMBER);
+            memberRepository.saveAndFlush(existing);
+        } else {
+            memberRepository.saveAndFlush(createMember(room, user, CommunityRoomRole.MEMBER));
         }
 
-        memberRepository.save(createMember(room, user, CommunityRoomRole.MEMBER));
-        room.setMemberCount(room.getMemberCount() + 1);
-        roomRepository.save(room);
+        roomRepository.adjustMemberCount(roomId, 1);
+        room = findRoom(roomId);
 
         return toRoomResponse(room, userId);
     }
@@ -228,14 +234,19 @@ public class CommunityRoomService {
     public void leaveRoom(String userId, UUID roomId) {
         validateCommunityRoom(userId);
         CommunityRoomMember member = findMembership(roomId, userId);
+        requireActive(member);
         if (member.getRole() == CommunityRoomRole.OWNER) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_OWNER_CANNOT_LEAVE);
         }
 
-        CommunityRoom room = member.getRoom();
-        memberRepository.delete(member);
-        room.setMemberCount(Math.max(0, room.getMemberCount() - 1));
-        roomRepository.save(room);
+        member.setStatus(CommunityRoomMemberStatus.LEFT);
+        member.setLeftAt(Instant.now());
+        member.setRemovedAt(null);
+        member.setRemovedBy(null);
+        member.setRemovalReason("User tự rời phòng");
+        member.setMuteUntil(null);
+        memberRepository.saveAndFlush(member);
+        roomRepository.adjustMemberCount(roomId, -1);
     }
 
     @Transactional(readOnly = true)
@@ -248,7 +259,7 @@ public class CommunityRoomService {
         validateCommunityRoom(userId);
         requireMember(roomId, userId);
         Page<CommunityRoomMemberResponse> members = memberRepository
-                .findByRoomRoomIdAndBannedFalse(roomId, pageable(page, size))
+                .findActiveByRoomId(roomId, CommunityRoomMemberStatus.ACTIVE, pageable(page, size))
                 .map(this::toMemberResponse);
 
         return PageResponse.from(members);
@@ -269,10 +280,10 @@ public class CommunityRoomService {
         CommunityRoomMember existingMember = memberRepository
                 .findByRoomRoomIdAndUserUserId(roomId, invitee.getUserId())
                 .orElse(null);
-        if (existingMember != null && existingMember.isBanned()) {
+        if (existingMember != null && isBanned(existingMember)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
         }
-        if (existingMember != null) {
+        if (existingMember != null && isActive(existingMember)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_ALREADY_JOINED);
         }
         inviteRepository.findByRoomRoomIdAndInviteeUserIdAndStatus(
@@ -325,13 +336,18 @@ public class CommunityRoomService {
         CommunityRoomMember existing = memberRepository
                 .findByRoomRoomIdAndUserUserId(room.getRoomId(), userId)
                 .orElse(null);
-        if (existing != null && existing.isBanned()) {
+        if (existing != null && isBanned(existing)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
         }
-        if (existing == null) {
-            memberRepository.save(createMember(room, invite.getInvitee(), CommunityRoomRole.MEMBER));
-            room.setMemberCount(room.getMemberCount() + 1);
-            roomRepository.save(room);
+        if (existing == null || !isActive(existing)) {
+            if (existing == null) {
+                memberRepository.saveAndFlush(createMember(room, invite.getInvitee(), CommunityRoomRole.MEMBER));
+            } else {
+                activateMembership(existing, CommunityRoomRole.MEMBER);
+                memberRepository.saveAndFlush(existing);
+            }
+            roomRepository.adjustMemberCount(room.getRoomId(), 1);
+            room = findRoom(room.getRoomId());
         }
 
         invite.setStatus(CommunityRoomInviteStatus.ACCEPTED);
@@ -360,6 +376,7 @@ public class CommunityRoomService {
         validateCommunityRoom(actorUserId);
         requireOwner(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
+        requireActive(member);
         if (member.getRole() == CommunityRoomRole.OWNER || request.getRole() == CommunityRoomRole.OWNER) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_OWNER_ACTION_NOT_ALLOWED);
         }
@@ -380,6 +397,7 @@ public class CommunityRoomService {
         validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
+        requireActive(member);
         requireNotOwner(member);
 
         int minutes = request.getMinutes() != null ? request.getMinutes() : 30;
@@ -394,13 +412,17 @@ public class CommunityRoomService {
         validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
+        requireActive(member);
         requireNotOwner(member);
 
-        CommunityRoom room = member.getRoom();
-        memberRepository.delete(member);
-        room.setMemberCount(Math.max(0, room.getMemberCount() - 1));
-        roomRepository.save(room);
-        logMemberActivity(actorUserId, member, BusinessActionType.COMMUNITY_ROOM_MEMBER_KICKED);
+        member.setStatus(CommunityRoomMemberStatus.KICKED);
+        member.setRemovedAt(Instant.now());
+        member.setRemovedBy(findUser(actorUserId));
+        member.setRemovalReason("Bị owner hoặc moderator kick khỏi phòng");
+        member.setMuteUntil(null);
+        CommunityRoomMember saved = memberRepository.saveAndFlush(member);
+        roomRepository.adjustMemberCount(roomId, -1);
+        logMemberActivity(actorUserId, saved, BusinessActionType.COMMUNITY_ROOM_MEMBER_KICKED);
     }
 
     @Transactional
@@ -410,14 +432,21 @@ public class CommunityRoomService {
         CommunityRoomMember member = findMembership(roomId, targetUserId);
         requireNotOwner(member);
 
-        if (!member.isBanned()) {
-            member.setBanned(true);
-            member.setMuteUntil(null);
-            member.getRoom().setMemberCount(Math.max(0, member.getRoom().getMemberCount() - 1));
-            roomRepository.save(member.getRoom());
+        if (isBanned(member)) {
+            return toMemberResponse(member);
         }
 
-        CommunityRoomMember saved = memberRepository.save(member);
+        requireActive(member);
+        member.setBanned(true);
+        member.setStatus(CommunityRoomMemberStatus.BANNED);
+        member.setMuteUntil(null);
+        member.setRemovedAt(Instant.now());
+        member.setRemovedBy(findUser(actorUserId));
+        member.setRemovalReason("Bị cấm khỏi phòng");
+        memberRepository.saveAndFlush(member);
+        roomRepository.adjustMemberCount(roomId, -1);
+
+        CommunityRoomMember saved = memberRepository.findById(member.getMemberId()).orElse(member);
         logMemberActivity(actorUserId, saved, BusinessActionType.COMMUNITY_ROOM_MEMBER_BANNED);
         return toMemberResponse(saved);
     }
@@ -429,13 +458,14 @@ public class CommunityRoomService {
         CommunityRoomMember member = memberRepository.findByRoomRoomIdAndUserUserId(roomId, targetUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND));
 
-        if (member.isBanned()) {
+        if (isBanned(member)) {
             member.setBanned(false);
-            member.getRoom().setMemberCount(member.getRoom().getMemberCount() + 1);
-            roomRepository.save(member.getRoom());
+            activateMembership(member, CommunityRoomRole.MEMBER);
+            memberRepository.saveAndFlush(member);
+            roomRepository.adjustMemberCount(roomId, 1);
         }
 
-        CommunityRoomMember saved = memberRepository.save(member);
+        CommunityRoomMember saved = memberRepository.findById(member.getMemberId()).orElse(member);
         logMemberActivity(actorUserId, saved, BusinessActionType.COMMUNITY_ROOM_MEMBER_UNBANNED);
         return toMemberResponse(saved);
     }
@@ -486,6 +516,7 @@ public class CommunityRoomService {
         member.setRoom(room);
         member.setUser(user);
         member.setRole(role);
+        member.setStatus(CommunityRoomMemberStatus.ACTIVE);
         return member;
     }
 
@@ -497,16 +528,18 @@ public class CommunityRoomService {
 
     private void requireMember(UUID roomId, String userId) {
         CommunityRoomMember member = findMembership(roomId, userId);
-        if (member.isBanned()) {
+        if (isBanned(member)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
         }
+        requireActive(member);
     }
 
     private CommunityRoomMember requireModerator(UUID roomId, String userId) {
         CommunityRoomMember member = findMembership(roomId, userId);
-        if (member.isBanned()) {
+        if (isBanned(member)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_BANNED);
         }
+        requireActive(member);
         if (member.getRole() != CommunityRoomRole.OWNER && member.getRole() != CommunityRoomRole.MODERATOR) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_MODERATOR_REQUIRED);
         }
@@ -515,6 +548,7 @@ public class CommunityRoomService {
 
     private CommunityRoomMember requireOwner(UUID roomId, String userId) {
         CommunityRoomMember member = findMembership(roomId, userId);
+        requireActive(member);
         if (member.getRole() != CommunityRoomRole.OWNER) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_OWNER_REQUIRED);
         }
@@ -525,6 +559,34 @@ public class CommunityRoomService {
         if (member.getRole() == CommunityRoomRole.OWNER) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_OWNER_ACTION_NOT_ALLOWED);
         }
+    }
+
+    private void requireActive(CommunityRoomMember member) {
+        if (!isActive(member)) {
+            throw new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND);
+        }
+    }
+
+    private boolean isActive(CommunityRoomMember member) {
+        return member != null
+                && !member.isBanned()
+                && (member.getStatus() == null || member.getStatus() == CommunityRoomMemberStatus.ACTIVE);
+    }
+
+    private boolean isBanned(CommunityRoomMember member) {
+        return member != null
+                && (member.isBanned() || member.getStatus() == CommunityRoomMemberStatus.BANNED);
+    }
+
+    private void activateMembership(CommunityRoomMember member, CommunityRoomRole role) {
+        member.setRole(role);
+        member.setStatus(CommunityRoomMemberStatus.ACTIVE);
+        member.setBanned(false);
+        member.setMuteUntil(null);
+        member.setLeftAt(null);
+        member.setRemovedAt(null);
+        member.setRemovedBy(null);
+        member.setRemovalReason(null);
     }
 
     private void requireInvitee(CommunityRoomInvite invite, String userId) {
@@ -605,6 +667,7 @@ public class CommunityRoomService {
     }
 
     private CommunityRoomResponse toRoomResponse(CommunityRoom room, CommunityRoomMember member) {
+        boolean activeMember = isActive(member);
         return CommunityRoomResponse.builder()
                 .roomId(room.getRoomId())
                 .name(room.getName())
@@ -615,9 +678,9 @@ public class CommunityRoomService {
                 .maxMembers(room.getMaxMembers())
                 .memberCount(room.getMemberCount())
                 .reportCount(room.getReportCount())
-                .myRole(member != null && !member.isBanned() ? member.getRole() : null)
-                .joined(member != null && !member.isBanned())
-                .banned(member != null && member.isBanned())
+                .myRole(activeMember ? member.getRole() : null)
+                .joined(activeMember)
+                .banned(isBanned(member))
                 .adminNote(room.getAdminNote())
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
@@ -665,8 +728,13 @@ public class CommunityRoomService {
                 .roomId(member.getRoom().getRoomId())
                 .user(toAuthor(member.getUser()))
                 .role(member.getRole())
+                .status(member.getStatus() == null ? CommunityRoomMemberStatus.ACTIVE : member.getStatus())
                 .muteUntil(member.getMuteUntil())
                 .banned(member.isBanned())
+                .leftAt(member.getLeftAt())
+                .removedAt(member.getRemovedAt())
+                .removedBy(toAuthor(member.getRemovedBy()))
+                .removalReason(member.getRemovalReason())
                 .joinedAt(member.getCreatedAt())
                 .updatedAt(member.getUpdatedAt())
                 .build();
