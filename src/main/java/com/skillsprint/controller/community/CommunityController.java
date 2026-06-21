@@ -7,9 +7,10 @@ import com.skillsprint.dto.request.community.CreatePostCommentRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityPostRequest;
 import com.skillsprint.dto.request.community.UpdatePostCommentRequest;
 import com.skillsprint.dto.response.common.PageResponse;
-import com.skillsprint.dto.response.community.CommunityPostResponse;
+import com.skillsprint.dto.response.community.CommunityUserPostResponse;
 import com.skillsprint.dto.response.community.ContentReportResponse;
-import com.skillsprint.dto.response.community.PostCommentResponse;
+import com.skillsprint.dto.response.community.PostCommentUserResponse;
+import com.skillsprint.enums.community.CommunityPostStatus;
 import com.skillsprint.service.community.CommunityService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -39,43 +40,56 @@ public class CommunityController {
     CommunityService communityService;
 
     @PostMapping("/posts")
-    public ResponseEntity<ApiResponse<CommunityPostResponse>> createPost(
+    public ResponseEntity<ApiResponse<CommunityUserPostResponse>> createPost(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateCommunityPostRequest request
     ) {
-        CommunityPostResponse response = communityService.createPost(jwt.getSubject(), request);
+        CommunityUserPostResponse response = communityService.createPost(jwt.getSubject(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created("Tạo bài viết cộng đồng thành công", response));
     }
 
     @GetMapping("/posts")
-    public ResponseEntity<ApiResponse<PageResponse<CommunityPostResponse>>> getFeed(
+    public ResponseEntity<ApiResponse<PageResponse<CommunityUserPostResponse>>> getFeed(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String hashtag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        PageResponse<CommunityPostResponse> response =
-                communityService.getFeed(jwt.getSubject(), search, page, size);
+        PageResponse<CommunityUserPostResponse> response =
+                communityService.getFeed(jwt.getSubject(), search, hashtag, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/posts/me")
+    public ResponseEntity<ApiResponse<PageResponse<CommunityUserPostResponse>>> getMyPosts(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) CommunityPostStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        PageResponse<CommunityUserPostResponse> response =
+                communityService.getMyPosts(jwt.getSubject(), status, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/posts/{postId}")
-    public ResponseEntity<ApiResponse<CommunityPostResponse>> getPost(
+    public ResponseEntity<ApiResponse<CommunityUserPostResponse>> getPost(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId
     ) {
-        CommunityPostResponse response = communityService.getPost(jwt.getSubject(), postId);
+        CommunityUserPostResponse response = communityService.getPost(jwt.getSubject(), postId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/posts/{postId}")
-    public ResponseEntity<ApiResponse<CommunityPostResponse>> updatePost(
+    public ResponseEntity<ApiResponse<CommunityUserPostResponse>> updatePost(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId,
             @Valid @RequestBody UpdateCommunityPostRequest request
     ) {
-        CommunityPostResponse response = communityService.updatePost(jwt.getSubject(), postId, request);
+        CommunityUserPostResponse response = communityService.updatePost(jwt.getSubject(), postId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật bài viết thành công", response));
     }
 
@@ -89,51 +103,51 @@ public class CommunityController {
     }
 
     @PostMapping("/posts/{postId}/like")
-    public ResponseEntity<ApiResponse<CommunityPostResponse>> likePost(
+    public ResponseEntity<ApiResponse<CommunityUserPostResponse>> likePost(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId
     ) {
-        CommunityPostResponse response = communityService.likePost(jwt.getSubject(), postId);
+        CommunityUserPostResponse response = communityService.likePost(jwt.getSubject(), postId);
         return ResponseEntity.ok(ApiResponse.success("Like bài viết thành công", response));
     }
 
     @DeleteMapping("/posts/{postId}/like")
-    public ResponseEntity<ApiResponse<CommunityPostResponse>> unlikePost(
+    public ResponseEntity<ApiResponse<CommunityUserPostResponse>> unlikePost(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId
     ) {
-        CommunityPostResponse response = communityService.unlikePost(jwt.getSubject(), postId);
+        CommunityUserPostResponse response = communityService.unlikePost(jwt.getSubject(), postId);
         return ResponseEntity.ok(ApiResponse.success("Bỏ like bài viết thành công", response));
     }
 
     @GetMapping("/posts/{postId}/comments")
-    public ResponseEntity<ApiResponse<PageResponse<PostCommentResponse>>> getComments(
+    public ResponseEntity<ApiResponse<PageResponse<PostCommentUserResponse>>> getComments(
             @PathVariable UUID postId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        PageResponse<PostCommentResponse> response = communityService.getComments(postId, page, size);
+        PageResponse<PostCommentUserResponse> response = communityService.getComments(postId, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/posts/{postId}/comments")
-    public ResponseEntity<ApiResponse<PostCommentResponse>> createComment(
+    public ResponseEntity<ApiResponse<PostCommentUserResponse>> createComment(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId,
             @Valid @RequestBody CreatePostCommentRequest request
     ) {
-        PostCommentResponse response = communityService.createComment(jwt.getSubject(), postId, request);
+        PostCommentUserResponse response = communityService.createComment(jwt.getSubject(), postId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created("Tạo bình luận thành công", response));
     }
 
     @PatchMapping("/comments/{commentId}")
-    public ResponseEntity<ApiResponse<PostCommentResponse>> updateComment(
+    public ResponseEntity<ApiResponse<PostCommentUserResponse>> updateComment(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID commentId,
             @Valid @RequestBody UpdatePostCommentRequest request
     ) {
-        PostCommentResponse response = communityService.updateComment(jwt.getSubject(), commentId, request);
+        PostCommentUserResponse response = communityService.updateComment(jwt.getSubject(), commentId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật bình luận thành công", response));
     }
 

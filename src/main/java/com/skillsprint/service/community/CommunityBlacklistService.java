@@ -1,19 +1,27 @@
 package com.skillsprint.service.community;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.dto.request.community.CreateBlacklistKeywordRequest;
 import com.skillsprint.dto.response.community.BlacklistKeywordResponse;
 import com.skillsprint.dto.response.community.CommunityAuthorResponse;
+import com.skillsprint.entity.BusinessActivityLog;
 import com.skillsprint.entity.BlacklistKeyword;
 import com.skillsprint.entity.User;
+import com.skillsprint.enums.log.BusinessActionType;
+import com.skillsprint.enums.log.BusinessEntityType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.BlacklistKeywordRepository;
+import com.skillsprint.repository.BusinessActivityLogRepository;
 import com.skillsprint.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import java.text.Normalizer;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.AccessLevel;
@@ -29,6 +37,8 @@ public class CommunityBlacklistService {
 
     final BlacklistKeywordRepository blacklistKeywordRepository;
     final UserRepository userRepository;
+    final BusinessActivityLogRepository activityLogRepository;
+    final ObjectMapper objectMapper;
 
     volatile Set<String> cachedKeywords = ConcurrentHashMap.newKeySet();
 
@@ -62,16 +72,33 @@ public class CommunityBlacklistService {
 
         BlacklistKeyword saved = blacklistKeywordRepository.save(item);
         refreshCache();
+        logKeywordActivity(
+                adminUserId,
+                saved,
+                BusinessActionType.BLACKLIST_KEYWORD_CREATED,
+                "Thêm từ khóa blacklist",
+                null,
+                keywordSnapshot(saved)
+        );
         return toResponse(saved);
     }
 
     @Transactional
-    public void deleteKeyword(Long wordId) {
+    public void deleteKeyword(String adminUserId, Long wordId) {
         BlacklistKeyword item = blacklistKeywordRepository.findById(wordId)
                 .orElseThrow(() -> new AppException(ErrorCode.BLACKLIST_KEYWORD_NOT_FOUND));
+        Map<String, Object> oldValue = keywordSnapshot(item);
 
         blacklistKeywordRepository.delete(item);
         refreshCache();
+        logKeywordActivity(
+                adminUserId,
+                item,
+                BusinessActionType.BLACKLIST_KEYWORD_DELETED,
+                "Xóa từ khóa blacklist",
+                oldValue,
+                null
+        );
     }
 
     public boolean containsBadWords(String content) {
@@ -139,5 +166,52 @@ public class CommunityBlacklistService {
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
                 .build();
+    }
+
+    private void logKeywordActivity(
+            String adminUserId,
+            BlacklistKeyword item,
+            BusinessActionType actionType,
+            String title,
+            Map<String, Object> oldValue,
+            Map<String, Object> newValue
+    ) {
+        BusinessActivityLog log = new BusinessActivityLog();
+        if (adminUserId != null && !adminUserId.isBlank()) {
+            userRepository.findById(adminUserId).ifPresent(log::setUser);
+        }
+        log.setEntityType(BusinessEntityType.BLACKLIST_KEYWORD);
+        log.setActionType(actionType);
+        log.setTitle(title);
+        log.setDescription("Admin cập nhật blacklist community");
+        log.setOldValue(toJson(oldValue));
+        log.setNewValue(toJson(newValue));
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("wordId", item.getWordId());
+        metadata.put("keyword", item.getKeyword());
+        metadata.put("adminUserId", adminUserId);
+        metadata.put("module", "COMMUNITY");
+        log.setMetadata(toJson(metadata));
+
+        activityLogRepository.save(log);
+    }
+
+    private Map<String, Object> keywordSnapshot(BlacklistKeyword item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("wordId", item.getWordId());
+        snapshot.put("keyword", item.getKeyword());
+        return snapshot;
+    }
+
+    private String toJson(Map<String, Object> value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            return "{}";
+        }
     }
 }
