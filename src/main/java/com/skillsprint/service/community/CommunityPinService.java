@@ -84,6 +84,7 @@ public class CommunityPinService {
         pin.setPinnedBy(user);
         pin.setItemType(request.getItemType());
         pin.setTitle(normalizeRequired(request.getTitle(), ErrorCode.COMMUNITY_PIN_TITLE_REQUIRED));
+        pin.setLinkUrl(request.getLinkUrl());
         pin.setDisplayOrder((int) pinRepository.countByRoomRoomId(roomId));
 
         if (request.getItemType() == CommunityPinItemType.MESSAGE) {
@@ -236,6 +237,7 @@ public class CommunityPinService {
                 .itemType(pin.getItemType())
                 .title(pin.getTitle())
                 .content(pin.getContent())
+                .linkUrl(pin.getLinkUrl())
                 .messageId(pin.getMessage() != null ? pin.getMessage().getMessageId() : null)
                 .pinnedBy(toAuthor(pin.getPinnedBy()))
                 .displayOrder(pin.getDisplayOrder())
@@ -286,6 +288,7 @@ public class CommunityPinService {
         snapshot.put("itemType", pin.getItemType());
         snapshot.put("title", pin.getTitle());
         snapshot.put("content", pin.getContent());
+        snapshot.put("linkUrl", pin.getLinkUrl());
         snapshot.put("displayOrder", pin.getDisplayOrder());
         return snapshot;
     }

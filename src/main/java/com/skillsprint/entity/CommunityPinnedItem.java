@@ -43,6 +43,9 @@ public class CommunityPinnedItem extends BaseAuditEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "link_url", length = 2048)
+    private String linkUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "message_id")
     private CommunityChatMessage message;
