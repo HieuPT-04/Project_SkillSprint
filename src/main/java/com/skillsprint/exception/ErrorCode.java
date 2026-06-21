@@ -164,7 +164,12 @@ public enum ErrorCode {
     COMMUNITY_ROOM_OWNER_ACTION_NOT_ALLOWED("Không thể thao tác quyền này với owner phòng", HttpStatus.CONFLICT),
     COMMUNITY_ROOM_INVITE_NOT_FOUND("Không tìm thấy lời mời vào phòng", HttpStatus.NOT_FOUND),
     COMMUNITY_ROOM_INVITE_DUPLICATED("Người dùng này đã có lời mời đang chờ", HttpStatus.CONFLICT),
-    COMMUNITY_ROOM_INVITE_NOT_PENDING("Lời mời này không còn hiệu lực", HttpStatus.CONFLICT);
+    COMMUNITY_ROOM_INVITE_NOT_PENDING("Lời mời này không còn hiệu lực", HttpStatus.CONFLICT),
+    COMMUNITY_CHAT_MESSAGE_NOT_FOUND("Không tìm thấy tin nhắn", HttpStatus.NOT_FOUND),
+    COMMUNITY_CHAT_MESSAGE_REQUIRED("Tin nhắn không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_CHAT_MESSAGE_TOO_LONG("Tin nhắn tối đa 2000 ký tự", HttpStatus.BAD_REQUEST),
+    COMMUNITY_CHAT_MEMBER_MUTED("Bạn đang bị mute trong phòng này", HttpStatus.FORBIDDEN),
+    COMMUNITY_CHAT_AUTH_REQUIRED("Cần xác thực WebSocket trước khi gửi tin nhắn", HttpStatus.UNAUTHORIZED);
 
     private final String message;
     private final HttpStatus status;

@@ -3,14 +3,19 @@ package com.skillsprint.controller.community;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.community.CreateCommunityRoomInviteRequest;
 import com.skillsprint.dto.request.community.CreateCommunityRoomRequest;
+import com.skillsprint.dto.request.community.CreateContentReportRequest;
+import com.skillsprint.dto.request.community.HideCommunityChatMessageRequest;
 import com.skillsprint.dto.request.community.MuteCommunityRoomMemberRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityRoomMemberRoleRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityRoomRequest;
 import com.skillsprint.dto.response.common.PageResponse;
+import com.skillsprint.dto.response.community.CommunityChatMessageResponse;
+import com.skillsprint.dto.response.community.ContentReportResponse;
 import com.skillsprint.dto.response.community.CommunityRoomInviteResponse;
 import com.skillsprint.dto.response.community.CommunityRoomMemberResponse;
 import com.skillsprint.dto.response.community.CommunityRoomResponse;
 import com.skillsprint.enums.community.CommunityRoomMode;
+import com.skillsprint.service.community.CommunityChatService;
 import com.skillsprint.service.community.CommunityRoomService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -38,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommunityRoomController {
 
     CommunityRoomService roomService;
+    CommunityChatService chatService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CommunityRoomResponse>> createRoom(
@@ -223,5 +229,41 @@ public class CommunityRoomController {
     ) {
         CommunityRoomMemberResponse response = roomService.unbanMember(jwt.getSubject(), roomId, targetUserId);
         return ResponseEntity.ok(ApiResponse.success("Gỡ ban thành viên thành công", response));
+    }
+
+    @GetMapping("/{roomId}/messages")
+    public ResponseEntity<ApiResponse<PageResponse<CommunityChatMessageResponse>>> getMessageHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size
+    ) {
+        PageResponse<CommunityChatMessageResponse> response =
+                chatService.getHistory(jwt.getSubject(), roomId, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{roomId}/messages/{messageId}/hide")
+    public ResponseEntity<ApiResponse<CommunityChatMessageResponse>> hideMessage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @PathVariable UUID messageId,
+            @Valid @RequestBody HideCommunityChatMessageRequest request
+    ) {
+        CommunityChatMessageResponse response =
+                chatService.hideMessage(jwt.getSubject(), roomId, messageId, request, false);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái tin nhắn thành công", response));
+    }
+
+    @PostMapping("/{roomId}/messages/{messageId}/report")
+    public ResponseEntity<ApiResponse<ContentReportResponse>> reportMessage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @PathVariable UUID messageId,
+            @Valid @RequestBody CreateContentReportRequest request
+    ) {
+        ContentReportResponse response = chatService.reportMessage(jwt.getSubject(), roomId, messageId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created("Báo cáo tin nhắn thành công", response));
     }
 }

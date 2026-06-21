@@ -48,6 +48,10 @@ public class RateLimitService {
         check("payment:create:user", userId, properties.paymentCreateRule());
     }
 
+    public void checkCommunityChat(String userId, String roomId) {
+        check("community:chat", normalize(userId) + ":" + normalize(roomId), properties.communityChatRule());
+    }
+
     private void checkByEmailAndIp(
             String action,
             String email,

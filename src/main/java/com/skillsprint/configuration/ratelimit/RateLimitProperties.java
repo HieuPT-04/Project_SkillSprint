@@ -9,7 +9,8 @@ public record RateLimitProperties(
         Rule register,
         Rule resendConfirmationCode,
         Rule forgotPassword,
-        Rule paymentCreate
+        Rule paymentCreate,
+        Rule communityChat
 ) {
 
     private static final Rule DEFAULT_RULE = new Rule(5, 300);
@@ -32,6 +33,12 @@ public record RateLimitProperties(
 
     public Rule paymentCreateRule() {
         return validOrDefault(paymentCreate);
+    }
+
+    public Rule communityChatRule() {
+        return communityChat == null || communityChat.maxAttempts() <= 0 || communityChat.windowSeconds() <= 0
+                ? new Rule(3, 5)
+                : communityChat;
     }
 
     private Rule validOrDefault(Rule rule) {

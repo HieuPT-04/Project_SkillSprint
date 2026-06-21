@@ -1,11 +1,14 @@
 package com.skillsprint.controller.admin;
 
 import com.skillsprint.common.ApiResponse;
+import com.skillsprint.dto.request.community.HideCommunityChatMessageRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityRoomStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
+import com.skillsprint.dto.response.community.CommunityChatMessageResponse;
 import com.skillsprint.dto.response.community.CommunityRoomResponse;
 import com.skillsprint.enums.community.CommunityRoomMode;
 import com.skillsprint.enums.community.CommunityRoomStatus;
+import com.skillsprint.service.community.CommunityChatService;
 import com.skillsprint.service.community.CommunityRoomService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -31,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminCommunityRoomController {
 
     CommunityRoomService roomService;
+    CommunityChatService chatService;
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -55,5 +59,30 @@ public class AdminCommunityRoomController {
     ) {
         CommunityRoomResponse response = roomService.updateAdminRoomStatus(jwt.getSubject(), roomId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái phòng thành công", response));
+    }
+
+    @GetMapping("/{roomId}/messages")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<PageResponse<CommunityChatMessageResponse>>> getMessages(
+            @PathVariable UUID roomId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size
+    ) {
+        PageResponse<CommunityChatMessageResponse> response =
+                chatService.getAdminMessages(roomId, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{roomId}/messages/{messageId}/hide")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<CommunityChatMessageResponse>> hideMessage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @PathVariable UUID messageId,
+            @Valid @RequestBody HideCommunityChatMessageRequest request
+    ) {
+        CommunityChatMessageResponse response =
+                chatService.hideMessage(jwt.getSubject(), roomId, messageId, request, true);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái tin nhắn thành công", response));
     }
 }
