@@ -109,16 +109,15 @@ public class CommunityService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<CommunityUserPostResponse> posts = communityPostRepository
+        Page<CommunityPost> posts = communityPostRepository
                 .searchByStatus(
                         CommunityPostStatus.APPROVED,
                         normalizeSearch(search),
                         normalizeHashtagFilter(hashtag),
                         pageable
-                )
-                .map(post -> toUserPostResponse(post, userId));
+                );
 
-        return PageResponse.from(posts);
+        return toUserPostPage(posts, userId);
     }
 
     @Transactional(readOnly = true)
@@ -137,11 +136,10 @@ public class CommunityService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<CommunityUserPostResponse> posts = communityPostRepository
-                .findMyPosts(userId, status, pageable)
-                .map(post -> toUserPostResponse(post, userId));
+        Page<CommunityPost> posts = communityPostRepository
+                .findMyPosts(userId, status, pageable);
 
-        return PageResponse.from(posts);
+        return toUserPostPage(posts, userId);
     }
 
     @Transactional(readOnly = true)
@@ -670,6 +668,14 @@ public class CommunityService {
         boolean likedByMe = currentUserId != null
                 && postLikeRepository.existsByPostPostIdAndUserUserId(post.getPostId(), currentUserId);
 
+        return toUserPostResponse(post, likedByMe);
+    }
+
+    private CommunityUserPostResponse toUserPostResponse(CommunityPost post, Set<UUID> likedPostIds) {
+        return toUserPostResponse(post, likedPostIds.contains(post.getPostId()));
+    }
+
+    private CommunityUserPostResponse toUserPostResponse(CommunityPost post, boolean likedByMe) {
         return CommunityUserPostResponse.builder()
                 .postId(post.getPostId())
                 .author(toAuthor(post.getAuthor()))
@@ -681,6 +687,41 @@ public class CommunityService {
                 .likedByMe(likedByMe)
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
+                .build();
+    }
+
+    private PageResponse<CommunityUserPostResponse> toUserPostPage(Page<CommunityPost> posts, String currentUserId) {
+        Set<UUID> likedPostIds = findLikedPostIds(posts.getContent(), currentUserId);
+        List<CommunityUserPostResponse> items = posts.getContent().stream()
+                .map(post -> toUserPostResponse(post, likedPostIds))
+                .toList();
+
+        return toPageResponse(posts, items);
+    }
+
+    private Set<UUID> findLikedPostIds(List<CommunityPost> posts, String currentUserId) {
+        if (currentUserId == null || posts.isEmpty()) {
+            return Set.of();
+        }
+
+        List<UUID> postIds = posts.stream()
+                .map(CommunityPost::getPostId)
+                .toList();
+
+        return postLikeRepository.findLikedPostIds(postIds, currentUserId)
+                .stream()
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private <T> PageResponse<T> toPageResponse(Page<?> page, List<T> items) {
+        return PageResponse.<T>builder()
+                .items(items)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalItems(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
                 .build();
     }
 

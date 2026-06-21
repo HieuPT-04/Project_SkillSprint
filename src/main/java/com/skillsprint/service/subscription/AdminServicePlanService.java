@@ -25,7 +25,6 @@ import com.skillsprint.repository.FeatureRepository;
 import com.skillsprint.repository.PlanFeatureRepository;
 import com.skillsprint.repository.ServicePlanRepository;
 import com.skillsprint.repository.UserRepository;
-import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -282,47 +281,6 @@ public class AdminServicePlanService {
                         "Loại gói '" + planType + "' đã được sử dụng bởi một gói khác");
             }
         });
-    }
-
-    /**
-     * Seeds the internal ADMIN_DEFAULT plan once at startup if it does not exist yet.
-     * Runs on bean init; uses the repository directly (its save() opens its own transaction).
-     * Fail-soft: a seeding error must never block application startup.
-     */
-    @PostConstruct
-    void seedAdminDefaultPlan() {
-        try {
-            if (servicePlanRepository.existsByPlanType(ServicePlanType.ADMIN_DEFAULT)) {
-                return;
-            }
-            ServicePlan plan = new ServicePlan();
-            plan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
-            plan.setPlanName("Admin Default");
-            plan.setDescription("Gói nội bộ dành cho quản trị viên — mở khóa toàn bộ quota và tính năng.");
-            plan.setBenefits(List.of(
-                    "Toàn quyền truy cập hệ thống",
-                    "Quota tối đa cho mọi tài nguyên",
-                    "Không giới hạn lượt AI generate"
-            ));
-            plan.setMonthlyPrice(BigDecimal.ZERO);
-            plan.setCurrency("VND");
-            plan.setMaxWorkspaces(999999);
-            plan.setMaxUploads(999999);
-            plan.setMaxCommunityRooms(999999);
-            plan.setAiParsingLimit(999999);
-            plan.setMaxFileMb(999999);
-            plan.setMaxWorkspaceMb(999999);
-            plan.setActive(true);
-            plan.setPublicVisible(false); // internal: never shown on the public pricing page
-            plan.setSortOrder(99);
-            plan.setBadgeColor("from-pink-500 via-purple-500 to-indigo-600 text-white shadow-purple-500/30");
-            plan.setBadgeIcon("ShieldAlert");
-            plan.setAnimationType("pulse");
-            servicePlanRepository.save(plan);
-            log.info("Seeded ADMIN_DEFAULT service plan");
-        } catch (Exception ex) {
-            log.warn("Could not seed ADMIN_DEFAULT plan at startup", ex);
-        }
     }
 
     private ServicePlanResponse toResponse(ServicePlan plan) {
