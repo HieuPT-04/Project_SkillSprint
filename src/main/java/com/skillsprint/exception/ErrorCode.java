@@ -139,7 +139,19 @@ public enum ErrorCode {
     // Feedback / S3
     INVALID_FEEDBACK_IMAGE_CONTENT_TYPE("Ảnh phản hồi chỉ hỗ trợ JPG, PNG, WEBP hoặc GIF", HttpStatus.BAD_REQUEST),
     INVALID_FEEDBACK_IMAGE_OBJECT_KEY("Bạn không có quyền đính kèm ảnh này", HttpStatus.FORBIDDEN),
-    FEEDBACK_IMAGE_NOT_UPLOADED("Ảnh phản hồi chưa được upload thành công lên S3", HttpStatus.BAD_REQUEST);
+    FEEDBACK_IMAGE_NOT_UPLOADED("Ảnh phản hồi chưa được upload thành công lên S3", HttpStatus.BAD_REQUEST),
+
+    // Community
+    COMMUNITY_POST_NOT_FOUND("Không tìm thấy bài viết cộng đồng", HttpStatus.NOT_FOUND),
+    COMMUNITY_COMMENT_NOT_FOUND("Không tìm thấy bình luận", HttpStatus.NOT_FOUND),
+    COMMUNITY_CONTENT_REQUIRED("Nội dung không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_CONTENT_TOO_LONG("Nội dung vượt quá giới hạn cho phép", HttpStatus.BAD_REQUEST),
+    COMMUNITY_POST_NOT_VISIBLE("Bài viết chưa sẵn sàng để tương tác", HttpStatus.BAD_REQUEST),
+    COMMUNITY_ACTION_NOT_ALLOWED("Bạn không có quyền thao tác với nội dung này", HttpStatus.FORBIDDEN),
+    COMMUNITY_REPORT_DUPLICATED("Bạn đã báo cáo nội dung này trước đó", HttpStatus.CONFLICT),
+    COMMUNITY_REPORT_NOT_FOUND("Không tìm thấy báo cáo cộng đồng", HttpStatus.NOT_FOUND),
+    BLACKLIST_KEYWORD_NOT_FOUND("Không tìm thấy từ khóa blacklist", HttpStatus.NOT_FOUND),
+    BLACKLIST_KEYWORD_DUPLICATED("Từ khóa blacklist đã tồn tại", HttpStatus.CONFLICT);
 
     private final String message;
     private final HttpStatus status;
