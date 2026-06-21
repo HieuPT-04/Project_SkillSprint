@@ -1,5 +1,7 @@
 package com.skillsprint.service.community;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.dto.request.community.CreateCommunityPostRequest;
 import com.skillsprint.dto.request.community.CreateContentReportRequest;
 import com.skillsprint.dto.request.community.CreatePostCommentRequest;
@@ -11,8 +13,11 @@ import com.skillsprint.dto.request.community.UpdatePostCommentStatusRequest;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.community.CommunityAuthorResponse;
 import com.skillsprint.dto.response.community.CommunityPostResponse;
+import com.skillsprint.dto.response.community.CommunityUserPostResponse;
 import com.skillsprint.dto.response.community.ContentReportResponse;
 import com.skillsprint.dto.response.community.PostCommentResponse;
+import com.skillsprint.dto.response.community.PostCommentUserResponse;
+import com.skillsprint.entity.BusinessActivityLog;
 import com.skillsprint.entity.CommunityPost;
 import com.skillsprint.entity.ContentReport;
 import com.skillsprint.entity.PostComment;
@@ -22,18 +27,25 @@ import com.skillsprint.enums.community.CommunityPostStatus;
 import com.skillsprint.enums.community.ContentReportStatus;
 import com.skillsprint.enums.community.ContentReportTargetType;
 import com.skillsprint.enums.community.PostCommentStatus;
+import com.skillsprint.enums.log.BusinessActionType;
+import com.skillsprint.enums.log.BusinessEntityType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
+import com.skillsprint.repository.BusinessActivityLogRepository;
 import com.skillsprint.repository.CommunityPostRepository;
 import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.PostCommentRepository;
 import com.skillsprint.repository.PostLikeRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
+import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -63,9 +75,13 @@ public class CommunityService {
     ContentReportRepository contentReportRepository;
     UserRepository userRepository;
     CommunityBlacklistService blacklistService;
+    BusinessActivityLogRepository activityLogRepository;
+    ObjectMapper objectMapper;
+    QuotaService quotaService;
 
     @Transactional
-    public CommunityPostResponse createPost(String userId, CreateCommunityPostRequest request) {
+    public CommunityUserPostResponse createPost(String userId, CreateCommunityPostRequest request) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         String content = normalizeRequiredContent(request.getContent(), MAX_POST_LENGTH);
 
@@ -75,37 +91,72 @@ public class CommunityService {
         post.setHashtags(serializeHashtags(request.getHashtags()));
         post.setStatus(resolvePostStatus(content));
 
-        return toPostResponse(communityPostRepository.save(post), userId);
+        return toUserPostResponse(communityPostRepository.save(post), userId);
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<CommunityPostResponse> getFeed(String userId, String search, int page, int size) {
+    public PageResponse<CommunityUserPostResponse> getFeed(
+            String userId,
+            String search,
+            String hashtag,
+            int page,
+            int size
+    ) {
+        validateCommunityFeed(userId);
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizeSize(size),
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<CommunityPostResponse> posts = communityPostRepository
-                .searchByStatus(CommunityPostStatus.APPROVED, normalizeSearch(search), pageable)
-                .map(post -> toPostResponse(post, userId));
+        Page<CommunityPost> posts = communityPostRepository
+                .searchByStatus(
+                        CommunityPostStatus.APPROVED,
+                        normalizeSearch(search),
+                        normalizeHashtagFilter(hashtag),
+                        pageable
+                );
 
-        return PageResponse.from(posts);
+        return toUserPostPage(posts, userId);
     }
 
     @Transactional(readOnly = true)
-    public CommunityPostResponse getPost(String userId, UUID postId) {
+    public PageResponse<CommunityUserPostResponse> getMyPosts(
+            String userId,
+            CommunityPostStatus status,
+            int page,
+            int size
+    ) {
+        validateCommunityFeed(userId);
+        findUser(userId);
+
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                normalizeSize(size),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<CommunityPost> posts = communityPostRepository
+                .findMyPosts(userId, status, pageable);
+
+        return toUserPostPage(posts, userId);
+    }
+
+    @Transactional(readOnly = true)
+    public CommunityUserPostResponse getPost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         if (post.getStatus() != CommunityPostStatus.APPROVED
                 && !post.getAuthor().getUserId().equals(userId)) {
             throw new AppException(ErrorCode.COMMUNITY_POST_NOT_FOUND);
         }
 
-        return toPostResponse(post, userId);
+        return toUserPostResponse(post, userId);
     }
 
     @Transactional
-    public CommunityPostResponse updatePost(String userId, UUID postId, UpdateCommunityPostRequest request) {
+    public CommunityUserPostResponse updatePost(String userId, UUID postId, UpdateCommunityPostRequest request) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         requireOwner(post.getAuthor(), userId);
         if (post.getStatus() == CommunityPostStatus.DELETED) {
@@ -118,11 +169,12 @@ public class CommunityService {
         post.setStatus(resolvePostStatus(content));
         post.setAdminNote(null);
 
-        return toPostResponse(communityPostRepository.save(post), userId);
+        return toUserPostResponse(communityPostRepository.save(post), userId);
     }
 
     @Transactional
     public void deletePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         requireOwner(post.getAuthor(), userId);
 
@@ -131,7 +183,8 @@ public class CommunityService {
     }
 
     @Transactional
-    public CommunityPostResponse likePost(String userId, UUID postId) {
+    public CommunityUserPostResponse likePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         CommunityPost post = findVisiblePost(postId);
 
@@ -145,11 +198,12 @@ public class CommunityService {
             communityPostRepository.save(post);
         }
 
-        return toPostResponse(post, userId);
+        return toUserPostResponse(post, userId);
     }
 
     @Transactional
-    public CommunityPostResponse unlikePost(String userId, UUID postId) {
+    public CommunityUserPostResponse unlikePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findVisiblePost(postId);
 
         postLikeRepository.findByPostPostIdAndUserUserId(postId, userId)
@@ -159,11 +213,12 @@ public class CommunityService {
                     communityPostRepository.save(post);
                 });
 
-        return toPostResponse(post, userId);
+        return toUserPostResponse(post, userId);
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<PostCommentResponse> getComments(UUID postId, int page, int size) {
+    public PageResponse<PostCommentUserResponse> getComments(String userId, UUID postId, int page, int size) {
+        validateCommunityFeed(userId);
         findVisiblePost(postId);
 
         Pageable pageable = PageRequest.of(
@@ -172,15 +227,16 @@ public class CommunityService {
                 Sort.by(Sort.Direction.ASC, "createdAt")
         );
 
-        Page<PostCommentResponse> comments = postCommentRepository
+        Page<PostCommentUserResponse> comments = postCommentRepository
                 .findByPostAndStatus(postId, PostCommentStatus.VISIBLE, pageable)
-                .map(this::toCommentResponse);
+                .map(this::toUserCommentResponse);
 
         return PageResponse.from(comments);
     }
 
     @Transactional
-    public PostCommentResponse createComment(String userId, UUID postId, CreatePostCommentRequest request) {
+    public PostCommentUserResponse createComment(String userId, UUID postId, CreatePostCommentRequest request) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         CommunityPost post = findVisiblePost(postId);
         String content = normalizeRequiredContent(request.getContent(), MAX_COMMENT_LENGTH);
@@ -197,11 +253,12 @@ public class CommunityService {
             communityPostRepository.save(post);
         }
 
-        return toCommentResponse(saved);
+        return toUserCommentResponse(saved);
     }
 
     @Transactional
-    public PostCommentResponse updateComment(String userId, UUID commentId, UpdatePostCommentRequest request) {
+    public PostCommentUserResponse updateComment(String userId, UUID commentId, UpdatePostCommentRequest request) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         requireOwner(comment.getAuthor(), userId);
         if (comment.getStatus() == PostCommentStatus.DELETED) {
@@ -215,11 +272,12 @@ public class CommunityService {
         comment.setAdminNote(null);
 
         adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
-        return toCommentResponse(postCommentRepository.save(comment));
+        return toUserCommentResponse(postCommentRepository.save(comment));
     }
 
     @Transactional
     public void deleteComment(String userId, UUID commentId) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         requireOwner(comment.getAuthor(), userId);
 
@@ -231,12 +289,14 @@ public class CommunityService {
 
     @Transactional
     public ContentReportResponse reportPost(String userId, UUID postId, CreateContentReportRequest request) {
+        validateCommunityFeed(userId);
         findVisiblePost(postId);
         return createReport(userId, ContentReportTargetType.POST, postId, request);
     }
 
     @Transactional
     public ContentReportResponse reportComment(String userId, UUID commentId, CreateContentReportRequest request) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         if (comment.getStatus() != PostCommentStatus.VISIBLE) {
             throw new AppException(ErrorCode.COMMUNITY_COMMENT_NOT_FOUND);
@@ -291,28 +351,54 @@ public class CommunityService {
 
     @Transactional
     public CommunityPostResponse updatePostStatus(
+            String adminUserId,
             UUID postId,
             UpdateCommunityPostStatusRequest request
     ) {
         CommunityPost post = findPost(postId);
+        Map<String, Object> oldValue = statusSnapshot(post.getStatus(), post.getAdminNote());
         post.setStatus(request.getStatus());
         post.setAdminNote(normalizeBlank(request.getAdminNote()));
 
-        return toPostResponse(communityPostRepository.save(post), null);
+        CommunityPost saved = communityPostRepository.save(post);
+        logActivity(
+                adminUserId,
+                BusinessEntityType.COMMUNITY_POST,
+                saved.getPostId(),
+                BusinessActionType.COMMUNITY_POST_STATUS_UPDATED,
+                "Cập nhật trạng thái bài viết cộng đồng",
+                "Admin cập nhật trạng thái bài viết trong community",
+                oldValue,
+                statusSnapshot(saved.getStatus(), saved.getAdminNote())
+        );
+        return toPostResponse(saved, null);
     }
 
     @Transactional
     public PostCommentResponse updateCommentStatus(
+            String adminUserId,
             UUID commentId,
             UpdatePostCommentStatusRequest request
     ) {
         PostComment comment = findComment(commentId);
         PostCommentStatus oldStatus = comment.getStatus();
+        Map<String, Object> oldValue = statusSnapshot(oldStatus, comment.getAdminNote());
         comment.setStatus(request.getStatus());
         comment.setAdminNote(normalizeBlank(request.getAdminNote()));
         adjustCommentCountOnStatusChange(comment.getPost(), oldStatus, comment.getStatus());
 
-        return toCommentResponse(postCommentRepository.save(comment));
+        PostComment saved = postCommentRepository.save(comment);
+        logActivity(
+                adminUserId,
+                BusinessEntityType.COMMUNITY_COMMENT,
+                saved.getCommentId(),
+                BusinessActionType.COMMUNITY_COMMENT_STATUS_UPDATED,
+                "Cập nhật trạng thái bình luận cộng đồng",
+                "Admin cập nhật trạng thái bình luận trong community",
+                oldValue,
+                statusSnapshot(saved.getStatus(), saved.getAdminNote())
+        );
+        return toCommentResponse(saved);
     }
 
     @Transactional
@@ -324,12 +410,24 @@ public class CommunityService {
         ContentReport report = contentReportRepository.findById(reportId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMMUNITY_REPORT_NOT_FOUND));
 
+        Map<String, Object> oldValue = statusSnapshot(report.getStatus(), report.getAdminNote());
         report.setStatus(request.getStatus());
         report.setAdminNote(normalizeBlank(request.getAdminNote()));
         report.setReviewedBy(findUser(adminUserId));
         report.setReviewedAt(Instant.now());
 
-        return toReportResponse(contentReportRepository.save(report));
+        ContentReport saved = contentReportRepository.save(report);
+        logActivity(
+                adminUserId,
+                BusinessEntityType.CONTENT_REPORT,
+                saved.getReportId(),
+                BusinessActionType.COMMUNITY_REPORT_STATUS_UPDATED,
+                "Cập nhật trạng thái report cộng đồng",
+                "Admin xử lý report nội dung community",
+                oldValue,
+                statusSnapshot(saved.getStatus(), saved.getAdminNote())
+        );
+        return toReportResponse(saved);
     }
 
     private ContentReportResponse createReport(
@@ -408,6 +506,10 @@ public class CommunityService {
     private User findUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private void validateCommunityFeed(String userId) {
+        quotaService.validateFeature(userId, PlanFeatureKeys.COMMUNITY_FEED);
     }
 
     private void requireOwner(User owner, String userId) {
@@ -489,6 +591,10 @@ public class CommunityService {
         return normalizeBlank(search);
     }
 
+    private String normalizeHashtagFilter(String hashtag) {
+        return normalizeHashtag(hashtag);
+    }
+
     private String normalizeBlank(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -558,6 +664,67 @@ public class CommunityService {
                 .build();
     }
 
+    private CommunityUserPostResponse toUserPostResponse(CommunityPost post, String currentUserId) {
+        boolean likedByMe = currentUserId != null
+                && postLikeRepository.existsByPostPostIdAndUserUserId(post.getPostId(), currentUserId);
+
+        return toUserPostResponse(post, likedByMe);
+    }
+
+    private CommunityUserPostResponse toUserPostResponse(CommunityPost post, Set<UUID> likedPostIds) {
+        return toUserPostResponse(post, likedPostIds.contains(post.getPostId()));
+    }
+
+    private CommunityUserPostResponse toUserPostResponse(CommunityPost post, boolean likedByMe) {
+        return CommunityUserPostResponse.builder()
+                .postId(post.getPostId())
+                .author(toAuthor(post.getAuthor()))
+                .content(post.getContent())
+                .hashtags(deserializeHashtags(post.getHashtags()))
+                .status(post.getStatus())
+                .likeCount(post.getLikeCount())
+                .commentCount(post.getCommentCount())
+                .likedByMe(likedByMe)
+                .createdAt(post.getCreatedAt())
+                .updatedAt(post.getUpdatedAt())
+                .build();
+    }
+
+    private PageResponse<CommunityUserPostResponse> toUserPostPage(Page<CommunityPost> posts, String currentUserId) {
+        Set<UUID> likedPostIds = findLikedPostIds(posts.getContent(), currentUserId);
+        List<CommunityUserPostResponse> items = posts.getContent().stream()
+                .map(post -> toUserPostResponse(post, likedPostIds))
+                .toList();
+
+        return toPageResponse(posts, items);
+    }
+
+    private Set<UUID> findLikedPostIds(List<CommunityPost> posts, String currentUserId) {
+        if (currentUserId == null || posts.isEmpty()) {
+            return Set.of();
+        }
+
+        List<UUID> postIds = posts.stream()
+                .map(CommunityPost::getPostId)
+                .toList();
+
+        return postLikeRepository.findLikedPostIds(postIds, currentUserId)
+                .stream()
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private <T> PageResponse<T> toPageResponse(Page<?> page, List<T> items) {
+        return PageResponse.<T>builder()
+                .items(items)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalItems(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .build();
+    }
+
     private PostCommentResponse toCommentResponse(PostComment comment) {
         return PostCommentResponse.builder()
                 .commentId(comment.getCommentId())
@@ -567,6 +734,18 @@ public class CommunityService {
                 .status(comment.getStatus())
                 .reportCount(comment.getReportCount())
                 .adminNote(comment.getAdminNote())
+                .createdAt(comment.getCreatedAt())
+                .updatedAt(comment.getUpdatedAt())
+                .build();
+    }
+
+    private PostCommentUserResponse toUserCommentResponse(PostComment comment) {
+        return PostCommentUserResponse.builder()
+                .commentId(comment.getCommentId())
+                .postId(comment.getPost().getPostId())
+                .author(toAuthor(comment.getAuthor()))
+                .content(comment.getContent())
+                .status(comment.getStatus())
                 .createdAt(comment.getCreatedAt())
                 .updatedAt(comment.getUpdatedAt())
                 .build();
@@ -598,5 +777,53 @@ public class CommunityService {
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
                 .build();
+    }
+
+    private void logActivity(
+            String adminUserId,
+            BusinessEntityType entityType,
+            UUID entityId,
+            BusinessActionType actionType,
+            String title,
+            String description,
+            Map<String, Object> oldValue,
+            Map<String, Object> newValue
+    ) {
+        BusinessActivityLog log = new BusinessActivityLog();
+        if (adminUserId != null && !adminUserId.isBlank()) {
+            userRepository.findById(adminUserId).ifPresent(log::setUser);
+        }
+        log.setEntityType(entityType);
+        log.setEntityId(entityId);
+        log.setActionType(actionType);
+        log.setTitle(title);
+        log.setDescription(description);
+        log.setOldValue(toJson(oldValue));
+        log.setNewValue(toJson(newValue));
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("adminUserId", adminUserId);
+        metadata.put("module", "COMMUNITY");
+        log.setMetadata(toJson(metadata));
+
+        activityLogRepository.save(log);
+    }
+
+    private String toJson(Map<String, Object> value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            return "{}";
+        }
+    }
+
+    private Map<String, Object> statusSnapshot(Enum<?> status, String adminNote) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("status", status);
+        snapshot.put("adminNote", adminNote);
+        return snapshot;
     }
 }

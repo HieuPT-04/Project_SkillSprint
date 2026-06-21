@@ -21,6 +21,10 @@ public class QuotaStatusResponse {
     Long usedUploads;
     Long remainingUploads;
 
+    Integer maxCommunityRooms;
+    Long usedCommunityRooms;
+    Long remainingCommunityRooms;
+
     Integer aiGenerateLimit;
     Long usedAiGenerate;
     Long remainingAiGenerate;

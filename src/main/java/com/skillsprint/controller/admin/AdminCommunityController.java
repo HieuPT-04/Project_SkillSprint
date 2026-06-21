@@ -88,20 +88,22 @@ public class AdminCommunityController {
     @PatchMapping("/posts/{postId}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CommunityPostResponse>> updatePostStatus(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId,
             @Valid @RequestBody UpdateCommunityPostStatusRequest request
     ) {
-        CommunityPostResponse response = communityService.updatePostStatus(postId, request);
+        CommunityPostResponse response = communityService.updatePostStatus(jwt.getSubject(), postId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái bài viết thành công", response));
     }
 
     @PatchMapping("/comments/{commentId}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PostCommentResponse>> updateCommentStatus(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID commentId,
             @Valid @RequestBody UpdatePostCommentStatusRequest request
     ) {
-        PostCommentResponse response = communityService.updateCommentStatus(commentId, request);
+        PostCommentResponse response = communityService.updateCommentStatus(jwt.getSubject(), commentId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái bình luận thành công", response));
     }
 
@@ -135,8 +137,11 @@ public class AdminCommunityController {
 
     @DeleteMapping("/blacklist/{wordId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteBlacklistKeyword(@PathVariable Long wordId) {
-        blacklistService.deleteKeyword(wordId);
+    public ResponseEntity<ApiResponse<Void>> deleteBlacklistKeyword(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long wordId
+    ) {
+        blacklistService.deleteKeyword(jwt.getSubject(), wordId);
         return ResponseEntity.ok(ApiResponse.success("Xóa từ khóa blacklist thành công", null));
     }
 }

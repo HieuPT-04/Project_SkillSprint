@@ -117,6 +117,7 @@ public enum ErrorCode {
     QUOTA_FILE_SIZE_LIMIT_EXCEEDED("File vượt quá giới hạn dung lượng của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_STORAGE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn dung lượng lưu trữ của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_COMMUNITY_ROOM_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số phòng cộng đồng của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_ROADMAP_STEP_LOCKED("Vui lòng nâng cấp gói để học tiếp", HttpStatus.FORBIDDEN),
     PREMIUM_FEATURE_REQUIRED("Vui lòng nâng cấp gói để sử dụng tính năng này", HttpStatus.FORBIDDEN),
 
@@ -151,7 +152,29 @@ public enum ErrorCode {
     COMMUNITY_REPORT_DUPLICATED("Bạn đã báo cáo nội dung này trước đó", HttpStatus.CONFLICT),
     COMMUNITY_REPORT_NOT_FOUND("Không tìm thấy báo cáo cộng đồng", HttpStatus.NOT_FOUND),
     BLACKLIST_KEYWORD_NOT_FOUND("Không tìm thấy từ khóa blacklist", HttpStatus.NOT_FOUND),
-    BLACKLIST_KEYWORD_DUPLICATED("Từ khóa blacklist đã tồn tại", HttpStatus.CONFLICT);
+    BLACKLIST_KEYWORD_DUPLICATED("Từ khóa blacklist đã tồn tại", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_NOT_FOUND("Không tìm thấy phòng cộng đồng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_NAME_REQUIRED("Tên phòng không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_ROOM_NOT_ACTIVE("Phòng hiện không mở để tham gia", HttpStatus.BAD_REQUEST),
+    COMMUNITY_ROOM_ALREADY_JOINED("Bạn đã tham gia phòng này", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_MEMBER_NOT_FOUND("Không tìm thấy thành viên trong phòng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_MEMBER_BANNED("Bạn đã bị chặn khỏi phòng này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_OWNER_REQUIRED("Chỉ owner phòng mới được thực hiện thao tác này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_MODERATOR_REQUIRED("Chỉ owner hoặc moderator mới được thực hiện thao tác này", HttpStatus.FORBIDDEN),
+    COMMUNITY_ROOM_OWNER_CANNOT_LEAVE("Owner cần chuyển quyền hoặc xóa phòng trước khi rời", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_OWNER_ACTION_NOT_ALLOWED("Không thể thao tác quyền này với owner phòng", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_INVITE_NOT_FOUND("Không tìm thấy lời mời vào phòng", HttpStatus.NOT_FOUND),
+    COMMUNITY_ROOM_INVITE_DUPLICATED("Người dùng này đã có lời mời đang chờ", HttpStatus.CONFLICT),
+    COMMUNITY_ROOM_INVITE_NOT_PENDING("Lời mời này không còn hiệu lực", HttpStatus.CONFLICT),
+    COMMUNITY_CHAT_MESSAGE_NOT_FOUND("Không tìm thấy tin nhắn", HttpStatus.NOT_FOUND),
+    COMMUNITY_CHAT_MESSAGE_REQUIRED("Tin nhắn không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_CHAT_MESSAGE_TOO_LONG("Tin nhắn tối đa 2000 ký tự", HttpStatus.BAD_REQUEST),
+    COMMUNITY_CHAT_MEMBER_MUTED("Bạn đang bị mute trong phòng này", HttpStatus.FORBIDDEN),
+    COMMUNITY_CHAT_AUTH_REQUIRED("Cần xác thực WebSocket trước khi gửi tin nhắn", HttpStatus.UNAUTHORIZED),
+    COMMUNITY_PIN_NOT_FOUND("Không tìm thấy nội dung ghim", HttpStatus.NOT_FOUND),
+    COMMUNITY_PIN_TITLE_REQUIRED("Tiêu đề ghim không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_PIN_CONTENT_REQUIRED("Nội dung ghim không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_PIN_MESSAGE_REQUIRED("Cần chọn tin nhắn để ghim", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;
