@@ -117,6 +117,7 @@ public enum ErrorCode {
     QUOTA_FILE_SIZE_LIMIT_EXCEEDED("File vượt quá giới hạn dung lượng của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_STORAGE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn dung lượng lưu trữ của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_AI_GENERATE_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số lần AI generate của gói hiện tại", HttpStatus.FORBIDDEN),
+    QUOTA_COMMUNITY_ROOM_LIMIT_EXCEEDED("Bạn đã đạt giới hạn số phòng cộng đồng của gói hiện tại", HttpStatus.FORBIDDEN),
     QUOTA_ROADMAP_STEP_LOCKED("Vui lòng nâng cấp gói để học tiếp", HttpStatus.FORBIDDEN),
     PREMIUM_FEATURE_REQUIRED("Vui lòng nâng cấp gói để sử dụng tính năng này", HttpStatus.FORBIDDEN),
 
@@ -169,7 +170,11 @@ public enum ErrorCode {
     COMMUNITY_CHAT_MESSAGE_REQUIRED("Tin nhắn không được để trống", HttpStatus.BAD_REQUEST),
     COMMUNITY_CHAT_MESSAGE_TOO_LONG("Tin nhắn tối đa 2000 ký tự", HttpStatus.BAD_REQUEST),
     COMMUNITY_CHAT_MEMBER_MUTED("Bạn đang bị mute trong phòng này", HttpStatus.FORBIDDEN),
-    COMMUNITY_CHAT_AUTH_REQUIRED("Cần xác thực WebSocket trước khi gửi tin nhắn", HttpStatus.UNAUTHORIZED);
+    COMMUNITY_CHAT_AUTH_REQUIRED("Cần xác thực WebSocket trước khi gửi tin nhắn", HttpStatus.UNAUTHORIZED),
+    COMMUNITY_PIN_NOT_FOUND("Không tìm thấy nội dung ghim", HttpStatus.NOT_FOUND),
+    COMMUNITY_PIN_TITLE_REQUIRED("Tiêu đề ghim không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_PIN_CONTENT_REQUIRED("Nội dung ghim không được để trống", HttpStatus.BAD_REQUEST),
+    COMMUNITY_PIN_MESSAGE_REQUIRED("Cần chọn tin nhắn để ghim", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;

@@ -23,6 +23,8 @@ import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.ratelimit.RateLimitService;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
+import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -52,6 +54,7 @@ public class CommunityChatService {
     UserRepository userRepository;
     CommunityBlacklistService blacklistService;
     RateLimitService rateLimitService;
+    QuotaService quotaService;
 
     @Transactional
     public CommunityChatMessageResponse sendMessage(
@@ -59,6 +62,7 @@ public class CommunityChatService {
             UUID roomId,
             SendCommunityChatMessageRequest request
     ) {
+        validateCommunityChat(userId);
         User sender = findUser(userId);
         CommunityRoom room = findActiveRoom(roomId);
         CommunityRoomMember member = requireActiveMember(roomId, userId);
@@ -82,6 +86,7 @@ public class CommunityChatService {
             int page,
             int size
     ) {
+        validateCommunityChat(userId);
         findActiveRoom(roomId);
         requireActiveMember(roomId, userId);
 
@@ -116,6 +121,9 @@ public class CommunityChatService {
             HideCommunityChatMessageRequest request,
             boolean admin
     ) {
+        if (!admin) {
+            validateCommunityChat(actorUserId);
+        }
         CommunityChatMessage message = findMessageInRoom(roomId, messageId);
         if (!admin) {
             requireModerator(roomId, actorUserId);
@@ -135,6 +143,7 @@ public class CommunityChatService {
             UUID messageId,
             CreateContentReportRequest request
     ) {
+        validateCommunityChat(userId);
         findActiveRoom(roomId);
         requireActiveMember(roomId, userId);
         CommunityChatMessage message = findMessageInRoom(roomId, messageId);
@@ -225,6 +234,10 @@ public class CommunityChatService {
     private User findUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private void validateCommunityChat(String userId) {
+        quotaService.validateFeature(userId, PlanFeatureKeys.COMMUNITY_CHAT);
     }
 
     private Pageable pageable(int page, int size) {

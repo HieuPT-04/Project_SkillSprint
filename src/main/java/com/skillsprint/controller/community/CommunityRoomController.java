@@ -4,20 +4,25 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.community.CreateCommunityRoomInviteRequest;
 import com.skillsprint.dto.request.community.CreateCommunityRoomRequest;
 import com.skillsprint.dto.request.community.CreateContentReportRequest;
+import com.skillsprint.dto.request.community.CreateCommunityPinRequest;
 import com.skillsprint.dto.request.community.HideCommunityChatMessageRequest;
 import com.skillsprint.dto.request.community.MuteCommunityRoomMemberRequest;
+import com.skillsprint.dto.request.community.ReorderCommunityPinsRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityRoomMemberRoleRequest;
 import com.skillsprint.dto.request.community.UpdateCommunityRoomRequest;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.community.CommunityChatMessageResponse;
+import com.skillsprint.dto.response.community.CommunityPinResponse;
 import com.skillsprint.dto.response.community.ContentReportResponse;
 import com.skillsprint.dto.response.community.CommunityRoomInviteResponse;
 import com.skillsprint.dto.response.community.CommunityRoomMemberResponse;
 import com.skillsprint.dto.response.community.CommunityRoomResponse;
 import com.skillsprint.enums.community.CommunityRoomMode;
 import com.skillsprint.service.community.CommunityChatService;
+import com.skillsprint.service.community.CommunityPinService;
 import com.skillsprint.service.community.CommunityRoomService;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +49,7 @@ public class CommunityRoomController {
 
     CommunityRoomService roomService;
     CommunityChatService chatService;
+    CommunityPinService pinService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CommunityRoomResponse>> createRoom(
@@ -265,5 +271,45 @@ public class CommunityRoomController {
         ContentReportResponse response = chatService.reportMessage(jwt.getSubject(), roomId, messageId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created("Báo cáo tin nhắn thành công", response));
+    }
+
+    @GetMapping("/{roomId}/pins")
+    public ResponseEntity<ApiResponse<List<CommunityPinResponse>>> getPins(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId
+    ) {
+        List<CommunityPinResponse> response = pinService.getPins(jwt.getSubject(), roomId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{roomId}/pins")
+    public ResponseEntity<ApiResponse<CommunityPinResponse>> createPin(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @Valid @RequestBody CreateCommunityPinRequest request
+    ) {
+        CommunityPinResponse response = pinService.createPin(jwt.getSubject(), roomId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created("Tạo pin trong phòng thành công", response));
+    }
+
+    @DeleteMapping("/{roomId}/pins/{pinId}")
+    public ResponseEntity<ApiResponse<Void>> deletePin(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @PathVariable UUID pinId
+    ) {
+        pinService.deletePin(jwt.getSubject(), roomId, pinId, false);
+        return ResponseEntity.ok(ApiResponse.success("Xóa pin thành công", null));
+    }
+
+    @PatchMapping("/{roomId}/pins/reorder")
+    public ResponseEntity<ApiResponse<List<CommunityPinResponse>>> reorderPins(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID roomId,
+            @Valid @RequestBody ReorderCommunityPinsRequest request
+    ) {
+        List<CommunityPinResponse> response = pinService.reorderPins(jwt.getSubject(), roomId, request);
+        return ResponseEntity.ok(ApiResponse.success("Sắp xếp pin thành công", response));
     }
 }

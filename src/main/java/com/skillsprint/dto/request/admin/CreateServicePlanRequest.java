@@ -42,6 +42,7 @@ public class CreateServicePlanRequest {
 
     Integer maxWorkspaces;
     Integer maxUploads;
+    Integer maxCommunityRooms;
     Integer aiGenerateLimit;
     Integer maxFileMb;
     Integer maxWorkspaceMb;

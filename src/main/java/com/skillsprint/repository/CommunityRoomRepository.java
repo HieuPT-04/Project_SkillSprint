@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CommunityRoomRepository extends JpaRepository<CommunityRoom, UUID> {
 
+    long countByOwnerUserIdAndStatusNot(String ownerId, CommunityRoomStatus status);
+
     @Query("""
             select room
             from CommunityRoom room

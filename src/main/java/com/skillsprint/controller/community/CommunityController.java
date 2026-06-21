@@ -122,11 +122,12 @@ public class CommunityController {
 
     @GetMapping("/posts/{postId}/comments")
     public ResponseEntity<ApiResponse<PageResponse<PostCommentUserResponse>>> getComments(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID postId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        PageResponse<PostCommentUserResponse> response = communityService.getComments(postId, page, size);
+        PageResponse<PostCommentUserResponse> response = communityService.getComments(jwt.getSubject(), postId, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

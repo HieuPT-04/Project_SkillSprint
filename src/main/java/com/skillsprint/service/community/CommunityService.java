@@ -37,6 +37,8 @@ import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.PostCommentRepository;
 import com.skillsprint.repository.PostLikeRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
+import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -75,9 +77,11 @@ public class CommunityService {
     CommunityBlacklistService blacklistService;
     BusinessActivityLogRepository activityLogRepository;
     ObjectMapper objectMapper;
+    QuotaService quotaService;
 
     @Transactional
     public CommunityUserPostResponse createPost(String userId, CreateCommunityPostRequest request) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         String content = normalizeRequiredContent(request.getContent(), MAX_POST_LENGTH);
 
@@ -98,6 +102,7 @@ public class CommunityService {
             int page,
             int size
     ) {
+        validateCommunityFeed(userId);
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizeSize(size),
@@ -123,6 +128,7 @@ public class CommunityService {
             int page,
             int size
     ) {
+        validateCommunityFeed(userId);
         findUser(userId);
 
         Pageable pageable = PageRequest.of(
@@ -140,6 +146,7 @@ public class CommunityService {
 
     @Transactional(readOnly = true)
     public CommunityUserPostResponse getPost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         if (post.getStatus() != CommunityPostStatus.APPROVED
                 && !post.getAuthor().getUserId().equals(userId)) {
@@ -151,6 +158,7 @@ public class CommunityService {
 
     @Transactional
     public CommunityUserPostResponse updatePost(String userId, UUID postId, UpdateCommunityPostRequest request) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         requireOwner(post.getAuthor(), userId);
         if (post.getStatus() == CommunityPostStatus.DELETED) {
@@ -168,6 +176,7 @@ public class CommunityService {
 
     @Transactional
     public void deletePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findPost(postId);
         requireOwner(post.getAuthor(), userId);
 
@@ -177,6 +186,7 @@ public class CommunityService {
 
     @Transactional
     public CommunityUserPostResponse likePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         CommunityPost post = findVisiblePost(postId);
 
@@ -195,6 +205,7 @@ public class CommunityService {
 
     @Transactional
     public CommunityUserPostResponse unlikePost(String userId, UUID postId) {
+        validateCommunityFeed(userId);
         CommunityPost post = findVisiblePost(postId);
 
         postLikeRepository.findByPostPostIdAndUserUserId(postId, userId)
@@ -208,7 +219,8 @@ public class CommunityService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<PostCommentUserResponse> getComments(UUID postId, int page, int size) {
+    public PageResponse<PostCommentUserResponse> getComments(String userId, UUID postId, int page, int size) {
+        validateCommunityFeed(userId);
         findVisiblePost(postId);
 
         Pageable pageable = PageRequest.of(
@@ -226,6 +238,7 @@ public class CommunityService {
 
     @Transactional
     public PostCommentUserResponse createComment(String userId, UUID postId, CreatePostCommentRequest request) {
+        validateCommunityFeed(userId);
         User user = findUser(userId);
         CommunityPost post = findVisiblePost(postId);
         String content = normalizeRequiredContent(request.getContent(), MAX_COMMENT_LENGTH);
@@ -247,6 +260,7 @@ public class CommunityService {
 
     @Transactional
     public PostCommentUserResponse updateComment(String userId, UUID commentId, UpdatePostCommentRequest request) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         requireOwner(comment.getAuthor(), userId);
         if (comment.getStatus() == PostCommentStatus.DELETED) {
@@ -265,6 +279,7 @@ public class CommunityService {
 
     @Transactional
     public void deleteComment(String userId, UUID commentId) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         requireOwner(comment.getAuthor(), userId);
 
@@ -276,12 +291,14 @@ public class CommunityService {
 
     @Transactional
     public ContentReportResponse reportPost(String userId, UUID postId, CreateContentReportRequest request) {
+        validateCommunityFeed(userId);
         findVisiblePost(postId);
         return createReport(userId, ContentReportTargetType.POST, postId, request);
     }
 
     @Transactional
     public ContentReportResponse reportComment(String userId, UUID commentId, CreateContentReportRequest request) {
+        validateCommunityFeed(userId);
         PostComment comment = findComment(commentId);
         if (comment.getStatus() != PostCommentStatus.VISIBLE) {
             throw new AppException(ErrorCode.COMMUNITY_COMMENT_NOT_FOUND);
@@ -491,6 +508,10 @@ public class CommunityService {
     private User findUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private void validateCommunityFeed(String userId) {
+        quotaService.validateFeature(userId, PlanFeatureKeys.COMMUNITY_FEED);
     }
 
     private void requireOwner(User owner, String userId) {

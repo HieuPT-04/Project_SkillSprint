@@ -31,6 +31,8 @@ import com.skillsprint.repository.CommunityRoomInviteRepository;
 import com.skillsprint.repository.CommunityRoomMemberRepository;
 import com.skillsprint.repository.CommunityRoomRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
+import com.skillsprint.service.subscription.QuotaService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
@@ -61,9 +63,11 @@ public class CommunityRoomService {
     BusinessActivityLogRepository activityLogRepository;
     ObjectMapper objectMapper;
     CommunityBlacklistService blacklistService;
+    QuotaService quotaService;
 
     @Transactional
     public CommunityRoomResponse createRoom(String userId, CreateCommunityRoomRequest request) {
+        quotaService.validateCanCreateCommunityRoom(userId);
         User owner = findUser(userId);
         String name = normalizeRequiredName(request.getName());
         String description = normalizeBlank(request.getDescription());
@@ -104,6 +108,7 @@ public class CommunityRoomService {
             int page,
             int size
     ) {
+        validateCommunityRoom(userId);
         Pageable pageable = pageable(page, size);
         Page<CommunityRoomResponse> rooms = roomRepository
                 .searchDiscoverableRooms(mode, normalizeBlank(search), pageable)
@@ -114,6 +119,7 @@ public class CommunityRoomService {
 
     @Transactional(readOnly = true)
     public PageResponse<CommunityRoomResponse> getMyRooms(String userId, int page, int size) {
+        validateCommunityRoom(userId);
         findUser(userId);
 
         Pageable pageable = pageable(page, size);
@@ -126,6 +132,7 @@ public class CommunityRoomService {
 
     @Transactional(readOnly = true)
     public CommunityRoomResponse getRoom(String userId, UUID roomId) {
+        validateCommunityRoom(userId);
         CommunityRoom room = findRoom(roomId);
         CommunityRoomMember member = memberRepository.findByRoomRoomIdAndUserUserId(roomId, userId).orElse(null);
         boolean joined = member != null && !member.isBanned();
@@ -140,6 +147,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomResponse updateRoom(String userId, UUID roomId, UpdateCommunityRoomRequest request) {
+        validateCommunityRoom(userId);
         CommunityRoom room = findRoom(roomId);
         requireOwner(roomId, userId);
 
@@ -179,6 +187,7 @@ public class CommunityRoomService {
 
     @Transactional
     public void deleteRoom(String userId, UUID roomId) {
+        validateCommunityRoom(userId);
         CommunityRoom room = findRoom(roomId);
         requireOwner(roomId, userId);
 
@@ -188,6 +197,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomResponse joinRoom(String userId, UUID roomId) {
+        validateCommunityRoom(userId);
         User user = findUser(userId);
         CommunityRoom room = findRoom(roomId);
         if (room.getStatus() != CommunityRoomStatus.ACTIVE) {
@@ -214,6 +224,7 @@ public class CommunityRoomService {
 
     @Transactional
     public void leaveRoom(String userId, UUID roomId) {
+        validateCommunityRoom(userId);
         CommunityRoomMember member = findMembership(roomId, userId);
         if (member.getRole() == CommunityRoomRole.OWNER) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_OWNER_CANNOT_LEAVE);
@@ -232,6 +243,7 @@ public class CommunityRoomService {
             int page,
             int size
     ) {
+        validateCommunityRoom(userId);
         requireMember(roomId, userId);
         Page<CommunityRoomMemberResponse> members = memberRepository
                 .findByRoomRoomIdAndBannedFalse(roomId, pageable(page, size))
@@ -246,6 +258,7 @@ public class CommunityRoomService {
             UUID roomId,
             CreateCommunityRoomInviteRequest request
     ) {
+        validateCommunityRoom(inviterUserId);
         User inviter = findUser(inviterUserId);
         User invitee = findUser(request.getInviteeUserId());
         CommunityRoom room = findRoom(roomId);
@@ -280,6 +293,7 @@ public class CommunityRoomService {
 
     @Transactional(readOnly = true)
     public PageResponse<CommunityRoomInviteResponse> getMyInvites(String userId, int page, int size) {
+        validateCommunityRoom(userId);
         findUser(userId);
 
         Page<CommunityRoomInviteResponse> invites = inviteRepository
@@ -296,6 +310,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomResponse acceptInvite(String userId, UUID inviteId) {
+        validateCommunityRoom(userId);
         CommunityRoomInvite invite = findInvite(inviteId);
         requireInvitee(invite, userId);
         requirePendingInvite(invite);
@@ -324,6 +339,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomInviteResponse declineInvite(String userId, UUID inviteId) {
+        validateCommunityRoom(userId);
         CommunityRoomInvite invite = findInvite(inviteId);
         requireInvitee(invite, userId);
         requirePendingInvite(invite);
@@ -339,6 +355,7 @@ public class CommunityRoomService {
             String targetUserId,
             UpdateCommunityRoomMemberRoleRequest request
     ) {
+        validateCommunityRoom(actorUserId);
         requireOwner(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
         if (member.getRole() == CommunityRoomRole.OWNER || request.getRole() == CommunityRoomRole.OWNER) {
@@ -358,6 +375,7 @@ public class CommunityRoomService {
             String targetUserId,
             MuteCommunityRoomMemberRequest request
     ) {
+        validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
         requireNotOwner(member);
@@ -371,6 +389,7 @@ public class CommunityRoomService {
 
     @Transactional
     public void kickMember(String actorUserId, UUID roomId, String targetUserId) {
+        validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
         requireNotOwner(member);
@@ -384,6 +403,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomMemberResponse banMember(String actorUserId, UUID roomId, String targetUserId) {
+        validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = findMembership(roomId, targetUserId);
         requireNotOwner(member);
@@ -402,6 +422,7 @@ public class CommunityRoomService {
 
     @Transactional
     public CommunityRoomMemberResponse unbanMember(String actorUserId, UUID roomId, String targetUserId) {
+        validateCommunityRoom(actorUserId);
         requireModerator(roomId, actorUserId);
         CommunityRoomMember member = memberRepository.findByRoomRoomIdAndUserUserId(roomId, targetUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMMUNITY_ROOM_MEMBER_NOT_FOUND));
@@ -538,6 +559,10 @@ public class CommunityRoomService {
     private User findUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private void validateCommunityRoom(String userId) {
+        quotaService.validateFeature(userId, PlanFeatureKeys.COMMUNITY_ROOM);
     }
 
     private Pageable pageable(int page, int size) {
