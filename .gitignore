@@ -4,6 +4,8 @@ target/
 .DS_Store
 .env
 *.postman_collection.json
+backups/
+*.dump
 
 .idea/
 *.iml
