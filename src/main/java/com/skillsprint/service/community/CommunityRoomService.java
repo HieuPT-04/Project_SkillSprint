@@ -274,9 +274,19 @@ public class CommunityRoomService {
             CreateCommunityRoomInviteRequest request
     ) {
         validateCommunityRoom(inviterUserId);
+        
+        if (inviterUserId.equals(request.getInviteeUserId())) {
+            throw new AppException(ErrorCode.COMMUNITY_ACTION_NOT_ALLOWED);
+        }
+
         User inviter = findUser(inviterUserId);
         User invitee = findUser(request.getInviteeUserId());
         CommunityRoom room = findRoom(roomId);
+        
+        if (room.getStatus() != CommunityRoomStatus.ACTIVE) {
+            throw new AppException(ErrorCode.COMMUNITY_ROOM_NOT_ACTIVE);
+        }
+
         requireModerator(roomId, inviterUserId);
 
         CommunityRoomMember existingMember = memberRepository
@@ -288,13 +298,20 @@ public class CommunityRoomService {
         if (existingMember != null && isActive(existingMember)) {
             throw new AppException(ErrorCode.COMMUNITY_ROOM_ALREADY_JOINED);
         }
-        inviteRepository.findByRoomRoomIdAndInviteeUserIdAndStatus(
+        List<CommunityRoomInvite> pendingInvites = inviteRepository.findByRoomRoomIdAndInviteeUserIdAndStatus(
                 roomId,
                 invitee.getUserId(),
                 CommunityRoomInviteStatus.PENDING
-        ).ifPresent(invite -> {
-            throw new AppException(ErrorCode.COMMUNITY_ROOM_INVITE_DUPLICATED);
-        });
+        );
+
+        for (CommunityRoomInvite pendingInvite : pendingInvites) {
+            if (pendingInvite.getExpiresAt().isAfter(Instant.now())) {
+                throw new AppException(ErrorCode.COMMUNITY_ROOM_INVITE_DUPLICATED);
+            } else {
+                pendingInvite.setStatus(CommunityRoomInviteStatus.EXPIRED);
+                inviteRepository.save(pendingInvite);
+            }
+        }
 
         CommunityRoomInvite invite = new CommunityRoomInvite();
         invite.setRoom(room);
