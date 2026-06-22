@@ -41,6 +41,8 @@ import com.skillsprint.repository.UserPointSummaryRepository;
 import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
+import com.skillsprint.service.notification.NotificationService;
+import com.skillsprint.enums.notification.NotificationType;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -82,6 +84,7 @@ public class CommunityService {
     ObjectMapper objectMapper;
     QuotaService quotaService;
     S3PresignedUrlService s3PresignedUrlService;
+    NotificationService notificationService;
 
     @Transactional
     public CommunityUserPostResponse createPost(String userId, CreateCommunityPostRequest request) {
@@ -360,8 +363,10 @@ public class CommunityService {
             UpdateCommunityPostStatusRequest request
     ) {
         CommunityPost post = findPost(postId);
-        Map<String, Object> oldValue = statusSnapshot(post.getStatus(), post.getAdminNote());
-        post.setStatus(request.getStatus());
+        CommunityPostStatus oldStatus = post.getStatus();
+        CommunityPostStatus newStatus = request.getStatus();
+        Map<String, Object> oldValue = statusSnapshot(oldStatus, post.getAdminNote());
+        post.setStatus(newStatus);
         post.setAdminNote(normalizeBlank(request.getAdminNote()));
 
         CommunityPost saved = communityPostRepository.save(post);
@@ -375,6 +380,28 @@ public class CommunityService {
                 oldValue,
                 statusSnapshot(saved.getStatus(), saved.getAdminNote())
         );
+
+        boolean isModerationPenalty = newStatus == CommunityPostStatus.HIDDEN || newStatus == CommunityPostStatus.DELETED;
+        if (oldStatus != newStatus && isModerationPenalty) {
+            String note = normalizeBlank(request.getAdminNote());
+            String action = newStatus == CommunityPostStatus.HIDDEN ? "ẩn" : "xóa";
+            String msg;
+            if (note != null) {
+                msg = String.format("Bài viết của bạn đã bị %s do vi phạm tiêu chuẩn cộng đồng. Lý do: %s", action, note);
+            } else {
+                msg = String.format("Bài viết của bạn đã bị %s do vi phạm tiêu chuẩn cộng đồng. Vui lòng xem lại tiêu chuẩn cộng đồng của SkillSprint.", action);
+            }
+            
+            notificationService.createAndDispatch(
+                    post.getAuthor(),
+                    null,
+                    null,
+                    NotificationType.CONTENT_MODERATION,
+                    "Kiểm duyệt cộng đồng",
+                    msg
+            );
+        }
+
         return toPostResponse(saved, null);
     }
 
@@ -386,8 +413,9 @@ public class CommunityService {
     ) {
         PostComment comment = findComment(commentId);
         PostCommentStatus oldStatus = comment.getStatus();
+        PostCommentStatus newStatus = request.getStatus();
         Map<String, Object> oldValue = statusSnapshot(oldStatus, comment.getAdminNote());
-        comment.setStatus(request.getStatus());
+        comment.setStatus(newStatus);
         comment.setAdminNote(normalizeBlank(request.getAdminNote()));
 
         PostComment saved = postCommentRepository.saveAndFlush(comment);
@@ -402,6 +430,28 @@ public class CommunityService {
                 oldValue,
                 statusSnapshot(saved.getStatus(), saved.getAdminNote())
         );
+
+        boolean isModerationPenalty = newStatus == PostCommentStatus.HIDDEN || newStatus == PostCommentStatus.DELETED;
+        if (oldStatus != newStatus && isModerationPenalty) {
+            String note = normalizeBlank(request.getAdminNote());
+            String action = newStatus == PostCommentStatus.HIDDEN ? "ẩn" : "xóa";
+            String msg;
+            if (note != null) {
+                msg = String.format("Bình luận của bạn đã bị %s do vi phạm tiêu chuẩn cộng đồng. Lý do: %s", action, note);
+            } else {
+                msg = String.format("Bình luận của bạn đã bị %s do vi phạm tiêu chuẩn cộng đồng. Vui lòng xem lại tiêu chuẩn cộng đồng của SkillSprint.", action);
+            }
+            
+            notificationService.createAndDispatch(
+                    comment.getAuthor(),
+                    null,
+                    null,
+                    NotificationType.CONTENT_MODERATION,
+                    "Kiểm duyệt cộng đồng",
+                    msg
+            );
+        }
+
         return toCommentResponse(saved);
     }
 

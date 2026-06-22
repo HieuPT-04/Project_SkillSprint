@@ -7,5 +7,6 @@ public enum NotificationType {
     TASK_REMINDER,
     TASK_OVERDUE,
     AI_SCHEDULE_READY,
-    FEEDBACK_REPLIED
+    FEEDBACK_REPLIED,
+    CONTENT_MODERATION
 }
