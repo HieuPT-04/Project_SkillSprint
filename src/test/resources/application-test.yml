@@ -9,6 +9,8 @@ spring:
       ddl-auto: create-drop
     open-in-view: false
     show-sql: false
+  flyway:
+    enabled: false
   data:
     redis:
       repositories:
