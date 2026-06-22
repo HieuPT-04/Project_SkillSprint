@@ -37,6 +37,7 @@ import com.skillsprint.repository.ContentReportRepository;
 import com.skillsprint.repository.PostCommentRepository;
 import com.skillsprint.repository.PostLikeRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.repository.UserPointSummaryRepository;
 import com.skillsprint.service.storage.S3PresignedUrlService;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
@@ -75,6 +76,7 @@ public class CommunityService {
     PostCommentRepository postCommentRepository;
     ContentReportRepository contentReportRepository;
     UserRepository userRepository;
+    UserPointSummaryRepository userPointSummaryRepository;
     CommunityBlacklistService blacklistService;
     BusinessActivityLogRepository activityLogRepository;
     ObjectMapper objectMapper;
@@ -771,12 +773,21 @@ public class CommunityService {
             return null;
         }
 
+        Integer rank = null;
+        Integer totalPoints = userPointSummaryRepository.findById(user.getUserId())
+                .map(com.skillsprint.entity.UserPointSummary::getTotalPoints)
+                .orElse(0);
+        if (totalPoints > 0) {
+            rank = userPointSummaryRepository.calculateAllTimeRank(totalPoints).intValue();
+        }
+
         return CommunityAuthorResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarObjectKey(user.getAvatarObjectKey())
                 .avatarUrl(s3PresignedUrlService.createViewUrl(user.getAvatarObjectKey()))
+                .allTimeRank(rank)
                 .build();
     }
 

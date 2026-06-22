@@ -12,4 +12,5 @@ public class CommunityAuthorResponse {
     private String fullName;
     private String avatarObjectKey;
     private String avatarUrl;
+    private Integer allTimeRank;
 }
