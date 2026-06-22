@@ -60,16 +60,17 @@ public class CommunityBlacklistService {
 
     @Transactional
     public BlacklistKeywordResponse addKeyword(String adminUserId, CreateBlacklistKeywordRequest request) {
-        String keyword = normalizeKeyword(request.getKeyword());
-        if (keyword == null) {
+        String rawKeyword = request.getKeyword().trim();
+        String normalized = normalizeForCheck(rawKeyword);
+        if (normalized == null) {
             throw new AppException(ErrorCode.COMMUNITY_CONTENT_REQUIRED);
         }
-        if (blacklistKeywordRepository.existsByKeyword(keyword)) {
+        if (blacklistKeywordRepository.existsByKeyword(rawKeyword)) {
             throw new AppException(ErrorCode.BLACKLIST_KEYWORD_DUPLICATED);
         }
 
         BlacklistKeyword item = new BlacklistKeyword();
-        item.setKeyword(keyword);
+        item.setKeyword(rawKeyword);
         item.setCreatedBy(findUser(adminUserId));
 
         BlacklistKeyword saved = blacklistKeywordRepository.save(item);
