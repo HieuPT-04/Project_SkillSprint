@@ -151,7 +151,8 @@ class StudyQuizTutorApiFlowTest {
         when(studySessionService.nextPomodoroPhase(USER_ID, sessionId)).thenReturn(shortBreakSessionResponse());
         when(studySessionService.finishPomodoro(USER_ID, sessionId)).thenReturn(completedSessionResponse(true));
         when(studySessionService.finishSession(eq(USER_ID), eq(sessionId), any(FinishStudySessionRequest.class)))
-                .thenReturn(completedSessionResponse(true));
+                .thenReturn(completedSessionResponse(true))
+                .thenReturn(completedSessionResponse(false));
 
         mockMvc.perform(get("/api/calendar/tasks/{taskId}/study-session", taskId)
                         .with(learnerJwt()))
@@ -216,6 +217,20 @@ class StudyQuizTutorApiFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Hoàn thành buổi học thành công"))
                 .andExpect(jsonPath("$.data.taskCompleted").value(true));
+
+        mockMvc.perform(post("/api/study-sessions/{sessionId}/finish", sessionId)
+                        .with(learnerJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "notes": "Stopped early",
+                                  "focusScore": 3
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(
+                        "Phiên học đã kết thúc, task chưa hoàn thành vì thời gian học chưa đủ"))
+                .andExpect(jsonPath("$.data.taskCompleted").value(false));
     }
 
     @Test
