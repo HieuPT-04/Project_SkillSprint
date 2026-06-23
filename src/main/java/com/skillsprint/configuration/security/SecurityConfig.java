@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -103,5 +104,32 @@ public class SecurityConfig {
                     .toList();
         });
         return converter;
+    }
+
+    @Bean
+    public FilterRegistrationBean<MaintenanceModeFilter> maintenanceModeFilterRegistration(
+            MaintenanceModeFilter filter
+    ) {
+        return disabledFilterRegistration(filter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<SingleSessionFilter> singleSessionFilterRegistration(
+            SingleSessionFilter filter
+    ) {
+        return disabledFilterRegistration(filter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<AuthenticatedUserGuardFilter> authenticatedUserGuardFilterRegistration(
+            AuthenticatedUserGuardFilter filter
+    ) {
+        return disabledFilterRegistration(filter);
+    }
+
+    private <T extends jakarta.servlet.Filter> FilterRegistrationBean<T> disabledFilterRegistration(T filter) {
+        FilterRegistrationBean<T> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 }
