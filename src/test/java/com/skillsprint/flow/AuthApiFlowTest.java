@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.skillsprint.dto.request.auth.ConfirmForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.ConfirmRegisterRequest;
+import com.skillsprint.dto.request.auth.CompleteNewPasswordRequest;
 import com.skillsprint.dto.request.auth.ForgotPasswordRequest;
 import com.skillsprint.dto.request.auth.LoginRequest;
 import com.skillsprint.dto.request.auth.RefreshTokenRequest;
@@ -228,6 +229,31 @@ class AuthApiFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Cần đổi mật khẩu mới"))
                 .andExpect(jsonPath("$.data.challengeName").value("NEW_PASSWORD_REQUIRED"));
+    }
+
+    @Test
+    void completeNewPasswordReturnsMappedResponse() throws Exception {
+        when(authService.completeNewPassword(any(CompleteNewPasswordRequest.class)))
+                .thenReturn(AuthResponse.builder()
+                        .accessToken("completed-access-token")
+                        .sessionId("completed-session")
+                        .build());
+
+        mockMvc.perform(post("/api/auth/complete-new-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "learner@example.com",
+                                  "newPassword": "newPassword123",
+                                  "session": "challenge-session"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Đổi mật khẩu thành công"))
+                .andExpect(jsonPath("$.data.accessToken").value("completed-access-token"))
+                .andExpect(jsonPath("$.data.sessionId").value("completed-session"));
+
+        verify(authService).completeNewPassword(any(CompleteNewPasswordRequest.class));
     }
 
     @Test

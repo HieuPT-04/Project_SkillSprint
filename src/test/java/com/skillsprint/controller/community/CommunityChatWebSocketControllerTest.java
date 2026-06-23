@@ -68,6 +68,25 @@ class CommunityChatWebSocketControllerTest {
     }
 
     @Test
+    void sendMessageRejectsMissingPrincipalAndMissingPrincipalName() {
+        UUID roomId = UUID.randomUUID();
+        SendCommunityChatMessageRequest request = chatRequest("blocked");
+
+        AppException missingPrincipal = assertThrows(
+                AppException.class,
+                () -> controller.sendMessage(null, roomId, request)
+        );
+        AppException missingName = assertThrows(
+                AppException.class,
+                () -> controller.sendMessage(principal(null), roomId, request)
+        );
+
+        assertSame(ErrorCode.COMMUNITY_CHAT_AUTH_REQUIRED, missingPrincipal.getErrorCode());
+        assertSame(ErrorCode.COMMUNITY_CHAT_AUTH_REQUIRED, missingName.getErrorCode());
+        verifyNoInteractions(chatService, messagingTemplate);
+    }
+
+    @Test
     void handleExceptionSendsBusinessErrorToAuthenticatedUserQueue() {
         AppException failure = new AppException(ErrorCode.COMMUNITY_CHAT_MEMBER_MUTED);
 
@@ -96,6 +115,13 @@ class CommunityChatWebSocketControllerTest {
     @Test
     void handleExceptionDoesNothingWhenPrincipalIsMissing() {
         controller.handleException(new AppException(ErrorCode.COMMUNITY_CHAT_AUTH_REQUIRED), null);
+
+        verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handleExceptionDoesNothingWhenPrincipalNameIsMissing() {
+        controller.handleException(new AppException(ErrorCode.COMMUNITY_CHAT_AUTH_REQUIRED), principal(null));
 
         verifyNoInteractions(messagingTemplate);
     }

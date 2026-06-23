@@ -203,6 +203,12 @@ class CommunityRoomApiFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Cập nhật phòng cộng đồng thành công"));
 
+        mockMvc.perform(delete("/api/community/rooms/{roomId}", roomId)
+                        .with(learnerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Xóa phòng cộng đồng thành công"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
         mockMvc.perform(post("/api/community/rooms/{roomId}/join", roomId)
                         .with(learnerJwt()))
                 .andExpect(status().isOk())
@@ -215,6 +221,7 @@ class CommunityRoomApiFlowTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(roomService).leaveRoom(LEARNER_ID, roomId);
+        verify(roomService).deleteRoom(LEARNER_ID, roomId);
     }
 
     @Test
