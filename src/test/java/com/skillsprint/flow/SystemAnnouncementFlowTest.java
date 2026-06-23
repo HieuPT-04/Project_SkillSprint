@@ -174,6 +174,14 @@ class SystemAnnouncementFlowTest {
                 .andExpect(jsonPath("$.data.message").value("Phiên bản mới đã sẵn sàng"))
                 .andExpect(jsonPath("$.data.type").value("MAINTENANCE"));
 
+        mockMvc.perform(get("/api/admin/system/announcement").with(adminJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Lấy thông báo công khai thành công"))
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.active").value(true))
+                .andExpect(jsonPath("$.data.title").value("Cập nhật hệ thống"));
+
         mockMvc.perform(patch("/api/admin/system/announcement")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
