@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +74,19 @@ public class GlobalExceptionHandler {
         ApiResponse<Object> response = ApiResponse.error(
                 ErrorCode.VALIDATION_ERROR,
                 "Malformed or unreadable request body",
+                request.getRequestURI()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMissingRequestHeader(
+            MissingRequestHeaderException ex,
+            HttpServletRequest request
+    ) {
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.VALIDATION_ERROR,
+                "Thiếu header bắt buộc: " + ex.getHeaderName(),
                 request.getRequestURI()
         );
         return ResponseEntity.badRequest().body(response);
