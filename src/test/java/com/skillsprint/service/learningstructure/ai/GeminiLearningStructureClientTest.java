@@ -92,6 +92,10 @@ class GeminiLearningStructureClientTest {
         assertThat(prompt).contains("You are the SkillSprint learning-structure generator.");
         assertThat(prompt).contains("Write all user-facing generated content in Vietnamese");
         assertThat(prompt).contains("Do not include raw outline numbering in titles.");
+        assertThat(prompt).contains("Do not copy the document outline mechanically");
+        assertThat(prompt).contains("do not turn every heading into its own topic");
+        assertThat(prompt).contains("group sections into learner phases");
+        assertThat(prompt).contains("overview, root cause, implementation/fix, validation/tests, and result");
         assertThat(prompt).doesNotContain("Bạn là");
     }
 

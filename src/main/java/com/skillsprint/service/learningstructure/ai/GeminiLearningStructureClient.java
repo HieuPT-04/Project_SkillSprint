@@ -106,6 +106,9 @@ public class GeminiLearningStructureClient {
                   whatToLearn, keyConcepts, learningOutcomes, recommendedFocus, and warnings.
                 - Do not include raw outline numbering in titles. Do not start a title with prefixes such as
                   "1.", "1.1.", "2 -", "3:", "Step 1", "Topic 1", or "Bước 1". Titles must be clean display titles only.
+                - Do not copy the document outline mechanically, and do not turn every heading into its own topic.
+                - For a technical report (bug report, RFC, post-mortem), group sections into learner phases:
+                  overview, root cause, implementation/fix, validation/tests, and result.
                 - summary: 1-2 short sentences.
                 - whatToLearn: 2-4 short items.
                 - keyConcepts: 3-6 short concepts.
@@ -147,6 +150,9 @@ public class GeminiLearningStructureClient {
                   whatToLearn, keyConcepts, learningOutcomes, recommendedFocus, and warnings.
                 - Do not include raw outline numbering in titles. Do not start a title with prefixes such as
                   "1.", "1.1.", "2 -", "3:", "Step 1", "Topic 1", or "Bước 1". Titles must be clean display titles only.
+                - Do not copy the document outline mechanically, and do not turn every heading into its own topic.
+                - For a technical report (bug report, RFC, post-mortem), group sections into learner phases:
+                  overview, root cause, implementation/fix, validation/tests, and result.
                 - summary: 1 short sentence; do not copy the whole table.
                 - whatToLearn: 2-4 short items.
                 - keyConcepts: 3-6 short concepts.
@@ -185,6 +191,9 @@ public class GeminiLearningStructureClient {
                   whatToLearn, keyConcepts, learningOutcomes, recommendedFocus, and warnings.
                 - Do not include raw outline numbering in titles. Do not start a title with prefixes such as
                   "1.", "1.1.", "2 -", "3:", "Step 1", "Topic 1", or "Bước 1". Titles must be clean display titles only.
+                - Do not copy the document outline mechanically, and do not turn every heading into its own topic.
+                - For a technical report (bug report, RFC, post-mortem), group sections into learner phases:
+                  overview, root cause, implementation/fix, validation/tests, and result.
                 - sourceChunkIds may only use ids present in the input.
 
                 Detected sections:
@@ -215,6 +224,9 @@ public class GeminiLearningStructureClient {
                   whatToLearn, keyConcepts, learningOutcomes, recommendedFocus, and warnings.
                 - Do not include raw outline numbering in titles. Do not start a title with prefixes such as
                   "1.", "1.1.", "2 -", "3:", "Step 1", "Topic 1", or "Bước 1". Titles must be clean display titles only.
+                - Do not copy the document outline mechanically, and do not turn every heading into its own topic.
+                - For a technical report (bug report, RFC, post-mortem), group sections into learner phases:
+                  overview, root cause, implementation/fix, validation/tests, and result.
                 - sourceChunkIds may only use ids present in the input.
 
                 Detected sections/slides:
@@ -246,6 +258,9 @@ public class GeminiLearningStructureClient {
                   whatToLearn, keyConcepts, learningOutcomes, recommendedFocus, and warnings.
                 - Do not include raw outline numbering in titles. Do not start a title with prefixes such as
                   "1.", "1.1.", "2 -", "3:", "Step 1", "Topic 1", or "Bước 1". Titles must be clean display titles only.
+                - Do not copy the document outline mechanically, and do not turn every heading into its own topic.
+                - For a technical report (bug report, RFC, post-mortem), group sections into learner phases:
+                  overview, root cause, implementation/fix, validation/tests, and result.
                 - sourceChunkIds may only use ids present in the input.
 
                 Backend pre-analysis:
