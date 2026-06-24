@@ -470,7 +470,7 @@ public class LearningStructureService {
 
     // True when the heading list looks like a technical report: most headings map to a known
     // report phase and at least three distinct phases are present.
-    static boolean isReportLikeHeadings(List<String> titles) {
+    public static boolean isReportLikeHeadings(List<String> titles) {
         if (titles == null || titles.size() < 4) {
             return false;
         }
@@ -566,7 +566,7 @@ public class LearningStructureService {
         return normalized.matches("(tong quan|summary|affected area|pham vi anh huong|root cause|nguyen nhan goc|impact|tac dong|van de|cach sua|fix|fix implemented|file lien quan|thay doi chinh|tests added / updated|tests added/updated|tests da them cap nhat|kiem thu da bo sung|verification|xac minh|build / test result|build test result|final result|ket qua cuoi cung|ket luan)");
     }
 
-    static String normalizeForMatch(String value) {
+    public static String normalizeForMatch(String value) {
         if (value == null) {
             return "";
         }
