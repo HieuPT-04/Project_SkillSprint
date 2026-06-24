@@ -10,6 +10,7 @@ backups/
 .idea/
 *.iml
 *.md
+!HUONG_DAN_CHECK_TEST_BACKEND.md
 
 #test
 /test/SkillSprint.postman_collection (2).json
