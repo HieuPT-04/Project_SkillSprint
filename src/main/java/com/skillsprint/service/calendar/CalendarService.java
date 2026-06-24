@@ -51,8 +51,6 @@ import com.skillsprint.service.calendar.ai.GeminiCalendarPlannerClient;
 import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.QuotaService;
 import com.skillsprint.service.subscription.SubscriptionService;
-import com.skillsprint.enums.plan.ServicePlanType;
-import com.skillsprint.entity.ServicePlan;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -88,6 +86,8 @@ public class CalendarService {
     static int DEFAULT_SESSIONS_PER_DAY = 1;
     static int MAX_SESSIONS_PER_DAY = 8;
     static int MIN_STEP_POINT_STUDY_MINUTES = 20;
+    static int MIN_VALID_STUDY_MINUTES = 15;
+    static int FALLBACK_REQUIRED_STUDY_MINUTES = 5;
     static int TITLE_LENGTH = 90;
     static int SAFE_VARCHAR_LENGTH = 250;
     static Pattern DISPLAY_STEP_PREFIX_PATTERN = Pattern.compile(
@@ -216,7 +216,10 @@ public class CalendarService {
     @Transactional
     public CalendarTaskResponse completeTask(String userId, UUID taskId) {
         CalendarTask task = findOwnedTask(userId, taskId);
-        quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
+        if (task.getRoadmapStep() != null) {
+            quotaService.validateCanAccessRoadmapStep(userId, task.getRoadmapStep());
+            ensureTaskHasEnoughValidStudyMinutes(task);
+        }
 
         if (task.getStatus() != CalendarTaskStatus.COMPLETED) {
             task.setStatus(CalendarTaskStatus.COMPLETED);
@@ -276,6 +279,9 @@ public class CalendarService {
 
         CalendarTaskStatus newStatus = resolveStatus(request.getStatus());
         CalendarTaskStatus oldStatus = task.getStatus();
+        if (oldStatus != CalendarTaskStatus.COMPLETED && newStatus == CalendarTaskStatus.COMPLETED) {
+            ensureTaskHasEnoughValidStudyMinutes(task);
+        }
         task.setStatus(newStatus);
         task.setCompletedAt(newStatus == CalendarTaskStatus.COMPLETED ? Instant.now() : null);
         CalendarTask savedTask = calendarTaskRepository.save(task);
@@ -923,7 +929,8 @@ public class CalendarService {
                 CalendarTaskStatus.CANCELLED
         );
         boolean stepReady = activeStepTasks.stream()
-                .allMatch(task -> task.getStatus() == CalendarTaskStatus.COMPLETED);
+                .allMatch(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
+                && hasEnoughStudyMinutesForStep(step);
 
         if (!stepReady) {
             return;
@@ -993,15 +1000,8 @@ public class CalendarService {
             roadmapRepository.save(roadmap);
         }
 
-        // Anti-cheat backfill. A step can be marked COMPLETED before its study time
-        // crosses MIN_STEP_POINT_STUDY_MINUTES (e.g. the step is closed out by a quiz
-        // pass, or the user logs the qualifying study session only afterwards). When
-        // that happens the per-step 120 XP event is never written, which used to
-        // permanently block the 700 XP roadmap reward below. Re-attempt the award for
-        // every completed step here: awardRoadmapStepCompleted -> awardUnique is
-        // idempotent (it skips when the event already exists and saveAndFlush makes
-        // the new rows visible to the eligibility check that follows), so already
-        // rewarded steps are a no-op and now-eligible steps finally earn their XP.
+        // Re-attempt per-step awards before the final roadmap reward. awardUnique is
+        // idempotent, so already rewarded steps are no-ops.
         completedSteps.forEach(this::awardRoadmapStepPointsIfEligible);
 
         // Reward is now manually claimed by clicking the chest via `/claim-reward` endpoint.
@@ -1009,20 +1009,58 @@ public class CalendarService {
 
     private boolean hasEnoughStudyMinutesForStep(RoadmapStep step) {
         String userId = step.getWorkspace().getUser().getUserId();
-        try {
-            ServicePlan plan = subscriptionService.getCurrentPlan(userId);
-            if (plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT) {
-                return true;
-            }
-        } catch (Exception e) {
-            // Fallback to standard validation
-        }
-        Long studiedMinutes = studySessionRepository.sumDurationMinutesByUserAndRoadmapStepAndStatus(
+        Long studiedMinutes = studySessionRepository.sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
                 userId,
                 step.getStepId(),
-                StudySessionStatus.COMPLETED
+                StudySessionStatus.COMPLETED,
+                MIN_VALID_STUDY_MINUTES
         );
-        return safeLong(studiedMinutes) >= MIN_STEP_POINT_STUDY_MINUTES;
+        return safeLong(studiedMinutes) >= calculateRequiredStudyMinutesForStep(step);
+    }
+
+    private void ensureTaskHasEnoughValidStudyMinutes(CalendarTask task) {
+        if (task.getRoadmapStep() == null || hasEnoughValidStudyMinutesForTask(task)) {
+            return;
+        }
+        throw new AppException(ErrorCode.CALENDAR_TASK_STUDY_TIME_REQUIRED);
+    }
+
+    private boolean hasEnoughValidStudyMinutesForTask(CalendarTask task) {
+        Long studiedMinutes = studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                task.getUser().getUserId(),
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                MIN_VALID_STUDY_MINUTES
+        );
+        return safeLong(studiedMinutes) >= calculateRequiredStudyMinutesForTask(task);
+    }
+
+    private int calculateRequiredStudyMinutesForTask(CalendarTask task) {
+        if (task == null || task.getDurationMinutes() == null || task.getDurationMinutes() <= 0) {
+            return FALLBACK_REQUIRED_STUDY_MINUTES;
+        }
+        return task.getDurationMinutes();
+    }
+
+    private int calculateRequiredStudyMinutesForStep(RoadmapStep step) {
+        if (step == null) {
+            return MIN_STEP_POINT_STUDY_MINUTES;
+        }
+        if (step.getEstimatedMinutes() != null && step.getEstimatedMinutes() > 0) {
+            return step.getEstimatedMinutes();
+        }
+
+        int scheduledMinutes = calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                        step.getStepId(),
+                        CalendarTaskStatus.CANCELLED
+                )
+                .stream()
+                .map(CalendarTask::getDurationMinutes)
+                .filter(Objects::nonNull)
+                .filter(duration -> duration > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+        return scheduledMinutes > 0 ? scheduledMinutes : MIN_STEP_POINT_STUDY_MINUTES;
     }
 
     private long safeLong(Long value) {

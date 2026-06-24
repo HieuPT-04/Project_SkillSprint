@@ -36,6 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProgressService {
 
+    static int MIN_VALID_STUDY_MINUTES = 15;
+
     StudyWorkspaceRepository workspaceRepository;
     RoadmapRepository roadmapRepository;
     RoadmapStepRepository roadmapStepRepository;
@@ -96,11 +98,10 @@ public class ProgressService {
 
     private ProgressDashboardResponse.StudyStatsResponse buildStudyStats(List<StudySession> sessions, LocalDate today) {
         List<StudySession> completedSessions = sessions.stream()
-                .filter(session -> session.getStatus() == StudySessionStatus.COMPLETED)
+                .filter(this::isValidCompletedStudySession)
                 .toList();
         int totalStudyMinutes = completedSessions.stream()
                 .map(StudySession::getDurationMinutes)
-                .filter(duration -> duration != null && duration > 0)
                 .mapToInt(Integer::intValue)
                 .sum();
         Set<LocalDate> studyDates = completedSessions.stream()
@@ -133,10 +134,9 @@ public class ProgressService {
                 .mapToInt(Integer::intValue)
                 .sum();
         int studyMinutes = sessions.stream()
-                .filter(session -> session.getStatus() == StudySessionStatus.COMPLETED)
+                .filter(this::isValidCompletedStudySession)
                 .filter(session -> today.equals(resolveStudyDate(session)))
                 .map(StudySession::getDurationMinutes)
-                .filter(duration -> duration != null && duration > 0)
                 .mapToInt(Integer::intValue)
                 .sum();
 
@@ -156,6 +156,12 @@ public class ProgressService {
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    private boolean isValidCompletedStudySession(StudySession session) {
+        return session.getStatus() == StudySessionStatus.COMPLETED
+                && session.getDurationMinutes() != null
+                && session.getDurationMinutes() >= MIN_VALID_STUDY_MINUTES;
     }
 
     private int calculateCurrentStreakDays(Set<LocalDate> studyDates, LocalDate today) {
