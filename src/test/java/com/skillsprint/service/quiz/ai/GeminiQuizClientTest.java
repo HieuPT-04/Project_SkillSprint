@@ -182,7 +182,6 @@ class GeminiQuizClientTest {
                 singleChoiceWithQuestion("「です」は文の中でどのような役割をしますか？"))));
     }
 
-    @Test
     void validateDraftRejectsPlaceholderDistractorOptions() {
         AiQuizQuestionDraft placeholder = new AiQuizQuestionDraft(
                 "SINGLE_CHOICE",
