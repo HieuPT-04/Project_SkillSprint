@@ -83,20 +83,37 @@ class GeminiQuizClientTest {
     }
 
     @Test
-    void validateDraftRejectsTrueFalseWithMoreThanTwoOptions() {
-        AiQuizQuestionDraft threeOptions = new AiQuizQuestionDraft(
+    void validateDraftRejectsWellFormedTrueFalseQuestion() {
+        AiQuizQuestionDraft trueFalse = new AiQuizQuestionDraft(
                 "TRUE_FALSE",
                 "Java is a programming language.",
                 List.of(
                         new AiQuizOptionDraft("A", "True"),
-                        new AiQuizOptionDraft("B", "False"),
-                        new AiQuizOptionDraft("C", "Maybe")
+                        new AiQuizOptionDraft("B", "False")
                 ),
                 "A",
                 "Explanation"
         );
 
-        assertNull(client.validateDraft(draftWithLast(threeOptions)));
+        assertNull(client.validateDraft(draftWithLast(trueFalse)));
+    }
+
+    @Test
+    void validateDraftRejectsUnknownQuestionType() {
+        AiQuizQuestionDraft unknownType = new AiQuizQuestionDraft(
+                "MULTI_SELECT",
+                "Which are valid greetings?",
+                List.of(
+                        new AiQuizOptionDraft("A", "One"),
+                        new AiQuizOptionDraft("B", "Two"),
+                        new AiQuizOptionDraft("C", "Three"),
+                        new AiQuizOptionDraft("D", "Four")
+                ),
+                "A",
+                "Explanation"
+        );
+
+        assertNull(client.validateDraft(draftWithLast(unknownType)));
     }
 
     @Test
@@ -133,6 +150,36 @@ class GeminiQuizClientTest {
         );
 
         assertNull(client.validateDraft(draftWithLast(longExplanation)));
+    }
+
+    @Test
+    void validateDraftRejectsVietnameseMetaQuestion() {
+        assertNull(client.validateDraft(draftWithLast(
+                singleChoiceWithQuestion("Bài học này nói về điều gì?"))));
+    }
+
+    @Test
+    void validateDraftRejectsEnglishMetaQuestion() {
+        assertNull(client.validateDraft(draftWithLast(
+                singleChoiceWithQuestion("What is this lesson about?"))));
+    }
+
+    @Test
+    void validateDraftRejectsMainTopicMetaQuestion() {
+        assertNull(client.validateDraft(draftWithLast(
+                singleChoiceWithQuestion("Chủ đề chính của bài này là gì?"))));
+    }
+
+    @Test
+    void validateDraftAcceptsVietnameseContentQuestion() {
+        assertNotNull(client.validateDraft(draftWithLast(
+                singleChoiceWithQuestion("Trợ từ は dùng để làm gì?"))));
+    }
+
+    @Test
+    void validateDraftAcceptsJapaneseContentQuestion() {
+        assertNotNull(client.validateDraft(draftWithLast(
+                singleChoiceWithQuestion("「です」は文の中でどのような役割をしますか？"))));
     }
 
     @Test
@@ -177,6 +224,21 @@ class GeminiQuizClientTest {
                 ),
                 "A",
                 "Explanation " + n
+        );
+    }
+
+    private AiQuizQuestionDraft singleChoiceWithQuestion(String questionText) {
+        return new AiQuizQuestionDraft(
+                "SINGLE_CHOICE",
+                questionText,
+                List.of(
+                        new AiQuizOptionDraft("A", "One"),
+                        new AiQuizOptionDraft("B", "Two"),
+                        new AiQuizOptionDraft("C", "Three"),
+                        new AiQuizOptionDraft("D", "Four")
+                ),
+                "A",
+                "Explanation"
         );
     }
 
