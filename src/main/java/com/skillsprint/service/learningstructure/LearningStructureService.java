@@ -26,9 +26,13 @@ import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.Docume
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentKind;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.SyllabusSlot;
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -36,10 +40,12 @@ import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.skillsprint.service.subscription.QuotaService;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -56,12 +62,12 @@ public class LearningStructureService {
             Pattern.CASE_INSENSITIVE
     );
     // Strips raw outline/document numbering only when the separator is followed by whitespace,
-    // e.g. "1. Tổng quan", "1) X", "1.1. Backend", "2 - Y", "3: Z", "4/ W".
+    // e.g. "1. Tổng quan", "1) X", "1.1 Backend", "1.1. Backend", "2 - Y", "3: Z", "4/ W".
     // The mandatory trailing whitespace is what keeps clock times like "08:00" from being treated
     // as a numeric prefix (there is no space after the ":"). Numeric titles without a separator
     // (e.g. "2026 Roadmap", "5 Whys") are preserved.
     static Pattern NUMERIC_PREFIX_PATTERN = Pattern.compile(
-            "^\\s*(?:\\d+(?:\\.\\d+)*[.)]\\s+|\\d+\\s*[-:/]\\s+)(.+)$"
+            "^\\s*(?:(?:\\d+(?:\\.\\d+)+|\\d+(?:\\.\\d+)*[.)]|\\d+\\s*[-:/])\\s+)(.+)$"
     );
     // Clock times / time ranges (e.g. "08:00", "08:00 - 10:00") are real content, never outline
     // numbering or headings. Used as guards so prefix cleanup and heading detection leave them alone.
@@ -94,6 +100,23 @@ public class LearningStructureService {
         DocumentAnalysis documentAnalysis = LearningDocumentAnalyzer.analyze(chunks);
         AiLearningStructureDraft aiDraft = geminiLearningStructureClient.generate(chunks, documentAnalysis);
         boolean useAi = isValidAiDraft(aiDraft, chunks, documentAnalysis);
+        List<HeadingSection> headingSections = detectHeadingSections(chunks);
+        boolean reportLikeHeadings = isReportLikeHeadings(headingSections.stream()
+                .map(HeadingSection::title)
+                .toList());
+
+        log.info(
+                "[LearningStructure] generation decision: workspaceId={}, documentKind={}, sections={}, syllabusSlots={}, reportLikeHeadings={}, aiReturned={}, aiAccepted={}, aiChapters={}, aiMaxTopicsPerChapter={}",
+                workspaceId,
+                documentAnalysis.kind(),
+                documentAnalysis.sections().size(),
+                documentAnalysis.syllabusSlots().size(),
+                reportLikeHeadings,
+                aiDraft != null,
+                useAi,
+                aiChapterCount(aiDraft),
+                aiMaxTopicsPerChapter(aiDraft)
+        );
 
         LearningStructureVersion structureVersion = new LearningStructureVersion();
         structureVersion.setWorkspace(workspace);
@@ -118,9 +141,10 @@ public class LearningStructureService {
         if (useAi) {
             generatedStructure = createAiStructure(savedVersion, workspace, aiDraft, chunks);
         } else {
-            List<HeadingSection> headingSections = detectHeadingSections(chunks);
             if (documentAnalysis.isSyllabus() && !documentAnalysis.syllabusSlots().isEmpty()) {
                 generatedStructure = createSyllabusBasedStructure(savedVersion, workspace, documentAnalysis.syllabusSlots());
+            } else if (reportLikeHeadings) {
+                generatedStructure = createReportStructure(savedVersion, workspace, headingSections);
             } else {
                 generatedStructure = headingSections.isEmpty()
                         ? createFallbackStructure(savedVersion, workspace, chunks)
@@ -347,31 +371,35 @@ public class LearningStructureService {
             StudyWorkspace workspace,
             List<HeadingSection> sections
     ) {
-        List<List<HeadingSection>> phaseGroups = new ArrayList<>();
-        List<HeadingSection> currentGroup = new ArrayList<>();
-        ReportPhase currentPhase = null;
+        Map<ReportPhase, List<HeadingSection>> sectionsByPhase = new LinkedHashMap<>();
+        for (ReportPhase phase : ReportPhase.values()) {
+            sectionsByPhase.put(phase, new ArrayList<>());
+        }
+        List<HeadingSection> overflowSections = new ArrayList<>();
 
         for (HeadingSection section : sections) {
             ReportPhase phase = classifyReportPhase(section.title());
             if (phase == null) {
-                // Sections with no learning phase (stray fragments) are absorbed into the previous
-                // group's content rather than promoted into their own chapter/topic.
-                if (!currentGroup.isEmpty()) {
-                    currentGroup.get(currentGroup.size() - 1).append(section.title());
-                    section.chunks().forEach(currentGroup.get(currentGroup.size() - 1)::addChunk);
-                }
+                overflowSections.add(section);
                 continue;
             }
-            if (currentPhase != null && phase != currentPhase) {
-                phaseGroups.add(currentGroup);
-                currentGroup = new ArrayList<>();
+            sectionsByPhase.get(phase).add(section);
+        }
+
+        for (HeadingSection section : overflowSections) {
+            List<HeadingSection> targetGroup = sectionsByPhase.values().stream()
+                    .filter(group -> !group.isEmpty())
+                    .reduce((previous, current) -> current)
+                    .orElse(null);
+            if (targetGroup != null) {
+                targetGroup.get(targetGroup.size() - 1).append(section.title());
+                section.chunks().forEach(targetGroup.get(targetGroup.size() - 1)::addChunk);
             }
-            currentGroup.add(section);
-            currentPhase = phase;
         }
-        if (!currentGroup.isEmpty()) {
-            phaseGroups.add(currentGroup);
-        }
+
+        List<List<HeadingSection>> phaseGroups = sectionsByPhase.values().stream()
+                .filter(group -> !group.isEmpty())
+                .toList();
 
         List<Chapter> chapters = new ArrayList<>();
         for (int i = 0; i < phaseGroups.size(); i++) {
@@ -386,13 +414,13 @@ public class LearningStructureService {
             chapter.setStructureVersion(structureVersion);
             chapter.setTitle(truncate(chapterTitle, 90));
             chapter.setSummary(truncate(buildReportChapterSummary(group), 700));
-            chapter.setWhatToLearn(List.of("Hiểu phần " + chapterTitle.toLowerCase(), "Nắm các ý chính trong nhóm nội dung này"));
+            chapter.setWhatToLearn(List.of("Hiểu phần " + chapterTitle.toLowerCase(Locale.ROOT), "Nắm các ý chính trong nhóm nội dung này"));
             chapter.setKeyConcepts(group.stream()
                     .map(section -> localizeReportHeading(section.title()))
                     .distinct()
                     .limit(5)
                     .toList());
-            chapter.setLearningOutcomes(List.of("Trình bày lại được " + chapterTitle.toLowerCase()));
+            chapter.setLearningOutcomes(List.of("Trình bày lại được " + chapterTitle.toLowerCase(Locale.ROOT)));
             chapter.setRecommendedFocus(List.of("Đọc theo trình tự nhóm nội dung", "Ghi chú các điểm kỹ thuật quan trọng"));
             chapter.setDifficulty(resolveDifficulty(i));
             chapter.setEstimatedMinutes(estimateMinutes(groupChunks, 30));
@@ -410,7 +438,7 @@ public class LearningStructureService {
             List<HeadingSection> group = phaseGroups.get(i);
             for (int topicIndex = 0; topicIndex < group.size(); topicIndex++) {
                 HeadingSection section = group.get(topicIndex);
-                String topicTitle = localizeReportHeading(section.title());
+                String topicTitle = buildReportTopicTitle(section);
                 Topic topic = new Topic();
                 topic.setChapter(chapter);
                 topic.setWorkspace(workspace);
@@ -452,34 +480,104 @@ public class LearningStructureService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .count();
-        return classified * 2 >= titles.size() && distinctPhases >= 3;
+        return classified >= 4 && classified * 2 >= titles.size() && distinctPhases >= 3;
     }
 
     static ReportPhase classifyReportPhase(String title) {
-        String normalized = title == null ? "" : title.toLowerCase().trim();
-        if (containsAny(normalized, "summary", "tổng quan", "tong quan", "overview", "affected area",
-                "phạm vi", "pham vi", "context", "bối cảnh", "boi canh", "symptom", "triệu chứng",
-                "background", "introduction", "giới thiệu")) {
+        return classifyNormalizedReportPhase(title);
+    }
+
+    private static ReportPhase classifyNormalizedReportPhase(String title) {
+        String normalized = normalizeForMatch(cleanDisplayTitle(title, 160));
+        if (containsAny(normalized, "summary", "tong quan", "overview", "affected area",
+                "pham vi", "context", "boi canh", "symptom", "trieu chung",
+                "background", "introduction", "gioi thieu", "muc tieu")) {
             return ReportPhase.OVERVIEW;
         }
-        if (containsAny(normalized, "root cause", "nguyên nhân", "nguyen nhan", "why", "vì sao", "vi sao",
-                "impact", "tác động", "tac dong", "analysis", "phân tích", "phan tich")) {
+        if (containsAny(normalized, "fallback", "prompt gemini", "gemini request", "gemini config",
+                "max_tokens", "max tokens", "json cat", "json truncated", "ai calendar output",
+                "ngoai availability", "availability", "rule based", "rule-based")) {
+            return ReportPhase.AI_CONTROL;
+        }
+        if (containsAny(normalized, "root cause", "nguyen nhan", "why", "vi sao",
+                "impact", "tac dong", "analysis", "phan tich", "van de", "loi ")) {
             return ReportPhase.ROOT_CAUSE;
         }
-        if (containsAny(normalized, "fix", "khắc phục", "khac phuc", "cách sửa", "cach sua", "solution",
-                "giải pháp", "giai phap", "implementation", "implemented", "triển khai", "trien khai",
-                "expected behavior", "expected behaviour", "hành vi mong đợi", "change")) {
+        if (containsAny(normalized, "fix", "khac phuc", "cach sua", "solution",
+                "giai phap", "implementation", "implemented", "trien khai",
+                "expected behavior", "expected behaviour", "hanh vi mong doi", "change",
+                "thay doi", "file lien quan", "files changed")) {
             return ReportPhase.FIX;
         }
-        if (containsAny(normalized, "test", "kiểm thử", "kiem thu", "verification", "verify", "xác minh",
-                "xac minh", "qa", "validation")) {
+        if (containsAny(normalized, "test", "kiem thu", "verification", "verify",
+                "xac minh", "qa", "validation", "build")) {
             return ReportPhase.VALIDATION;
         }
-        if (containsAny(normalized, "result", "kết quả", "ket qua", "conclusion", "kết luận", "ket luan",
+        if (containsAny(normalized, "result", "ket qua", "conclusion", "ket luan",
                 "outcome")) {
             return ReportPhase.RESULT;
         }
         return null;
+    }
+
+    private String buildReportTopicTitle(HeadingSection section) {
+        String localizedTitle = cleanDisplayTitle(localizeReportHeading(section.title()), 90);
+        if (!isRawReportLabel(localizedTitle)) {
+            return localizedTitle;
+        }
+
+        ReportPhase phase = classifyReportPhase(section.title());
+        String normalized = normalizeForMatch(section.title());
+        if (phase == null) {
+            return localizedTitle;
+        }
+        return switch (phase) {
+            case OVERVIEW -> "B\u1ed1i c\u1ea3nh v\u00e0 ph\u1ea1m vi s\u1eeda l\u1ed7i";
+            case ROOT_CAUSE -> normalized.contains("loi ")
+                    ? localizedTitle
+                    : "Ph\u00e2n t\u00edch v\u1ea5n \u0111\u1ec1 v\u00e0 nguy\u00ean nh\u00e2n";
+            case FIX -> {
+                if (normalized.contains("file")) {
+                    yield "File v\u00e0 thay \u0111\u1ed5i li\u00ean quan";
+                }
+                if (normalized.contains("thay doi") || normalized.contains("change")) {
+                    yield "Thay \u0111\u1ed5i ch\u00ednh trong m\u00e3";
+                }
+                yield "C\u00e1ch kh\u1eafc ph\u1ee5c ch\u00ednh";
+            }
+            case AI_CONTROL -> {
+                if (normalized.contains("prompt") || normalized.contains("config")) {
+                    yield "Prompt v\u00e0 c\u1ea5u h\u00ecnh Gemini";
+                }
+                if (normalized.contains("fallback")) {
+                    yield "Fallback an to\u00e0n khi AI l\u1ed7i";
+                }
+                yield "Ki\u1ec3m so\u00e1t output AI";
+            }
+            case VALIDATION -> normalized.contains("build")
+                    ? "K\u1ebft qu\u1ea3 build v\u00e0 test"
+                    : "Ki\u1ec3m th\u1eed \u0111\u00e3 b\u1ed5 sung";
+            case RESULT -> "K\u1ebft lu\u1eadn v\u00e0 k\u1ebft qu\u1ea3";
+        };
+    }
+
+    private static boolean isRawReportLabel(String title) {
+        String normalized = normalizeForMatch(title);
+        return normalized.matches("(tong quan|summary|affected area|pham vi anh huong|root cause|nguyen nhan goc|impact|tac dong|van de|cach sua|fix|fix implemented|file lien quan|thay doi chinh|tests added / updated|tests added/updated|tests da them cap nhat|kiem thu da bo sung|verification|xac minh|build / test result|build test result|final result|ket qua cuoi cung|ket luan)");
+    }
+
+    static String normalizeForMatch(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return normalized.toLowerCase(Locale.ROOT)
+                .replace('đ', 'd')
+                .replace('Đ', 'd')
+                .replaceAll("[“”\"'`]", "")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     // Maps common English technical-report section headings to clean Vietnamese display titles.
@@ -487,7 +585,7 @@ public class LearningStructureService {
         if (title == null || title.isBlank()) {
             return DEFAULT_DISPLAY_TITLE;
         }
-        String normalized = title.toLowerCase().trim();
+        String normalized = title.toLowerCase(Locale.ROOT).trim();
         return switch (normalized) {
             case "summary" -> "Tổng quan";
             case "affected area" -> "Phạm vi ảnh hưởng";
@@ -649,6 +747,23 @@ public class LearningStructureService {
         return "Generated from " + chunks.size() + " material chunks, estimated " + tokenCount + " tokens.";
     }
 
+    private static int aiChapterCount(AiLearningStructureDraft draft) {
+        return draft == null || draft.chapters() == null ? 0 : draft.chapters().size();
+    }
+
+    private static int aiMaxTopicsPerChapter(AiLearningStructureDraft draft) {
+        if (draft == null || draft.chapters() == null) {
+            return 0;
+        }
+        return draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::topics)
+                .filter(Objects::nonNull)
+                .mapToInt(List::size)
+                .max()
+                .orElse(0);
+    }
+
     private boolean isValidAiDraft(AiLearningStructureDraft draft, List<MaterialChunk> chunks, DocumentAnalysis analysis) {
         if (draft == null || chunks == null || chunks.isEmpty()) {
             return false;
@@ -661,6 +776,9 @@ public class LearningStructureService {
             return false;
         }
         if (analysis != null && analysis.kind() != DocumentKind.SYLLABUS && !isValidDocumentAwareAiDraft(draft, analysis)) {
+            return false;
+        }
+        if (analysis != null && analysis.kind() != DocumentKind.SYLLABUS && !isValidReportAiDraft(draft, chunks, analysis)) {
             return false;
         }
 
@@ -708,6 +826,97 @@ public class LearningStructureService {
                 .filter(Objects::nonNull)
                 .map(AiChapterDraft::title)
                 .noneMatch(title -> isBadGenericChapterTitle(title, analysis.kind()));
+    }
+
+    private boolean isValidReportAiDraft(
+            AiLearningStructureDraft draft,
+            List<MaterialChunk> chunks,
+            DocumentAnalysis analysis
+    ) {
+        List<String> sourceHeadingTitles = collectReportCandidateTitles(chunks, analysis);
+        List<String> aiTopicTitles = draft.chapters().stream()
+                .filter(Objects::nonNull)
+                .map(AiChapterDraft::topics)
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .map(AiTopicDraft::title)
+                .filter(Objects::nonNull)
+                .toList();
+
+        boolean sourceLooksReportLike = isReportLikeHeadings(sourceHeadingTitles);
+        boolean aiLooksReportLike = isReportLikeHeadings(aiTopicTitles) || countRawReportLabels(aiTopicTitles) >= 3;
+        if (!sourceLooksReportLike && !aiLooksReportLike) {
+            return true;
+        }
+
+        int chapterCount = aiChapterCount(draft);
+        int topicCount = aiTopicTitles.size();
+        int maxTopicsPerChapter = aiMaxTopicsPerChapter(draft);
+        long rawReportLabels = countRawReportLabels(aiTopicTitles);
+        long sourceHeadingOverlap = countHeadingOverlap(aiTopicTitles, sourceHeadingTitles);
+
+        boolean oneHugeChapter = chapterCount == 1 && topicCount > 8;
+        boolean overloadedChapter = maxTopicsPerChapter > 8 && topicCount > 8;
+        boolean copiedOutline = sourceHeadingOverlap >= 5 && sourceHeadingOverlap * 2 >= Math.min(topicCount, sourceHeadingTitles.size());
+        boolean manyGenericLabels = rawReportLabels >= 3;
+        boolean tooFewChaptersForLongReport = topicCount >= 12 && chapterCount < 3;
+
+        if (oneHugeChapter || overloadedChapter || copiedOutline || manyGenericLabels || tooFewChaptersForLongReport) {
+            log.info(
+                    "[LearningStructure] rejected AI report draft: chapters={}, topics={}, maxTopicsPerChapter={}, rawReportLabels={}, headingOverlap={}, sourceReportLike={}, aiReportLike={}",
+                    chapterCount,
+                    topicCount,
+                    maxTopicsPerChapter,
+                    rawReportLabels,
+                    sourceHeadingOverlap,
+                    sourceLooksReportLike,
+                    aiLooksReportLike
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    private List<String> collectReportCandidateTitles(List<MaterialChunk> chunks, DocumentAnalysis analysis) {
+        List<String> titles = new ArrayList<>();
+        if (analysis != null && analysis.sections() != null) {
+            analysis.sections().stream()
+                    .map(section -> section.title())
+                    .filter(Objects::nonNull)
+                    .forEach(titles::add);
+        }
+        detectHeadingSections(chunks).stream()
+                .map(HeadingSection::title)
+                .filter(Objects::nonNull)
+                .filter(title -> !titles.contains(title))
+                .forEach(titles::add);
+        return titles;
+    }
+
+    private static long countRawReportLabels(List<String> titles) {
+        return titles.stream()
+                .filter(Objects::nonNull)
+                .map(title -> cleanDisplayTitle(title, 160))
+                .filter(LearningStructureService::isRawReportLabel)
+                .count();
+    }
+
+    private static long countHeadingOverlap(List<String> aiTopicTitles, List<String> sourceHeadingTitles) {
+        List<String> normalizedSourceTitles = sourceHeadingTitles.stream()
+                .filter(Objects::nonNull)
+                .map(title -> normalizeForMatch(cleanDisplayTitle(title, 160)))
+                .filter(title -> !title.isBlank())
+                .distinct()
+                .toList();
+
+        return aiTopicTitles.stream()
+                .filter(Objects::nonNull)
+                .map(title -> normalizeForMatch(cleanDisplayTitle(title, 160)))
+                .filter(normalizedSourceTitles::contains)
+                .distinct()
+                .count();
     }
 
     private boolean isValidSyllabusAiDraft(AiLearningStructureDraft draft, DocumentAnalysis analysis) {
@@ -906,7 +1115,7 @@ public class LearningStructureService {
     }
 
     private String classifySyllabusModule(SyllabusSlot slot) {
-        String text = (slot.topic() + " " + String.join(" ", slot.details())).toLowerCase();
+        String text = (slot.topic() + " " + String.join(" ", slot.details())).toLowerCase(Locale.ROOT);
         if (containsAny(text, "html", "http", "web", "client-server", "client server")) {
             return "WEB_FOUNDATION";
         }
@@ -985,7 +1194,7 @@ public class LearningStructureService {
     }
 
     private boolean isBadSyllabusChapterTitle(String title) {
-        String normalized = title == null ? "" : title.toLowerCase();
+        String normalized = title == null ? "" : title.toLowerCase(Locale.ROOT);
         return normalized.contains("syllabus")
                 || normalized.contains("course description")
                 || normalized.contains("assessment scheme")
@@ -995,7 +1204,7 @@ public class LearningStructureService {
     }
 
     private boolean isBadGenericChapterTitle(String title, DocumentKind kind) {
-        String normalized = title == null ? "" : title.toLowerCase();
+        String normalized = title == null ? "" : title.toLowerCase(Locale.ROOT);
         if (kind == DocumentKind.ASSIGNMENT) {
             return normalized.equals("assignment") || normalized.equals("requirements") || normalized.equals("bài tập");
         }
@@ -1089,6 +1298,10 @@ public class LearningStructureService {
             return new Heading(level, title);
         }
 
+        if (isLikelyReportHeadingLabel(line)) {
+            return new Heading(2, line);
+        }
+
         return null;
     }
 
@@ -1121,6 +1334,20 @@ public class LearningStructureService {
                 && !title.endsWith(",")
                 && !title.endsWith(";")
                 && !title.endsWith(":");
+    }
+
+    private boolean isLikelyReportHeadingLabel(String line) {
+        if (line == null || isIgnorableHeadingTitle(line) || classifyReportPhase(line) == null) {
+            return false;
+        }
+        String trimmed = line.trim();
+        int wordCount = trimmed.split("\\s+").length;
+        return trimmed.length() <= 110
+                && wordCount <= 14
+                && !trimmed.endsWith(".")
+                && !trimmed.endsWith(",")
+                && !trimmed.endsWith(";")
+                && !trimmed.contains("|");
     }
 
     private String collectChapterText(ChapterDraft draft) {
@@ -1185,6 +1412,7 @@ public class LearningStructureService {
         OVERVIEW("Tổng quan vấn đề"),
         ROOT_CAUSE("Nguyên nhân và tác động"),
         FIX("Cách khắc phục"),
+        AI_CONTROL("Kiểm soát AI và fallback"),
         VALIDATION("Kiểm thử và xác minh"),
         RESULT("Kết quả cuối cùng");
 

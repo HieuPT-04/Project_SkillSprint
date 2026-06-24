@@ -8,8 +8,30 @@ import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.Docume
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class LearningDocumentAnalyzerTest {
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "Tổng quan | tong quan",
+            "Lỗi 1: Calendar chỉ dùng time slot đầu tiên | loi 1: calendar chi dung time slot dau tien",
+            "Cách sửa | cach sua",
+            "Kết luận | ket luan",
+            "  Tests   đã   thêm/cập nhật  | tests da them/cap nhat",
+    })
+    void normalizeForMatchingRemovesVietnameseDiacriticsAndCollapsesWhitespace(
+            String input,
+            String expected
+    ) {
+        assertThat(LearningDocumentAnalyzer.normalizeForMatching(input)).isEqualTo(expected);
+    }
+
+    @Test
+    void normalizeForMatchingHandlesNullSafely() {
+        assertThat(LearningDocumentAnalyzer.normalizeForMatching(null)).isEmpty();
+    }
 
     @Test
     void analyzeDetectsSyllabusSlotsFromScheduleTable() {
@@ -95,6 +117,84 @@ class LearningDocumentAnalyzerTest {
 
         assertThat(analysis.kind()).isEqualTo(DocumentKind.GENERAL);
         assertThat(analysis.syllabusSlots()).isEmpty();
+    }
+
+    @Test
+    void analyzeDetectsVietnameseTechnicalReportHeadings() {
+        MaterialChunk chunk = chunk("""
+                # Báo cáo sửa lỗi Calendar AI / Study Calendar
+                1. Tổng quan
+                2. Lỗi 1: Calendar chỉ dùng time slot đầu tiên
+                Vấn đề
+                Cách sửa
+                3. Lỗi 2: AI có thể sinh lịch ngoài availability
+                Fallback khi AI lỗi
+                Prompt Gemini Calendar
+                Gemini request config
+                Tests đã thêm/cập nhật
+                Build / Test result
+                Kết luận
+                """);
+
+        DocumentAnalysis analysis = LearningDocumentAnalyzer.analyze(List.of(chunk));
+
+        assertThat(analysis.kind()).isEqualTo(DocumentKind.LECTURE_NOTE);
+        assertThat(analysis.signals()).contains("technicalReportHeadings");
+        assertThat(analysis.sections().stream().map(section -> section.title()).toList())
+                .contains(
+                        "Tổng quan",
+                        "Lỗi 1: Calendar chỉ dùng time slot đầu tiên",
+                        "Vấn đề",
+                        "Cách sửa",
+                        "Prompt Gemini Calendar",
+                        "Gemini request config",
+                        "Tests đã thêm/cập nhật",
+                        "Build / Test result",
+                        "Kết luận"
+                );
+    }
+
+    @Test
+    void analyzeDetectsNoAccentTechnicalReportHeadings() {
+        MaterialChunk chunk = chunk("""
+                # Bao cao sua loi Calendar AI
+                1. Tong quan
+                2. Loi 1
+                Van de
+                Cach sua
+                Build / Test result
+                Ket luan
+                """);
+
+        DocumentAnalysis analysis = LearningDocumentAnalyzer.analyze(List.of(chunk));
+
+        assertThat(analysis.kind()).isEqualTo(DocumentKind.LECTURE_NOTE);
+        assertThat(analysis.signals()).contains("technicalReportHeadings");
+        assertThat(analysis.sections().stream().map(section -> section.title()).toList())
+                .contains("Tong quan", "Loi 1", "Van de", "Cach sua", "Ket luan");
+    }
+
+    @Test
+    void analyzeDetectsEnglishTechnicalReportHeadings() {
+        MaterialChunk chunk = chunk("""
+                ## Summary
+                Calendar generation issue.
+                ## Root Cause
+                The planner used one selected time slot.
+                ## Fix Implemented
+                Parse every selected window.
+                ## Verification
+                Added regression tests.
+                ## Final Result
+                Calendar output respects availability.
+                """);
+
+        DocumentAnalysis analysis = LearningDocumentAnalyzer.analyze(List.of(chunk));
+
+        assertThat(analysis.kind()).isEqualTo(DocumentKind.LECTURE_NOTE);
+        assertThat(analysis.signals()).contains("technicalReportHeadings");
+        assertThat(analysis.sections().stream().map(section -> section.title()).toList())
+                .contains("Summary", "Root Cause", "Fix Implemented", "Verification", "Final Result");
     }
 
     private MaterialChunk chunk(String content) {
