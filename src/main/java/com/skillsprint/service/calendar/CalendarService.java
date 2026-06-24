@@ -62,6 +62,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -352,7 +353,8 @@ public class CalendarService {
 
         List<WeekDay> onboardingDays = readList(onboarding.getPreferredDays(), WEEK_DAY_LIST_TYPE);
         List<String> onboardingTimeSlots = readList(onboarding.getPreferredTimeSlots(), STRING_LIST_TYPE);
-        TimeWindow firstTimeWindow = resolveFirstTimeWindow(onboardingTimeSlots);
+        List<TimeWindow> timeWindows = resolveTimeWindows(onboardingTimeSlots);
+        TimeWindow firstTimeWindow = timeWindows.get(0);
 
         Set<WeekDay> studyDays = validateStudyDays(
                 request.getStudyDays() == null || request.getStudyDays().isEmpty()
@@ -379,7 +381,8 @@ public class CalendarService {
             includeReviewSessions,
             endDate,
             onboarding.getTargetDeadline(),
-            onboarding.getPreferredTimeSlots()
+            onboarding.getPreferredTimeSlots(),
+            timeWindows
         );
     }
 
@@ -560,7 +563,11 @@ public class CalendarService {
             throw new AppException(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED);
         }
 
-        int maxSessionsPerDay = resolveSessionsPerDay(config, drafts.size());
+        // Never schedule more sessions in a day than there are selected time windows;
+        // each session is placed inside its own window so the plan stays within the
+        // user's onboarding availability.
+        List<TimeWindow> windows = config.timeWindows();
+        int maxSessionsPerDay = Math.min(resolveSessionsPerDay(config, drafts.size()), windows.size());
         int[] sessionsUsedByDay = new int[studyDates.size()];
 
         for (int i = 0; i < drafts.size(); i++) {
@@ -577,21 +584,28 @@ public class CalendarService {
 
             int sessionIndexInDay = sessionsUsedByDay[dayIndex];
             LocalDate taskDate = studyDates.get(dayIndex);
-            LocalTime startTime = config.dailyStartTime().plusMinutes((long) sessionIndexInDay * config.sessionMinutes());
-            LocalTime endTime = startTime.plusMinutes(config.sessionMinutes());
+            TimeWindow window = windows.get(sessionIndexInDay);
+            int duration = sessionDurationFor(window, config.sessionMinutes());
+            LocalTime startTime = window.startTime();
+            LocalTime endTime = startTime.plusMinutes(duration);
 
             plannedTasks.add(new PlannedTask(
                     draft,
                     taskDate,
                     startTime,
                     endTime,
-                    config.sessionMinutes(),
+                    duration,
                     CalendarTaskSource.SYSTEM_GENERATED
             ));
             sessionsUsedByDay[dayIndex]++;
         }
 
         return plannedTasks;
+    }
+
+    private int sessionDurationFor(TimeWindow window, int sessionMinutes) {
+        int windowMinutes = (int) Duration.between(window.startTime(), window.endTime()).toMinutes();
+        return Math.max(1, Math.min(sessionMinutes, windowMinutes));
     }
 
     private int resolveAvailableStudyDayCount(ScheduleConfig config, int taskCount) {
@@ -1067,20 +1081,48 @@ public class CalendarService {
         return EnumSet.copyOf(studyDays);
     }
 
-    private TimeWindow resolveFirstTimeWindow(List<String> timeSlots) {
+    /**
+     * Parses every onboarding time slot into a validated, de-duplicated, chronologically
+     * sorted list of windows. The full set is used for scheduling so the generated calendar
+     * respects every selected window, not only the first one. Throws when no valid window
+     * exists so we never silently fall back to an arbitrary schedule.
+     */
+    private List<TimeWindow> resolveTimeWindows(List<String> timeSlots) {
         if (timeSlots == null || timeSlots.isEmpty()) {
             throw new AppException(ErrorCode.CALENDAR_TIME_SLOT_REQUIRED);
         }
 
-        String firstSlot = timeSlots.get(0);
-        String[] parts = firstSlot.split("-");
+        List<TimeWindow> windows = new ArrayList<>();
+        for (String slot : timeSlots) {
+            TimeWindow window = parseTimeWindow(slot);
+            if (window != null && !windows.contains(window)) {
+                windows.add(window);
+            }
+        }
+
+        if (windows.isEmpty()) {
+            throw new AppException(ErrorCode.CALENDAR_TIME_SLOT_REQUIRED);
+        }
+
+        windows.sort(Comparator.comparing(TimeWindow::startTime).thenComparing(TimeWindow::endTime));
+        return windows;
+    }
+
+    private TimeWindow parseTimeWindow(String slot) {
+        if (slot == null || slot.isBlank()) {
+            return null;
+        }
+
+        String[] parts = slot.split("-");
         try {
             LocalTime startTime = LocalTime.parse(parts[0].trim());
             LocalTime endTime = parts.length > 1 ? LocalTime.parse(parts[1].trim()) : startTime.plusHours(1);
-            validateTimeRange(startTime, endTime);
+            if (!endTime.isAfter(startTime)) {
+                return null;
+            }
             return new TimeWindow(startTime, endTime);
         } catch (RuntimeException ex) {
-            throw new AppException(ErrorCode.CALENDAR_TIME_SLOT_REQUIRED);
+            return null;
         }
     }
 
@@ -1169,6 +1211,9 @@ public class CalendarService {
             if (!endTime.isAfter(suggestion.startTime())) {
                 return false;
             }
+            if (!fitsInAnyWindow(suggestion.startTime(), endTime, config.timeWindows())) {
+                return false;
+            }
         }
 
         LocalDate previousDate = null;
@@ -1190,6 +1235,14 @@ public class CalendarService {
         }
 
         return hasValidDailyCapacity(draft.tasks(), config.sessionsPerDay());
+    }
+
+    private boolean fitsInAnyWindow(LocalTime startTime, LocalTime endTime, List<TimeWindow> windows) {
+        if (windows == null || windows.isEmpty()) {
+            return false;
+        }
+        return windows.stream().anyMatch(window ->
+                !startTime.isBefore(window.startTime()) && !endTime.isAfter(window.endTime()));
     }
 
     private AiCalendarTaskSuggestion findSuggestionByIndex(List<AiCalendarTaskSuggestion> suggestions, int index) {
@@ -1296,7 +1349,8 @@ public class CalendarService {
             boolean includeReviewSessions,
             LocalDate endDate,
             LocalDate targetDeadline,
-            String timeSlotsJson
+            String timeSlotsJson,
+            List<TimeWindow> timeWindows
     ) {
 
         ScheduleConfig withSessionsPerDay(int value) {
@@ -1309,7 +1363,8 @@ public class CalendarService {
                     includeReviewSessions,
                     endDate,
                     targetDeadline,
-                    timeSlotsJson
+                    timeSlotsJson,
+                    timeWindows
             );
         }
     }
