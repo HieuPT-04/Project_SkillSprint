@@ -52,9 +52,16 @@ public class LearningStructureService {
     static Pattern NUMBERED_HEADING_PATTERN = Pattern.compile("^(\\d+(?:\\.\\d+){0,4})[.)]?\\s+(.{3,160})$");
     static Pattern LIST_MARKER_PATTERN = Pattern.compile("^[-*•]\\s+.+$");
     static Pattern DISPLAY_STEP_PREFIX_PATTERN = Pattern.compile(
-            "^(?:bước|step|topic)\\s*\\d+(?:[.\\-:/)]\\s*|\\s+)(.+)$",
+            "^(?:bước|step|topic)\\s*\\d+(?:\\s*[.\\-:/)]\\s*|\\s+)(.+)$",
             Pattern.CASE_INSENSITIVE
     );
+    // Strips raw outline/document numbering only when followed by a clear separator,
+    // e.g. "1. Tổng quan", "1) X", "1.1. Backend", "2 - Y", "3: Z", "4/ W".
+    // Numeric titles without a separator (e.g. "2026 Roadmap", "5 Whys") are preserved.
+    static Pattern NUMERIC_PREFIX_PATTERN = Pattern.compile(
+            "^\\s*(?:\\d+(?:\\.\\d+)*[.)]|\\d+\\s*[-:/])\\s*(.+)$"
+    );
+    static String DEFAULT_DISPLAY_TITLE = "Nội dung học";
 
     StudyWorkspaceRepository workspaceRepository;
     MaterialChunkRepository materialChunkRepository;
@@ -271,7 +278,7 @@ public class LearningStructureService {
             Chapter chapter = new Chapter();
             chapter.setWorkspace(workspace);
             chapter.setStructureVersion(structureVersion);
-            chapter.setTitle(truncate(section.title(), 90));
+            chapter.setTitle(cleanDisplayTitle(section.title(), 90));
             chapter.setSummary(truncate(collectChapterText(draft), 700));
             chapter.setWhatToLearn(List.of("Nắm nội dung chính của " + chapter.getTitle(), "Xác định các ý nhỏ trong chương"));
             chapter.setKeyConcepts(extractKeyConcepts(chapterChunks));
@@ -300,7 +307,7 @@ public class LearningStructureService {
                 topic.setChapter(chapter);
                 topic.setWorkspace(workspace);
                 topic.setStructureVersion(structureVersion);
-                topic.setTitle(truncate(section.title(), 90));
+                topic.setTitle(cleanDisplayTitle(section.title(), 90));
                 topic.setSummaryContent(truncate(section.text(), 700));
                 topic.setWhatToLearn(List.of("Đọc và hiểu: " + topic.getTitle()));
                 topic.setKeyConcepts(extractKeyConcepts(section.chunks()));
@@ -331,7 +338,7 @@ public class LearningStructureService {
             Chapter chapter = new Chapter();
             chapter.setWorkspace(workspace);
             chapter.setStructureVersion(structureVersion);
-            chapter.setTitle(truncate(inferSyllabusChapterTitle(group), 90));
+            chapter.setTitle(cleanDisplayTitle(inferSyllabusChapterTitle(group), 90));
             chapter.setSummary(truncate(buildSyllabusChapterSummary(group), 700));
             chapter.setWhatToLearn(group.stream()
                     .map(SyllabusSlot::topic)
@@ -365,7 +372,7 @@ public class LearningStructureService {
                 topic.setChapter(chapter);
                 topic.setWorkspace(workspace);
                 topic.setStructureVersion(structureVersion);
-                topic.setTitle(truncate(slot.topic(), 90));
+                topic.setTitle(cleanDisplayTitle(slot.topic(), 90));
                 topic.setSummaryContent(truncate(buildSyllabusTopicSummary(slot), 700));
                 topic.setWhatToLearn(List.of("Học nội dung slot " + slot.slot(), "Thực hành phần: " + truncate(slot.topic(), 70)));
                 topic.setKeyConcepts(extractSyllabusConcepts(List.of(slot)));
@@ -576,17 +583,38 @@ public class LearningStructureService {
         return minutes == null || minutes < minimumMinutes ? minimumMinutes : minutes;
     }
 
-    private String defaultText(String value, String fallback) {
+    private static String defaultText(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
-    private String cleanDisplayTitle(String value, int maxLength) {
-        String title = defaultText(value, "Nội dung học").replaceAll("\\s+", " ").trim();
-        Matcher matcher = DISPLAY_STEP_PREFIX_PATTERN.matcher(title);
-        if (matcher.matches()) {
-            title = matcher.group(1).trim();
+    static String cleanDisplayTitle(String value, int maxLength) {
+        String title = defaultText(value, DEFAULT_DISPLAY_TITLE).replaceAll("\\s+", " ").trim();
+
+        // Combined prefixes such as "Bước 1: 1. Tổng quan" need more than one pass.
+        for (int pass = 0; pass < 3; pass++) {
+            String previous = title;
+            title = stripPrefix(DISPLAY_STEP_PREFIX_PATTERN, title);
+            title = stripPrefix(NUMERIC_PREFIX_PATTERN, title);
+            if (title.equals(previous) || title.isBlank()) {
+                break;
+            }
+        }
+
+        if (title.isBlank()) {
+            title = DEFAULT_DISPLAY_TITLE;
         }
         return truncate(title, maxLength);
+    }
+
+    private static String stripPrefix(Pattern pattern, String title) {
+        Matcher matcher = pattern.matcher(title);
+        if (matcher.matches()) {
+            String stripped = matcher.group(1).trim();
+            if (!stripped.isBlank()) {
+                return stripped;
+            }
+        }
+        return title;
     }
 
     private List<String> safeList(List<String> values) {
@@ -938,7 +966,7 @@ public class LearningStructureService {
         return DifficultyLevel.HARD;
     }
 
-    private String truncate(String value, int maxLength) {
+    private static String truncate(String value, int maxLength) {
         if (value == null) {
             return "";
         }
