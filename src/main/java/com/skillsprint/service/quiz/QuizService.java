@@ -224,7 +224,13 @@ public class QuizService {
         AiQuizDraft draft = geminiQuizClient.generate(step, chunks);
         List<AiQuizQuestionDraft> questionDrafts = normalizeDraft(draft);
         if (questionDrafts.isEmpty()) {
-            questionDrafts = buildFallbackQuestions(step, chunks);
+            // Gemini returned null / failed / timed out / quota exhausted, or its draft failed
+            // validation. Do NOT save a low-quality fallback quiz with generic, meta, or
+            // placeholder questions — fail in a controlled way so the client can show a
+            // friendly retry message.
+            log.warn("[AI] Quiz generation unavailable for step {}: no valid AI draft produced",
+                    step.getStepId());
+            throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
         }
 
         Quiz quiz = new Quiz();
@@ -325,89 +331,6 @@ public class QuizService {
                         clean(option.text(), "Đáp án")
                 ))
                 .toList();
-    }
-
-    private List<AiQuizQuestionDraft> buildFallbackQuestions(RoadmapStep step, List<MaterialChunk> chunks) {
-        String title = clean(step.getTitle(), "Nội dung bài học");
-        String firstConcept = firstValue(step.getKeyConcepts(), title);
-        String secondConcept = secondValue(step.getKeyConcepts(), firstConcept);
-        String summary = clean(step.getSummary(), firstChunkText(chunks, title));
-
-        return List.of(
-                singleChoice(
-                        "Mục tiêu chính của phần \"" + title + "\" là gì?",
-                        "Hiểu và vận dụng " + firstConcept,
-                        "Ghi nhớ tên tài liệu",
-                        "Bỏ qua phần thực hành",
-                        "Chỉ đọc tiêu đề",
-                        "A",
-                        "Phần này tập trung vào việc hiểu và vận dụng nội dung chính của bài học."
-                ),
-                trueFalse(
-                        "Người học nên nắm được \"" + firstConcept + "\" sau khi hoàn thành phần này.",
-                        "A",
-                        "Đây là khái niệm chính được lấy từ roadmap step."
-                ),
-                singleChoice(
-                        "Khi học phần này, hoạt động nào phù hợp nhất?",
-                        "Đọc nội dung, ghi chú ý chính và tự giải thích lại",
-                        "Chỉ lướt qua tài liệu",
-                        "Bỏ qua ví dụ",
-                        "Không cần ôn tập",
-                        "A",
-                        "Cách học tốt nhất là đọc, ghi chú và tự diễn giải lại bằng lời của mình."
-                ),
-                trueFalse(
-                        "Tóm tắt bài học có nhắc đến: " + truncate(summary, 120),
-                        "A",
-                        "Câu này dựa trên phần tóm tắt hoặc nội dung đã trích xuất từ tài liệu."
-                ),
-                singleChoice(
-                        "Khái niệm nào nên được ưu tiên ôn tập?",
-                        secondConcept,
-                        "Thông tin ngoài tài liệu",
-                        "Nội dung không liên quan",
-                        "Tên file upload",
-                        "A",
-                        "Nên ưu tiên ôn các key concept được AI/rule-based rút ra từ tài liệu."
-                )
-        );
-    }
-
-    private AiQuizQuestionDraft singleChoice(
-            String question,
-            String optionA,
-            String optionB,
-            String optionC,
-            String optionD,
-            String correctLabel,
-            String explanation
-    ) {
-        return new AiQuizQuestionDraft(
-                QuizQuestionType.SINGLE_CHOICE.name(),
-                question,
-                List.of(
-                        new AiQuizOptionDraft("A", optionA),
-                        new AiQuizOptionDraft("B", optionB),
-                        new AiQuizOptionDraft("C", optionC),
-                        new AiQuizOptionDraft("D", optionD)
-                ),
-                correctLabel,
-                explanation
-        );
-    }
-
-    private AiQuizQuestionDraft trueFalse(String question, String correctLabel, String explanation) {
-        return new AiQuizQuestionDraft(
-                QuizQuestionType.TRUE_FALSE.name(),
-                question,
-                List.of(
-                        new AiQuizOptionDraft("A", "Đúng"),
-                        new AiQuizOptionDraft("B", "Sai")
-                ),
-                correctLabel,
-                explanation
-        );
     }
 
     private QuizResponse toQuizResponse(Quiz quiz, boolean includeCorrectAnswers) {
@@ -524,35 +447,4 @@ public class QuizService {
         return value.trim();
     }
 
-    private String firstValue(List<String> values, String fallback) {
-        if (values == null || values.isEmpty() || values.get(0) == null || values.get(0).isBlank()) {
-            return fallback;
-        }
-        return values.get(0);
-    }
-
-    private String secondValue(List<String> values, String fallback) {
-        if (values == null || values.size() < 2 || values.get(1) == null || values.get(1).isBlank()) {
-            return fallback;
-        }
-        return values.get(1);
-    }
-
-    private String firstChunkText(List<MaterialChunk> chunks, String fallback) {
-        if (chunks == null || chunks.isEmpty()) {
-            return fallback;
-        }
-        return chunks.stream()
-                .map(MaterialChunk::getContent)
-                .filter(content -> content != null && !content.isBlank())
-                .findFirst()
-                .orElse(fallback);
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength).trim();
-    }
 }

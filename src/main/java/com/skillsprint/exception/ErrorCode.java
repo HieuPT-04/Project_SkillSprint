@@ -90,6 +90,7 @@ public enum ErrorCode {
     QUIZ_ATTEMPT_NOT_FOUND("Chưa có lượt làm quiz", HttpStatus.NOT_FOUND),
     QUIZ_INVALID_ANSWER("Đáp án quiz không hợp lệ", HttpStatus.BAD_REQUEST),
     QUIZ_GENERATION_FAILED("Không thể tạo quiz", HttpStatus.INTERNAL_SERVER_ERROR),
+    QUIZ_GENERATION_UNAVAILABLE("Hiện chưa thể tạo quiz tự động. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
