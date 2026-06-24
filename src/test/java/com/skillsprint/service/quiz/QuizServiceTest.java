@@ -39,6 +39,9 @@ import com.skillsprint.repository.QuizQuestionRepository;
 import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.service.points.PointService;
+import com.skillsprint.service.quiz.ai.AiQuizDraft;
+import com.skillsprint.service.quiz.ai.AiQuizOptionDraft;
+import com.skillsprint.service.quiz.ai.AiQuizQuestionDraft;
 import com.skillsprint.service.quiz.ai.GeminiQuizClient;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
@@ -116,7 +119,32 @@ class QuizServiceTest {
     }
 
     @Test
-    void generateBuildsFallbackQuizWhenAiDraftIsInvalidAndHidesCorrectAnswersForLearner() {
+    void generateReturnsControlledFailureAndDoesNotSaveQuizWhenAiDraftUnavailable() {
+        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
+        when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
+                step.getStepId(),
+                "user-1",
+                QuizStatus.ACTIVE
+        )).thenReturn(Optional.empty());
+        when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
+                .thenReturn(List.of(chunk("Core Java summary")));
+        when(geminiQuizClient.generate(any(RoadmapStep.class), anyList())).thenReturn(null);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quizService.generate("user-1", step.getStepId())
+        );
+
+        assertEquals(ErrorCode.QUIZ_GENERATION_UNAVAILABLE, exception.getErrorCode());
+        verify(quizRepository, never()).save(any());
+        verify(quizQuestionRepository, never()).save(any());
+        verify(quizOptionRepository, never()).save(any());
+        verify(quotaService).validateFeature("user-1", PlanFeatureKeys.QUIZ_GENERATION);
+        verify(quotaService).validateCanAccessRoadmapStep("user-1", step);
+    }
+
+    @Test
+    void generateSavesAiQuizAndHidesCorrectAnswersForLearnerWhenDraftIsValid() {
         List<QuizQuestion> savedQuestions = new ArrayList<>();
         List<QuizOption> savedOptions = new ArrayList<>();
         when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
@@ -127,7 +155,7 @@ class QuizServiceTest {
         )).thenReturn(Optional.empty());
         when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
                 .thenReturn(List.of(chunk("Core Java summary")));
-        when(geminiQuizClient.generate(any(RoadmapStep.class), anyList())).thenReturn(null);
+        when(geminiQuizClient.generate(any(RoadmapStep.class), anyList())).thenReturn(aiDraft());
         when(quizRepository.save(any(Quiz.class))).thenAnswer(invocation -> {
             Quiz quiz = invocation.getArgument(0);
             quiz.setQuizId(UUID.randomUUID());
@@ -156,7 +184,8 @@ class QuizServiceTest {
 
         assertEquals(5, response.getQuestionCount());
         assertEquals(5, response.getQuestions().size());
-        assertEquals(16, savedOptions.size());
+        assertEquals(20, savedOptions.size());
+        assertTrue(savedQuestions.stream().allMatch(q -> q.getType() == QuizQuestionType.SINGLE_CHOICE));
         assertNull(response.getQuestions().get(0).getOptions().get(0).getCorrect());
         verify(quotaService).validateFeature("user-1", PlanFeatureKeys.QUIZ_GENERATION);
         verify(quotaService).validateCanAccessRoadmapStep("user-1", step);
@@ -300,6 +329,31 @@ class QuizServiceTest {
         option.setCorrect(correct);
         option.setSequenceNo(sequenceNo);
         return option;
+    }
+
+    private AiQuizDraft aiDraft() {
+        return new AiQuizDraft(List.of(
+                aiQuestion(1),
+                aiQuestion(2),
+                aiQuestion(3),
+                aiQuestion(4),
+                aiQuestion(5)
+        ));
+    }
+
+    private AiQuizQuestionDraft aiQuestion(int n) {
+        return new AiQuizQuestionDraft(
+                "SINGLE_CHOICE",
+                "Câu hỏi nội dung số " + n + " kiểm tra kiến thức gì?",
+                List.of(
+                        new AiQuizOptionDraft("A", "Đáp án đúng " + n),
+                        new AiQuizOptionDraft("B", "Đáp án sai B" + n),
+                        new AiQuizOptionDraft("C", "Đáp án sai C" + n),
+                        new AiQuizOptionDraft("D", "Đáp án sai D" + n)
+                ),
+                "A",
+                "Giải thích cho câu " + n
+        );
     }
 
     private MaterialChunk chunk(String content) {

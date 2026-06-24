@@ -183,6 +183,42 @@ class GeminiQuizClientTest {
     }
 
     @Test
+    void validateDraftRejectsPlaceholderDistractorOptions() {
+        AiQuizQuestionDraft placeholder = new AiQuizQuestionDraft(
+                "SINGLE_CHOICE",
+                "Trợ từ は dùng để làm gì trong câu?",
+                List.of(
+                        new AiQuizOptionDraft("A", "Đánh dấu chủ đề của câu"),
+                        new AiQuizOptionDraft("B", "Thông tin ngoài tài liệu"),
+                        new AiQuizOptionDraft("C", "Nội dung không liên quan"),
+                        new AiQuizOptionDraft("D", "Tên file upload")
+                ),
+                "A",
+                "Explanation"
+        );
+
+        assertNull(client.validateDraft(draftWithLast(placeholder)));
+    }
+
+    @Test
+    void validateDraftRejectsVietnameseAllOfTheAboveOption() {
+        AiQuizQuestionDraft allOfTheAbove = new AiQuizQuestionDraft(
+                "SINGLE_CHOICE",
+                "Cách chào buổi sáng trong tiếng Nhật là gì?",
+                List.of(
+                        new AiQuizOptionDraft("A", "おはよう"),
+                        new AiQuizOptionDraft("B", "こんにちは"),
+                        new AiQuizOptionDraft("C", "こんばんは"),
+                        new AiQuizOptionDraft("D", "Tất cả đáp án trên")
+                ),
+                "A",
+                "Explanation"
+        );
+
+        assertNull(client.validateDraft(draftWithLast(allOfTheAbove)));
+    }
+
+    @Test
     void buildChunkContextSkipsBlankChunksBeforeApplyingMaxChunks() {
         List<MaterialChunk> chunks = new ArrayList<>();
         for (int i = 0; i < 8; i++) {

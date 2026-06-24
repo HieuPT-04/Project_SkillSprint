@@ -48,6 +48,15 @@ public class GeminiQuizClient {
             "đây là bài học về",
             "chủ đề này nói về"
     );
+    private static final List<String> PLACEHOLDER_OPTION_PATTERNS = List.of(
+            "thông tin ngoài tài liệu",
+            "nội dung không liên quan",
+            "tên file upload",
+            "unrelated content",
+            "uploaded file name",
+            "không có đáp án nào đúng",
+            "tất cả đáp án trên"
+    );
 
     GeminiProperties properties;
     ObjectMapper objectMapper;
@@ -317,6 +326,9 @@ public class GeminiQuizClient {
             if (normalized.contains("all of the above") || normalized.contains("none of the above")) {
                 return "uses all/none of the above";
             }
+            if (isPlaceholderOption(normalized)) {
+                return "uses a placeholder option";
+            }
             labels.add(option.label());
         }
         if (!SINGLE_CHOICE_LABELS.equals(labels)) {
@@ -326,6 +338,15 @@ public class GeminiQuizClient {
             return "has a correctLabel outside A, B, C, D";
         }
         return null;
+    }
+
+    private boolean isPlaceholderOption(String normalizedText) {
+        for (String pattern : PLACEHOLDER_OPTION_PATTERNS) {
+            if (normalizedText.contains(pattern)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isMetaQuestion(String question) {
