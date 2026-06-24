@@ -29,7 +29,25 @@ public class GeminiQuizClient {
     private static final int REQUIRED_QUESTION_COUNT = 5;
     private static final int MAX_EXPLANATION_LENGTH = 240;
     private static final Set<String> SINGLE_CHOICE_LABELS = Set.of("A", "B", "C", "D");
-    private static final Set<String> TRUE_FALSE_LABELS = Set.of("A", "B");
+    private static final List<String> META_QUESTION_PATTERNS = List.of(
+            "what is this lesson about",
+            "what does this lesson teach",
+            "what is this topic about",
+            "what does this topic teach",
+            "what is the main topic",
+            "main topic of this lesson",
+            "this roadmap step",
+            "this lesson focuses on",
+            "this topic focuses on",
+            "bài học này",
+            "nội dung này",
+            "chủ đề chính",
+            "đang học về",
+            "học về điều gì",
+            "bài này nói về",
+            "đây là bài học về",
+            "chủ đề này nói về"
+    );
 
     GeminiProperties properties;
     ObjectMapper objectMapper;
@@ -80,14 +98,14 @@ public class GeminiQuizClient {
         return """
                 You are the AI quiz generator for SkillSprint.
 
-                Create exactly 5 quiz questions based on the roadmap step and the learning materials provided below.
+                Create exactly 5 concrete multiple-choice quiz questions that test the learner's understanding of the actual concepts, vocabulary, rules, examples, or usage points found in the provided learning materials.
                 Return a valid JSON object only. Do not include markdown blocks or any explanation outside the JSON.
 
                 Required Schema:
                 {
                   "questions": [
                     {
-                      "type": "SINGLE_CHOICE|TRUE_FALSE",
+                      "type": "SINGLE_CHOICE",
                       "question": "string",
                       "options": [
                         {"label": "A", "text": "string"}
@@ -103,19 +121,23 @@ public class GeminiQuizClient {
                 - Do not include any fields outside the required schema.
                 - Always generate exactly 5 questions.
                 - Each question must test a distinct concept or vocabulary item; do not repeat the same concept across questions.
-                - Prefer SINGLE_CHOICE, but you can use TRUE_FALSE where appropriate.
+                - Every question must be SINGLE_CHOICE. Do not generate TRUE_FALSE or any other question type.
                 - SINGLE_CHOICE questions must have exactly 4 options: A, B, C, D. Exactly one option must be the correct answer, and the other three options must be plausible and not obviously wrong, but unambiguously incorrect according to the provided materials.
                 - Distribute the correct answer label (A, B, C, or D) across different positions rather than favoring one label.
                 - Option texts must be non-empty and must not duplicate each other within the same question.
                 - Do not use "All of the above", "None of the above", joke options, trick options, or obviously fake distractors.
-                - TRUE_FALSE questions must have exactly 2 options: A and B. Option A is always True, and Option B is always False. The text of these options must represent "True" and "False" in the language of the material (e.g., A = "Đúng", B = "Sai" for Vietnamese; A = "True", B = "False" for English; A = "正しい", B = "間違い" for Japanese).
-                - For TRUE_FALSE, the question must be a statement that can be judged true or false from the provided materials.
                 - The correctLabel must match one of the option labels.
                 - Questions must be short, clear, and not start with "Step", "Bước", numbers, or mechanical prefixes.
                 - Do not ask about knowledge outside the provided materials.
                 - Thin-material fallback: If the provided materials contain fewer than 5 distinct testable facts, create comprehension or application questions that still rely only on the given materials, rather than fabricating external facts.
                 - If the material is ambiguous, prefer simpler comprehension questions rather than guessing.
                 - If a question cannot be grounded in the provided roadmap step or material chunks, replace it with a grounded comprehension question.
+                - Do not create meta questions about the lesson, course, roadmap step, topic title, or material title.
+                - Do not ask "what is this lesson/topic/material about?" or similar questions.
+                - Do not generate questions whose answer is simply the title, subtitle, topic name, or general subject of the material.
+                - Questions must test actual concepts, vocabulary, definitions, grammar rules, examples, usage, comparisons, or application points from the provided materials.
+                - Avoid generic questions such as "What is the main topic?", "What does this lesson teach?", "Bài học này nói về gì?", or "Chủ đề chính là gì?"
+                - If the material is thin, create simple comprehension questions about concrete facts from the material instead of asking meta/title questions.
                 - Language Match: The question, options (for SINGLE_CHOICE), and explanation must automatically match the primary language of the provided learning materials (Material chunks) or roadmap step. If they differ, the language of the Material chunks takes priority. (e.g., if the material is in Japanese, generate the quiz in Japanese; if it is in English, generate it in English; if it is in Vietnamese, generate it in Vietnamese).
                 - Keep the explanation short, easy to understand, and under 240 characters (not bytes).
 
@@ -250,11 +272,14 @@ public class GeminiQuizClient {
             return "is null";
         }
         String type = question.type();
-        if (!"SINGLE_CHOICE".equals(type) && !"TRUE_FALSE".equals(type)) {
-            return "has an invalid type";
+        if (!"SINGLE_CHOICE".equals(type)) {
+            return "must be SINGLE_CHOICE but was " + type;
         }
         if (isBlank(question.question())) {
             return "has blank question text";
+        }
+        if (isMetaQuestion(question.question())) {
+            return "looks like a meta question";
         }
         if (isBlank(question.explanation())) {
             return "has a blank explanation";
@@ -269,10 +294,7 @@ public class GeminiQuizClient {
         if (options == null) {
             return "has null options";
         }
-        if ("SINGLE_CHOICE".equals(type)) {
-            return singleChoiceError(question, options);
-        }
-        return trueFalseError(question, options);
+        return singleChoiceError(question, options);
     }
 
     private String singleChoiceError(AiQuizQuestionDraft question, List<AiQuizOptionDraft> options) {
@@ -306,27 +328,17 @@ public class GeminiQuizClient {
         return null;
     }
 
-    private String trueFalseError(AiQuizQuestionDraft question, List<AiQuizOptionDraft> options) {
-        if (options.size() != 2) {
-            return "must have exactly 2 options";
+    private boolean isMetaQuestion(String question) {
+        if (question == null) {
+            return false;
         }
-        Set<String> labels = new HashSet<>();
-        for (AiQuizOptionDraft option : options) {
-            if (option == null) {
-                return "has a null option";
+        String normalized = question.toLowerCase(Locale.ROOT);
+        for (String pattern : META_QUESTION_PATTERNS) {
+            if (normalized.contains(pattern)) {
+                return true;
             }
-            if (isBlank(option.text())) {
-                return "has a blank option text";
-            }
-            labels.add(option.label());
         }
-        if (!TRUE_FALSE_LABELS.equals(labels)) {
-            return "must use labels A and B";
-        }
-        if (!TRUE_FALSE_LABELS.contains(question.correctLabel())) {
-            return "has a correctLabel outside A, B";
-        }
-        return null;
+        return false;
     }
 
     private boolean isBlank(String value) {
