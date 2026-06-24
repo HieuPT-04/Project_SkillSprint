@@ -57,6 +57,7 @@ public enum ErrorCode {
     CALENDAR_TASK_ALREADY_COMPLETED("Task đã hoàn thành không thể dời lịch", HttpStatus.CONFLICT),
     CALENDAR_TASK_TIME_CONFLICT("Khung giờ này đã có task khác", HttpStatus.CONFLICT),
     CALENDAR_STUDY_DAYS_REQUIRED("Cần chọn ít nhất một ngày học trong tuần", HttpStatus.BAD_REQUEST),
+    CALENDAR_AVAILABILITY_INSUFFICIENT("Số ngày học và khung giờ bạn chọn chưa đủ để xếp hết lộ trình trong thời hạn. Vui lòng chọn thêm ngày học, thêm khung giờ, tăng số giờ học mỗi tuần hoặc kéo dài thời hạn hoàn thành", HttpStatus.BAD_REQUEST),
     CALENDAR_TIME_SLOT_REQUIRED("Cần chọn khung giờ học trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
     CALENDAR_ONBOARDING_REQUIRED("Cần setup onboarding trước khi sinh lịch học", HttpStatus.BAD_REQUEST),
 
