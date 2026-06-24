@@ -27,7 +27,6 @@ import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.service.calendar.CalendarService;
 import com.skillsprint.service.subscription.QuotaService;
 import com.skillsprint.service.subscription.SubscriptionService;
-import com.skillsprint.enums.plan.ServicePlanType;
 import java.util.EnumSet;
 import java.util.List;
 import java.time.Duration;
@@ -52,9 +51,8 @@ public class StudySessionService {
     private static final int DEFAULT_SHORT_BREAK_MINUTES = 5;
     private static final int DEFAULT_LONG_BREAK_MINUTES = 15;
     private static final int DEFAULT_TOTAL_CYCLES = 4;
-    private static final int MAX_REQUIRED_STUDY_MINUTES = 15;
+    static final int MIN_VALID_STUDY_MINUTES = 15;
     private static final int FALLBACK_REQUIRED_STUDY_MINUTES = 5;
-    private static final double REQUIRED_STUDY_RATIO = 0.30;
     private static final EnumSet<PomodoroSessionStatus> ACTIVE_POMODORO_STATUSES =
             EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED);
 
@@ -132,25 +130,16 @@ public class StudySessionService {
         if (session.getStatus() != StudySessionStatus.COMPLETED) {
             Instant endedAt = Instant.now();
             session.setEndedAt(endedAt);
-            
-            int duration = calculateDurationMinutes(session.getStartedAt(), endedAt);
-            try {
-                com.skillsprint.entity.ServicePlan plan = subscriptionService.getCurrentPlan(userId);
-                if (plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT) {
-                    int required = calculateMinimumRequiredMinutes(session.getCalendarTask());
-                    duration = Math.max(Math.max(20, required), duration);
-                }
-            } catch (Exception e) {
-                // Ignore and use actual duration
-            }
-            
+
+            PomodoroSession activePomodoro = findActivePomodoro(session);
+            int duration = calculateStudyDurationMinutes(session, activePomodoro, endedAt);
             session.setDurationMinutes(duration);
             session.setStatus(StudySessionStatus.COMPLETED);
             session.setNotes(request == null ? null : request.getNotes());
             session.setFocusScore(request == null ? null : request.getFocusScore());
             studySessionRepository.save(session);
 
-            completeActivePomodoro(session, endedAt);
+            completeActivePomodoro(activePomodoro, endedAt);
 
             if (shouldCompleteCalendarTask(session)) {
                 calendarService.completeTask(userId, session.getCalendarTask().getTaskId());
@@ -444,8 +433,7 @@ public class StudySessionService {
         return sessions.get(0);
     }
 
-    private void completeActivePomodoro(StudySession session, Instant endedAt) {
-        PomodoroSession pomodoro = findActivePomodoro(session);
+    private void completeActivePomodoro(PomodoroSession pomodoro, Instant endedAt) {
         if (pomodoro == null) {
             return;
         }
@@ -466,6 +454,10 @@ public class StudySessionService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private long safeLong(Long value) {
+        return value == null ? 0L : value;
     }
 
     private int calculateRemainingSeconds(PomodoroSession pomodoro) {
@@ -498,12 +490,47 @@ public class StudySessionService {
         return Math.max(1, (int) Duration.between(startedAt, endedAt).toMinutes());
     }
 
+    private int calculateStudyDurationMinutes(StudySession session, PomodoroSession activePomodoro, Instant endedAt) {
+        PomodoroSession pomodoro = activePomodoro;
+        if (pomodoro == null) {
+            pomodoro = findLatestFinishedPomodoro(session);
+        }
+        if (pomodoro != null) {
+            return validStudyMinutes(safeInt(pomodoro.getCompletedFocusMinutes()));
+        }
+        return validStudyMinutes(calculateDurationMinutes(session.getStartedAt(), endedAt));
+    }
+
+    private PomodoroSession findLatestFinishedPomodoro(StudySession session) {
+        if (session == null || session.getSessionId() == null) {
+            return null;
+        }
+        List<PomodoroSession> sessions = pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        );
+        return sessions.stream()
+                .filter(pomodoro -> pomodoro.getStatus() == PomodoroSessionStatus.COMPLETED)
+                .findFirst()
+                .orElse(null);
+    }
+
     private boolean shouldCompleteCalendarTask(StudySession session) {
         CalendarTask task = session.getCalendarTask();
-        if (task == null || task.getStatus() == CalendarTaskStatus.COMPLETED) {
+        if (task == null || task.getTaskId() == null) {
             return false;
         }
-        return safeInt(session.getDurationMinutes()) >= calculateMinimumRequiredMinutes(task);
+        Long studiedMinutes = studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                session.getUser().getUserId(),
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                MIN_VALID_STUDY_MINUTES
+        );
+        return safeLong(studiedMinutes) >= calculateMinimumRequiredMinutes(task);
+    }
+
+    private int validStudyMinutes(int minutes) {
+        return minutes >= MIN_VALID_STUDY_MINUTES ? minutes : 0;
     }
 
     private boolean isCalendarTaskCompleted(StudySession session) {
@@ -519,7 +546,6 @@ public class StudySessionService {
         if (taskDuration == null || taskDuration <= 0) {
             return FALLBACK_REQUIRED_STUDY_MINUTES;
         }
-        int ratioMinutes = (int) Math.ceil(taskDuration * REQUIRED_STUDY_RATIO);
-        return Math.max(1, Math.min(MAX_REQUIRED_STUDY_MINUTES, ratioMinutes));
+        return taskDuration;
     }
 }

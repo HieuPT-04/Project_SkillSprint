@@ -189,9 +189,9 @@ class StudySessionServiceTest {
     }
 
     @Test
-    void finishSessionCompletesCalendarTaskWhenMinimumDurationReached() {
+    void finishSessionCompletesCalendarTaskWhenTaskDurationReached() {
         StudySession session = studySession(task);
-        session.setStartedAt(Instant.now().minusSeconds(30 * 60L));
+        session.setStartedAt(Instant.now().minusSeconds(60 * 60L));
         FinishStudySessionRequest request = new FinishStudySessionRequest();
         request.setNotes("Done");
         request.setFocusScore(5);
@@ -209,12 +209,18 @@ class StudySessionServiceTest {
                 session.getSessionId(),
                 EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
         )).thenReturn(List.of());
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(60L);
         when(studySessionMapper.toResponse(
                 any(StudySession.class),
                 org.mockito.Mockito.isNull(),
                 org.mockito.Mockito.eq(0),
                 org.mockito.Mockito.eq(false),
-                org.mockito.Mockito.eq(15)
+                org.mockito.Mockito.eq(60)
         )).thenReturn(expected);
 
         StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), request);
@@ -224,6 +230,301 @@ class StudySessionServiceTest {
         assertEquals("Done", session.getNotes());
         assertEquals(5, session.getFocusScore());
         verify(calendarService).completeTask("user-1", task.getTaskId());
+    }
+
+    @Test
+    void finishSessionCompletesCalendarTaskWhenAccumulatedDurationReached() {
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(30 * 60L));
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of());
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(60L);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                org.mockito.Mockito.isNull(),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(60)
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(StudySessionStatus.COMPLETED, session.getStatus());
+        verify(calendarService).completeTask("user-1", task.getTaskId());
+    }
+
+    @Test
+    void finishSessionDoesNotCompleteCalendarTaskWhenOnlyPartialDurationStudied() {
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(30 * 60L));
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of());
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(30L);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                org.mockito.Mockito.isNull(),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(60)
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(StudySessionStatus.COMPLETED, session.getStatus());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionWithThreeMinutesStoresZeroProgressAndDoesNotCompleteTask() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(3 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 0L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(0, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionWithTenMinutesStoresZeroProgressAndDoesNotCompleteTask() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(10 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 0L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(0, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionWithMinimumValidMinutesCountsProgressButDoesNotCompleteLargeTask() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(15 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 15L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(15, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionWithThirtyMinutesCountsProgressButDoesNotCompleteLargeTask() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(30 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 30L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(30, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionCompletesLargeTaskWhenAccumulatedValidMinutesEqualTarget() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(15 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 96L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(15, session.getDurationMinutes());
+        verify(calendarService).completeTask("user-1", task.getTaskId());
+    }
+
+    @Test
+    void finishSessionCompletesLargeTaskWhenAccumulatedValidMinutesExceedTarget() {
+        task.setDurationMinutes(96);
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(30 * 60L));
+        StudySessionResponse expected = stubFinishSession(session, 120L, 96);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(30, session.getDurationMinutes());
+        verify(calendarService).completeTask("user-1", task.getTaskId());
+    }
+
+    @Test
+    void finishSessionUsesCompletedPomodoroFocusMinutesInsteadOfElapsedWallTime() {
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(90 * 60L));
+        PomodoroSession pomodoro = pomodoro(session, PomodoroSessionStatus.IN_PROGRESS);
+        pomodoro.setCompletedFocusMinutes(30);
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.of(pomodoro));
+        when(pomodoroSessionRepository.save(pomodoro)).thenReturn(pomodoro);
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(30L);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                any(PomodoroSession.class),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(60)
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(30, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishSessionWithIncompletePomodoroFocusStoresZeroProgress() {
+        StudySession session = studySession(task);
+        session.setStartedAt(Instant.now().minusSeconds(90 * 60L));
+        PomodoroSession pomodoro = pomodoro(session, PomodoroSessionStatus.IN_PROGRESS);
+        pomodoro.setCompletedFocusMinutes(0);
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.of(pomodoro));
+        when(pomodoroSessionRepository.save(pomodoro)).thenReturn(pomodoro);
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(0L);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                any(PomodoroSession.class),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(60)
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(0, session.getDurationMinutes());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void duplicateFinishSessionDoesNotSaveOrCompleteAgain() {
+        StudySession session = studySession(task);
+        session.setStatus(StudySessionStatus.COMPLETED);
+        session.setDurationMinutes(60);
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of());
+        when(studySessionMapper.toResponse(
+                session,
+                null,
+                0,
+                false,
+                60
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        verify(studySessionRepository, never()).save(any());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void finishPomodoroDoesNotCompleteCalendarTaskOrStudySession() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = pomodoro(session, PomodoroSessionStatus.IN_PROGRESS);
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.IN_PROGRESS)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.of(pomodoro));
+        when(pomodoroSessionRepository.save(pomodoro)).thenReturn(pomodoro);
+        when(studySessionMapper.toResponse(session, pomodoro, 0)).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishPomodoro("user-1", session.getSessionId());
+
+        assertSame(expected, response);
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+        assertEquals(PomodoroSessionStatus.COMPLETED, pomodoro.getStatus());
+        verify(calendarService, never()).completeTask(any(), any());
     }
 
     @Test
@@ -252,6 +553,37 @@ class StudySessionServiceTest {
         );
 
         assertEquals(ErrorCode.STUDY_SESSION_NOT_FOUND, exception.getErrorCode());
+    }
+
+    private StudySessionResponse stubFinishSession(StudySession session, long accumulatedValidMinutes, int requiredMinutes) {
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of());
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                session.getCalendarTask().getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(accumulatedValidMinutes);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                org.mockito.Mockito.isNull(),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(requiredMinutes)
+        )).thenReturn(expected);
+        return expected;
     }
 
     private StartStudySessionRequest pomodoroRequest() {

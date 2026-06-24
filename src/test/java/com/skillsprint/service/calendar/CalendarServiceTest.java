@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.dto.request.calendar.CreateCalendarTaskRequest;
 import com.skillsprint.dto.request.calendar.GenerateCalendarRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
+import com.skillsprint.dto.request.calendar.UpdateCalendarTaskStatusRequest;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.entity.CalendarTask;
 import com.skillsprint.entity.OnboardingProfile;
@@ -29,6 +30,9 @@ import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import com.skillsprint.enums.calendar.ClassifiedBy;
 import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import com.skillsprint.enums.learningstructure.DifficultyLevel;
+import com.skillsprint.enums.roadmap.RoadmapStatus;
+import com.skillsprint.enums.roadmap.RoadmapStepStatus;
+import com.skillsprint.enums.session.StudySessionStatus;
 import com.skillsprint.enums.workspace.WorkspaceStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -220,6 +224,155 @@ class CalendarServiceTest {
         );
 
         assertEquals(ErrorCode.CALENDAR_TASK_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void completeTaskDoesNotCompleteRoadmapStepWhenStudyMinutesAreBelowStepEstimate() {
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        roadmap.setCurrentStep(step);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        CalendarTaskResponse expected = CalendarTaskResponse.builder()
+                .taskId(task.getTaskId())
+                .status(CalendarTaskStatus.COMPLETED)
+                .build();
+
+        when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(60L);
+        when(calendarTaskRepository.save(task)).thenReturn(task);
+        when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        )).thenReturn(List.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
+                "user-1",
+                step.getStepId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(30L);
+        when(calendarMapper.toTaskResponse(task)).thenReturn(expected);
+
+        CalendarTaskResponse response = calendarService.completeTask("user-1", task.getTaskId());
+
+        assertSame(expected, response);
+        assertEquals(CalendarTaskStatus.COMPLETED, task.getStatus());
+        assertEquals(RoadmapStepStatus.CURRENT, step.getStatus());
+        verify(roadmapStepRepository, never()).save(any());
+        verify(roadmapProgressLogRepository, never()).save(any());
+        verify(pointService, never()).awardRoadmapStepCompleted(any(), any(), any());
+    }
+
+    @Test
+    void completeTaskRejectsRoadmapTaskWhenValidStudyMinutesAreBelowTaskDuration() {
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(30L);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> calendarService.completeTask("user-1", task.getTaskId())
+        );
+
+        assertEquals(ErrorCode.CALENDAR_TASK_STUDY_TIME_REQUIRED, exception.getErrorCode());
+        assertEquals(CalendarTaskStatus.TODO, task.getStatus());
+        verify(calendarTaskRepository, never()).save(any());
+        verify(roadmapStepRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTaskStatusRejectsCompletedForRoadmapTaskWhenValidStudyMinutesAreBelowTaskDuration() {
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        whenOwnedWorkspace(workspace.getWorkspaceId());
+        when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(30L);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> calendarService.updateTaskStatus(
+                        "user-1",
+                        workspace.getWorkspaceId(),
+                        task.getTaskId(),
+                        statusRequest("COMPLETED")
+                )
+        );
+
+        assertEquals(ErrorCode.CALENDAR_TASK_STUDY_TIME_REQUIRED, exception.getErrorCode());
+        assertEquals(CalendarTaskStatus.TODO, task.getStatus());
+        verify(calendarTaskRepository, never()).save(any());
+        verify(roadmapStepRepository, never()).save(any());
+    }
+
+    @Test
+    void completeTaskCompletesRoadmapStepWhenStudyMinutesReachStepEstimate() {
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        roadmap.setCurrentStep(step);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        CalendarTaskResponse expected = CalendarTaskResponse.builder()
+                .taskId(task.getTaskId())
+                .status(CalendarTaskStatus.COMPLETED)
+                .build();
+
+        when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(96L);
+        when(calendarTaskRepository.save(task)).thenReturn(task);
+        when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        )).thenReturn(List.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
+                "user-1",
+                step.getStepId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(96L);
+        when(roadmapStepRepository.save(any(RoadmapStep.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        )).thenReturn(List.of(step));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatusOrderBySequenceNoAsc(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.UPCOMING
+        )).thenReturn(List.of());
+        when(calendarMapper.toTaskResponse(task)).thenReturn(expected);
+
+        CalendarTaskResponse response = calendarService.completeTask("user-1", task.getTaskId());
+
+        assertSame(expected, response);
+        assertEquals(CalendarTaskStatus.COMPLETED, task.getStatus());
+        assertEquals(RoadmapStepStatus.COMPLETED, step.getStatus());
+        assertEquals(RoadmapStatus.COMPLETED, roadmap.getStatus());
+        assertEquals(1, roadmap.getCompletedSteps());
+        assertEquals(BigDecimal.valueOf(100).setScale(2), roadmap.getProgressPercent());
+        verify(roadmapStepRepository).save(step);
+        verify(roadmapProgressLogRepository).save(any());
+        verify(pointService, org.mockito.Mockito.atLeastOnce())
+                .awardRoadmapStepCompleted(user, workspace, step.getStepId());
     }
 
     @Test
@@ -535,6 +688,12 @@ class CalendarServiceTest {
         return request;
     }
 
+    private UpdateCalendarTaskStatusRequest statusRequest(String status) {
+        UpdateCalendarTaskStatusRequest request = new UpdateCalendarTaskStatusRequest();
+        request.setStatus(status);
+        return request;
+    }
+
     private CalendarTask task(CalendarTaskStatus status) {
         CalendarTask task = new CalendarTask();
         task.setTaskId(UUID.randomUUID());
@@ -548,6 +707,38 @@ class CalendarServiceTest {
         task.setStatus(status);
         task.setCategory(CalendarTaskCategory.PERSONAL);
         task.setPriority(CalendarTaskPriority.MEDIUM);
+        return task;
+    }
+
+    private Roadmap roadmap(int totalSteps) {
+        Roadmap roadmap = new Roadmap();
+        roadmap.setRoadmapId(UUID.randomUUID());
+        roadmap.setWorkspace(workspace);
+        roadmap.setUser(user);
+        roadmap.setStatus(RoadmapStatus.ACTIVE);
+        roadmap.setTotalSteps(totalSteps);
+        roadmap.setCompletedSteps(0);
+        roadmap.setProgressPercent(BigDecimal.ZERO);
+        return roadmap;
+    }
+
+    private RoadmapStep roadmapStep(Roadmap roadmap, int estimatedMinutes, RoadmapStepStatus status) {
+        RoadmapStep step = new RoadmapStep();
+        step.setStepId(UUID.randomUUID());
+        step.setWorkspace(workspace);
+        step.setRoadmap(roadmap);
+        step.setTitle("Calendar integration");
+        step.setEstimatedMinutes(estimatedMinutes);
+        step.setSequenceNo(1);
+        step.setStatus(status);
+        return step;
+    }
+
+    private CalendarTask roadmapTask(RoadmapStep step, CalendarTaskStatus status) {
+        CalendarTask task = task(status);
+        task.setRoadmap(step.getRoadmap());
+        task.setRoadmapStep(step);
+        task.setCategory(CalendarTaskCategory.DEEP_STUDY);
         return task;
     }
 
