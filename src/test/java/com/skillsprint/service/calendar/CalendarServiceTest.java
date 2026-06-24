@@ -2,6 +2,7 @@ package com.skillsprint.service.calendar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -252,6 +253,58 @@ class CalendarServiceTest {
     }
 
     @Test
+    void generateAcceptsSingleStudyDayWithSingleSlotWhenCapacityAllows() {
+        // 1 day + 1 slot used to fail with the misleading "Cần chọn ít nhất một ngày học" message.
+        // Over the default 30-day window a single weekday yields enough dates for 4 tasks at 1/day.
+        List<String> slots = List.of("20:00-22:00");
+        List<CalendarTask> saved = runGenerate(List.of("THURSDAY"), slots, generateRequest(1));
+
+        assertEquals(4, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+    }
+
+    @Test
+    void generateAcceptsTwoStudyDaysWithSingleSlotWhenCapacityAllows() {
+        List<String> slots = List.of("20:00-22:00");
+        List<CalendarTask> saved = runGenerate(List.of("THURSDAY", "FRIDAY"), slots, generateRequest(1));
+
+        assertEquals(4, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+    }
+
+    @Test
+    void generateStillWorksWithThreeStudyDaysAndThreeSlots() {
+        List<String> slots = List.of("08:00-10:00", "14:00-16:00", "19:00-21:00");
+        List<CalendarTask> saved =
+                runGenerate(List.of("MONDAY", "WEDNESDAY", "FRIDAY"), slots, generateRequest(3));
+
+        assertEquals(4, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+    }
+
+    @Test
+    void generateReportsCapacityErrorRatherThanStudyDaysRequiredWhenAvailabilityIsTooTight() {
+        // Window Mon 2026-06-22 .. Fri 2026-06-26 contains a single Thursday, and sessionsPerDay is
+        // capped at 1, so 4 tasks cannot fit. The user did select a day, so the error must be the
+        // capacity-specific one, not CALENDAR_STUDY_DAYS_REQUIRED.
+        prepareGenerateMocks(List.of("20:00-22:00"), List.of("THURSDAY"));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> calendarService.generate(
+                        "user-1",
+                        workspace.getWorkspaceId(),
+                        generateRequest(1, LocalDate.parse("2026-06-26"))
+                )
+        );
+
+        assertEquals(ErrorCode.CALENDAR_AVAILABILITY_INSUFFICIENT, exception.getErrorCode());
+        // The surfaced message must not be the old misleading "no study days selected" text.
+        assertNotEquals(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED.getMessage(), exception.getMessage());
+        verify(calendarTaskRepository, never()).saveAllAndFlush(any());
+    }
+
+    @Test
     void generateRejectsEmptyAvailabilityInsteadOfProducingRandomSchedule() {
         prepareGenerateMocks(List.of());
 
@@ -358,6 +411,10 @@ class CalendarServiceTest {
     }
 
     private void prepareGenerateMocks(List<String> slots) {
+        prepareGenerateMocks(slots, List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"));
+    }
+
+    private void prepareGenerateMocks(List<String> slots, List<String> days) {
         whenOwnedWorkspace(workspace.getWorkspaceId());
         Roadmap roadmap = new Roadmap();
         roadmap.setRoadmapId(UUID.randomUUID());
@@ -369,7 +426,7 @@ class CalendarServiceTest {
         when(calendarTaskRepository.findByRoadmapRoadmapIdAndStatusNot(any(), any()))
                 .thenReturn(List.of());
         when(onboardingProfileRepository.findByWorkspaceWorkspaceId(workspace.getWorkspaceId()))
-                .thenReturn(Optional.of(onboardingProfile(slots)));
+                .thenReturn(Optional.of(onboardingProfile(slots, days)));
     }
 
     private List<RoadmapStep> buildSteps(Roadmap roadmap, int count) {
@@ -389,12 +446,12 @@ class CalendarServiceTest {
         return steps;
     }
 
-    private OnboardingProfile onboardingProfile(List<String> slots) {
+    private OnboardingProfile onboardingProfile(List<String> slots, List<String> days) {
         OnboardingProfile profile = new OnboardingProfile();
         profile.setWorkspace(workspace);
         profile.setTargetGoal("Learn Java");
         profile.setStudyHoursPerWeek(BigDecimal.valueOf(8));
-        profile.setPreferredDays(toJson(List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY")));
+        profile.setPreferredDays(toJson(days));
         profile.setPreferredTimeSlots(toJson(slots));
         return profile;
     }
@@ -408,11 +465,30 @@ class CalendarServiceTest {
     }
 
     private GenerateCalendarRequest generateRequest(int sessionsPerDay) {
+        return generateRequest(sessionsPerDay, null);
+    }
+
+    private GenerateCalendarRequest generateRequest(int sessionsPerDay, LocalDate endDate) {
         GenerateCalendarRequest request = new GenerateCalendarRequest();
         request.setStartDate(LocalDate.parse("2026-06-22")); // Monday
         request.setSessionsPerDay(Math.max(1, sessionsPerDay));
         request.setIncludeReviewSessions(false);
+        request.setEndDate(endDate);
         return request;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<CalendarTask> runGenerate(List<String> days, List<String> slots, GenerateCalendarRequest request) {
+        prepareGenerateMocks(slots, days);
+        when(scheduleRunRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarTaskRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> new ArrayList<>((List<CalendarTask>) invocation.getArgument(0)));
+
+        calendarService.generate("user-1", workspace.getWorkspaceId(), request);
+
+        ArgumentCaptor<List<CalendarTask>> captor = ArgumentCaptor.forClass(List.class);
+        verify(calendarTaskRepository).saveAllAndFlush(captor.capture());
+        return captor.getValue();
     }
 
     private void assertAllTasksWithinWindows(List<CalendarTask> tasks, List<String> slots) {

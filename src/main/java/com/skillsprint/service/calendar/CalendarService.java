@@ -560,7 +560,9 @@ public class CalendarService {
 
         List<LocalDate> studyDates = resolveStudyDates(config, drafts.size());
         if (studyDates.isEmpty()) {
-            throw new AppException(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED);
+            // studyDays is already validated non-empty upstream; reaching here means the selected
+            // weekdays never occur inside the planning window, i.e. the availability is too tight.
+            throw new AppException(ErrorCode.CALENDAR_AVAILABILITY_INSUFFICIENT);
         }
 
         // Never schedule more sessions in a day than there are selected time windows;
@@ -579,7 +581,10 @@ public class CalendarService {
                 dayIndex = findNextAvailableStudyDayIndex(preferredDayIndex - 1, sessionsUsedByDay, maxSessionsPerDay);
             }
             if (dayIndex < 0) {
-                throw new AppException(ErrorCode.CALENDAR_STUDY_DAYS_REQUIRED);
+                // Every available study day is already filled to maxSessionsPerDay: the chosen
+                // days/slots cannot hold the whole roadmap. This is a capacity problem, not a
+                // "no study days selected" problem.
+                throw new AppException(ErrorCode.CALENDAR_AVAILABILITY_INSUFFICIENT);
             }
 
             int sessionIndexInDay = sessionsUsedByDay[dayIndex];
