@@ -55,12 +55,20 @@ public class LearningStructureService {
             "^(?:bước|step|topic)\\s*\\d+(?:\\s*[.\\-:/)]\\s*|\\s+)(.+)$",
             Pattern.CASE_INSENSITIVE
     );
-    // Strips raw outline/document numbering only when followed by a clear separator,
+    // Strips raw outline/document numbering only when the separator is followed by whitespace,
     // e.g. "1. Tổng quan", "1) X", "1.1. Backend", "2 - Y", "3: Z", "4/ W".
-    // Numeric titles without a separator (e.g. "2026 Roadmap", "5 Whys") are preserved.
+    // The mandatory trailing whitespace is what keeps clock times like "08:00" from being treated
+    // as a numeric prefix (there is no space after the ":"). Numeric titles without a separator
+    // (e.g. "2026 Roadmap", "5 Whys") are preserved.
     static Pattern NUMERIC_PREFIX_PATTERN = Pattern.compile(
-            "^\\s*(?:\\d+(?:\\.\\d+)*[.)]|\\d+\\s*[-:/])\\s*(.+)$"
+            "^\\s*(?:\\d+(?:\\.\\d+)*[.)]\\s+|\\d+\\s*[-:/]\\s+)(.+)$"
     );
+    // Clock times / time ranges (e.g. "08:00", "08:00 - 10:00") are real content, never outline
+    // numbering or headings. Used as guards so prefix cleanup and heading detection leave them alone.
+    static Pattern TIME_RANGE_PATTERN = Pattern.compile(
+            "^\\s*\\d{1,2}:\\d{2}(?::\\d{2})?\\s*[-–—]\\s*\\d{1,2}:\\d{2}(?::\\d{2})?\\s*$"
+    );
+    static Pattern TIME_PATTERN = Pattern.compile("^\\s*\\d{1,2}:\\d{2}(?::\\d{2})?\\s*$");
     static String DEFAULT_DISPLAY_TITLE = "Nội dung học";
 
     StudyWorkspaceRepository workspaceRepository;
@@ -254,6 +262,11 @@ public class LearningStructureService {
             StudyWorkspace workspace,
             List<HeadingSection> sections
     ) {
+        List<String> sectionTitles = sections.stream().map(HeadingSection::title).toList();
+        if (isReportLikeHeadings(sectionTitles)) {
+            return createReportStructure(structureVersion, workspace, sections);
+        }
+
         int chapterLevel = sections.stream()
                 .mapToInt(HeadingSection::level)
                 .min()
@@ -323,6 +336,170 @@ public class LearningStructureService {
         }
 
         return new GeneratedStructure(savedChapters, topicRepository.saveAllAndFlush(topics));
+    }
+
+    // Technical reports (bug reports, RFCs, post-mortems) come as a flat list of sections such as
+    // Summary / Root Cause / Fix / Tests. Copying each one verbatim into its own chapter produces a
+    // useless, English, outline-shaped result. Instead, group the sections into learner-friendly
+    // phases (overview → cause → fix → validation → result) with Vietnamese chapter titles.
+    private GeneratedStructure createReportStructure(
+            LearningStructureVersion structureVersion,
+            StudyWorkspace workspace,
+            List<HeadingSection> sections
+    ) {
+        List<List<HeadingSection>> phaseGroups = new ArrayList<>();
+        List<HeadingSection> currentGroup = new ArrayList<>();
+        ReportPhase currentPhase = null;
+
+        for (HeadingSection section : sections) {
+            ReportPhase phase = classifyReportPhase(section.title());
+            if (phase == null) {
+                // Sections with no learning phase (stray fragments) are absorbed into the previous
+                // group's content rather than promoted into their own chapter/topic.
+                if (!currentGroup.isEmpty()) {
+                    currentGroup.get(currentGroup.size() - 1).append(section.title());
+                    section.chunks().forEach(currentGroup.get(currentGroup.size() - 1)::addChunk);
+                }
+                continue;
+            }
+            if (currentPhase != null && phase != currentPhase) {
+                phaseGroups.add(currentGroup);
+                currentGroup = new ArrayList<>();
+            }
+            currentGroup.add(section);
+            currentPhase = phase;
+        }
+        if (!currentGroup.isEmpty()) {
+            phaseGroups.add(currentGroup);
+        }
+
+        List<Chapter> chapters = new ArrayList<>();
+        for (int i = 0; i < phaseGroups.size(); i++) {
+            List<HeadingSection> group = phaseGroups.get(i);
+            List<MaterialChunk> groupChunks = group.stream()
+                    .flatMap(section -> section.chunks().stream())
+                    .distinct()
+                    .toList();
+            String chapterTitle = classifyReportPhase(group.get(0).title()).chapterTitle();
+            Chapter chapter = new Chapter();
+            chapter.setWorkspace(workspace);
+            chapter.setStructureVersion(structureVersion);
+            chapter.setTitle(truncate(chapterTitle, 90));
+            chapter.setSummary(truncate(buildReportChapterSummary(group), 700));
+            chapter.setWhatToLearn(List.of("Hiểu phần " + chapterTitle.toLowerCase(), "Nắm các ý chính trong nhóm nội dung này"));
+            chapter.setKeyConcepts(group.stream()
+                    .map(section -> localizeReportHeading(section.title()))
+                    .distinct()
+                    .limit(5)
+                    .toList());
+            chapter.setLearningOutcomes(List.of("Trình bày lại được " + chapterTitle.toLowerCase()));
+            chapter.setRecommendedFocus(List.of("Đọc theo trình tự nhóm nội dung", "Ghi chú các điểm kỹ thuật quan trọng"));
+            chapter.setDifficulty(resolveDifficulty(i));
+            chapter.setEstimatedMinutes(estimateMinutes(groupChunks, 30));
+            chapter.setSequenceNo(i + 1);
+            chapter.setSourceChunkIds(toChunkIds(groupChunks));
+            chapter.setAiGenerated(false);
+            chapters.add(chapter);
+        }
+
+        List<Chapter> savedChapters = chapterRepository.saveAllAndFlush(chapters);
+
+        List<Topic> topics = new ArrayList<>();
+        for (int i = 0; i < phaseGroups.size(); i++) {
+            Chapter chapter = savedChapters.get(i);
+            List<HeadingSection> group = phaseGroups.get(i);
+            for (int topicIndex = 0; topicIndex < group.size(); topicIndex++) {
+                HeadingSection section = group.get(topicIndex);
+                String topicTitle = localizeReportHeading(section.title());
+                Topic topic = new Topic();
+                topic.setChapter(chapter);
+                topic.setWorkspace(workspace);
+                topic.setStructureVersion(structureVersion);
+                topic.setTitle(cleanDisplayTitle(topicTitle, 90));
+                topic.setSummaryContent(truncate(section.text(), 700));
+                topic.setWhatToLearn(List.of("Đọc và hiểu: " + topic.getTitle()));
+                topic.setKeyConcepts(List.of(topic.getTitle()));
+                topic.setLearningOutcomes(List.of("Trình bày được ý chính của " + topic.getTitle()));
+                topic.setRecommendedFocus(List.of("Tập trung vào điểm kỹ thuật và lý do thay đổi"));
+                topic.setDifficulty(chapter.getDifficulty());
+                topic.setEstimatedMinutes(estimateMinutes(section.chunks(), 15));
+                topic.setSequenceNo(topicIndex + 1);
+                topic.setSourceChunkIds(toChunkIds(section.chunks()));
+                topic.setAiGenerated(false);
+                topics.add(topic);
+            }
+        }
+
+        return new GeneratedStructure(savedChapters, topicRepository.saveAllAndFlush(topics));
+    }
+
+    private String buildReportChapterSummary(List<HeadingSection> group) {
+        return group.stream()
+                .map(section -> localizeReportHeading(section.title()))
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("Nhóm nội dung học");
+    }
+
+    // True when the heading list looks like a technical report: most headings map to a known
+    // report phase and at least three distinct phases are present.
+    static boolean isReportLikeHeadings(List<String> titles) {
+        if (titles == null || titles.size() < 4) {
+            return false;
+        }
+        long classified = titles.stream().filter(title -> classifyReportPhase(title) != null).count();
+        long distinctPhases = titles.stream()
+                .map(LearningStructureService::classifyReportPhase)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+        return classified * 2 >= titles.size() && distinctPhases >= 3;
+    }
+
+    static ReportPhase classifyReportPhase(String title) {
+        String normalized = title == null ? "" : title.toLowerCase().trim();
+        if (containsAny(normalized, "summary", "tổng quan", "tong quan", "overview", "affected area",
+                "phạm vi", "pham vi", "context", "bối cảnh", "boi canh", "symptom", "triệu chứng",
+                "background", "introduction", "giới thiệu")) {
+            return ReportPhase.OVERVIEW;
+        }
+        if (containsAny(normalized, "root cause", "nguyên nhân", "nguyen nhan", "why", "vì sao", "vi sao",
+                "impact", "tác động", "tac dong", "analysis", "phân tích", "phan tich")) {
+            return ReportPhase.ROOT_CAUSE;
+        }
+        if (containsAny(normalized, "fix", "khắc phục", "khac phuc", "cách sửa", "cach sua", "solution",
+                "giải pháp", "giai phap", "implementation", "implemented", "triển khai", "trien khai",
+                "expected behavior", "expected behaviour", "hành vi mong đợi", "change")) {
+            return ReportPhase.FIX;
+        }
+        if (containsAny(normalized, "test", "kiểm thử", "kiem thu", "verification", "verify", "xác minh",
+                "xac minh", "qa", "validation")) {
+            return ReportPhase.VALIDATION;
+        }
+        if (containsAny(normalized, "result", "kết quả", "ket qua", "conclusion", "kết luận", "ket luan",
+                "outcome")) {
+            return ReportPhase.RESULT;
+        }
+        return null;
+    }
+
+    // Maps common English technical-report section headings to clean Vietnamese display titles.
+    static String localizeReportHeading(String title) {
+        if (title == null || title.isBlank()) {
+            return DEFAULT_DISPLAY_TITLE;
+        }
+        String normalized = title.toLowerCase().trim();
+        return switch (normalized) {
+            case "summary" -> "Tổng quan";
+            case "affected area" -> "Phạm vi ảnh hưởng";
+            case "root cause" -> "Nguyên nhân gốc";
+            case "impact" -> "Tác động";
+            case "fix implemented", "fix" -> "Cách sửa";
+            case "expected behavior", "expected behaviour" -> "Hành vi mong đợi";
+            case "tests added / updated", "tests added/updated", "tests" -> "Kiểm thử đã bổ sung";
+            case "verification" -> "Xác minh";
+            case "final result" -> "Kết quả cuối cùng";
+            default -> title.trim();
+        };
     }
 
     private GeneratedStructure createSyllabusBasedStructure(
@@ -590,6 +767,12 @@ public class LearningStructureService {
     static String cleanDisplayTitle(String value, int maxLength) {
         String title = defaultText(value, DEFAULT_DISPLAY_TITLE).replaceAll("\\s+", " ").trim();
 
+        // Never run prefix cleanup on clock times / time ranges; multi-pass stripping would
+        // otherwise corrupt "08:00 - 10:00" into "00".
+        if (TIME_RANGE_PATTERN.matcher(title).matches() || TIME_PATTERN.matcher(title).matches()) {
+            return truncate(title, maxLength);
+        }
+
         // Combined prefixes such as "Bước 1: 1. Tổng quan" need more than one pass.
         for (int pass = 0; pass < 3; pass++) {
             String previous = title;
@@ -745,7 +928,7 @@ public class LearningStructureService {
         return "GENERAL";
     }
 
-    private boolean containsAny(String text, String... keywords) {
+    private static boolean containsAny(String text, String... keywords) {
         for (String keyword : keywords) {
             if (text.contains(keyword)) {
                 return true;
@@ -891,14 +1074,15 @@ public class LearningStructureService {
 
         Matcher markdownMatcher = MARKDOWN_HEADING_PATTERN.matcher(line);
         if (markdownMatcher.matches()) {
-            return new Heading(markdownMatcher.group(1).length(), markdownMatcher.group(2).trim());
+            String title = markdownMatcher.group(2).trim();
+            return isIgnorableHeadingTitle(title) ? null : new Heading(markdownMatcher.group(1).length(), title);
         }
 
         Matcher numberedMatcher = NUMBERED_HEADING_PATTERN.matcher(line);
         if (numberedMatcher.matches()) {
             String outlineNumber = numberedMatcher.group(1);
             String title = numberedMatcher.group(2).trim();
-            if (!isLikelyNumberedHeading(outlineNumber, title)) {
+            if (!isLikelyNumberedHeading(outlineNumber, title) || isIgnorableHeadingTitle(title)) {
                 return null;
             }
             int level = outlineNumber.split("\\.").length;
@@ -906,6 +1090,22 @@ public class LearningStructureService {
         }
 
         return null;
+    }
+
+    // A heading title that carries no learning value on its own: clock times, time ranges,
+    // bare numbers (e.g. "00"), or fragments too short to be a real section title.
+    static boolean isIgnorableHeadingTitle(String title) {
+        if (title == null) {
+            return true;
+        }
+        String trimmed = title.trim();
+        if (trimmed.length() < 3) {
+            return true;
+        }
+        if (TIME_RANGE_PATTERN.matcher(trimmed).matches() || TIME_PATTERN.matcher(trimmed).matches()) {
+            return true;
+        }
+        return trimmed.matches("\\d{1,4}");
     }
 
     private boolean isLikelyNumberedHeading(String outlineNumber, String title) {
@@ -978,6 +1178,25 @@ public class LearningStructureService {
     }
 
     private record Heading(int level, String title) {
+    }
+
+    // Learning phases used to regroup flat technical-report sections into meaningful chapters.
+    enum ReportPhase {
+        OVERVIEW("Tổng quan vấn đề"),
+        ROOT_CAUSE("Nguyên nhân và tác động"),
+        FIX("Cách khắc phục"),
+        VALIDATION("Kiểm thử và xác minh"),
+        RESULT("Kết quả cuối cùng");
+
+        private final String chapterTitle;
+
+        ReportPhase(String chapterTitle) {
+            this.chapterTitle = chapterTitle;
+        }
+
+        String chapterTitle() {
+            return chapterTitle;
+        }
     }
 
     private record GeneratedStructure(List<Chapter> chapters, List<Topic> topics) {
