@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -43,6 +44,26 @@ public final class LearningDocumentAnalyzer {
             "nop bai",
             "tieu chi cham"
     );
+    private static final List<String> REPORT_HEADING_KEYWORDS = List.of(
+            "tong quan",
+            "loi ",
+            "van de",
+            "cach sua",
+            "file lien quan",
+            "thay doi chinh",
+            "fallback",
+            "prompt gemini",
+            "gemini request",
+            "tests da them",
+            "build",
+            "test result",
+            "files changed",
+            "ket luan",
+            "root cause",
+            "fix implemented",
+            "verification",
+            "final result"
+    );
 
     private LearningDocumentAnalyzer() {
     }
@@ -54,7 +75,7 @@ public final class LearningDocumentAnalyzer {
 
         List<SyllabusSlot> syllabusSlots = extractSyllabusSlots(chunks);
         List<DocumentSection> sections = extractSections(chunks);
-        String normalizedText = normalize(joinChunkText(chunks));
+        String normalizedText = normalizeForMatching(joinChunkText(chunks));
         List<String> signals = collectSignals(normalizedText, chunks, syllabusSlots, sections);
         DocumentKind kind = detectKind(normalizedText, chunks, syllabusSlots, sections);
 
@@ -72,6 +93,9 @@ public final class LearningDocumentAnalyzer {
         }
         if (isLikelyAssignment(normalizedText)) {
             return DocumentKind.ASSIGNMENT;
+        }
+        if (isLikelyReportSections(sections)) {
+            return DocumentKind.LECTURE_NOTE;
         }
         if (isLikelySlideDeck(chunks, sections)) {
             return DocumentKind.SLIDE_DECK;
@@ -124,6 +148,9 @@ public final class LearningDocumentAnalyzer {
         if (isLikelySlideDeck(chunks, sections)) {
             signals.add("slideSignals");
         }
+        if (isLikelyReportSections(sections)) {
+            signals.add("technicalReportHeadings");
+        }
         return signals;
     }
 
@@ -151,7 +178,7 @@ public final class LearningDocumentAnalyzer {
 
                     int slotNo = Integer.parseInt(slotValue);
                     List<String> details = collectSlotDetails(parts, i + 2);
-                    String key = slotNo + ":" + normalize(topic);
+                    String key = slotNo + ":" + normalizeForMatching(topic);
                     slots.putIfAbsent(key, new SyllabusSlot(slotNo, topic, details, safeSourceIds(sourceChunkId)));
                 }
             }
@@ -219,6 +246,10 @@ public final class LearningDocumentAnalyzer {
             return new Heading(outlineNumber.split("\\.").length, title);
         }
 
+        if (isLikelyReportHeading(line)) {
+            return new Heading(2, line);
+        }
+
         if (SLIDE_PATTERN.matcher(line).matches()) {
             return new Heading(1, line);
         }
@@ -239,6 +270,32 @@ public final class LearningDocumentAnalyzer {
                 && !title.endsWith(",")
                 && !title.endsWith(";")
                 && !title.endsWith(":");
+    }
+
+    private static boolean isLikelyReportHeading(String line) {
+        String normalized = normalizeForMatching(line);
+        if (countMatches(normalized, REPORT_HEADING_KEYWORDS) == 0) {
+            return false;
+        }
+        int wordCount = line.split("\\s+").length;
+        return line.length() <= 110
+                && wordCount <= 14
+                && !line.endsWith(".")
+                && !line.endsWith(",")
+                && !line.endsWith(";")
+                && !line.contains("|");
+    }
+
+    private static boolean isLikelyReportSections(List<DocumentSection> sections) {
+        if (sections.size() < 4) {
+            return false;
+        }
+        long reportHeadings = sections.stream()
+                .map(DocumentSection::title)
+                .map(LearningDocumentAnalyzer::normalizeForMatching)
+                .filter(title -> countMatches(title, REPORT_HEADING_KEYWORDS) > 0)
+                .count();
+        return reportHeadings >= 4 && reportHeadings * 2 >= sections.size();
     }
 
     private static List<String> splitTableLine(String line) {
@@ -263,7 +320,7 @@ public final class LearningDocumentAnalyzer {
     }
 
     private static boolean isUsefulDetail(String value) {
-        String normalized = normalize(value);
+        String normalized = normalizeForMatching(value);
         return !normalized.isBlank()
                 && !normalized.equals("lop hoc")
                 && !normalized.equals("class")
@@ -272,7 +329,7 @@ public final class LearningDocumentAnalyzer {
     }
 
     private static boolean isValidSyllabusTopic(String topic) {
-        String normalized = normalize(topic);
+        String normalized = normalizeForMatching(topic);
         return topic.length() >= 4
                 && topic.length() <= 140
                 && !normalized.contains("chu de bai hoc")
@@ -312,13 +369,17 @@ public final class LearningDocumentAnalyzer {
         return chunkId == null ? null : chunkId.toString();
     }
 
-    private static String normalize(String value) {
+    static String normalizeForMatching(String value) {
         if (value == null) {
             return "";
         }
         String normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
-        return normalized.toLowerCase().trim();
+        return normalized.toLowerCase(Locale.ROOT)
+                .replace('đ', 'd')
+                .replace('Đ', 'd')
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     public enum DocumentKind {
