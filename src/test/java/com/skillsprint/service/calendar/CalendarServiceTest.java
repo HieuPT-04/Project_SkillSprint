@@ -530,6 +530,123 @@ class CalendarServiceTest {
         saved.forEach(task -> assertEquals(CalendarTaskSource.SYSTEM_GENERATED, task.getSource()));
     }
 
+    @Test
+    void generateSizesSixDayEightHourWeekIntoCleanBlocksWithoutMultiplyingBySlots() {
+        // 6 study days, 8h/week, 3 slots/day. Slots are availability pools, so we expect 6 tasks
+        // (one per study day) within a single week, NOT 18 (6 days x 3 slots).
+        List<String> slots = List.of("08:00-10:00", "14:00-16:00", "19:00-21:00");
+        List<String> days = List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY");
+        GenerateCalendarRequest request = generateRequest(
+                1, LocalDate.parse("2026-06-22"), LocalDate.parse("2026-06-27"));
+
+        List<CalendarTask> saved = runGenerate(days, slots, request, 6);
+
+        assertEquals(6, saved.size(), "one task per study day, not one per time slot");
+        assertAllTasksWithinWindows(saved, slots);
+        List<Integer> durations = durations(saved);
+        durations.forEach(duration -> assertEquals(0, duration % 15, "duration must be a multiple of 15"));
+        assertFalse(durations.contains(80), "must not produce 80-minute sessions");
+        assertEquals(480, durations.stream().mapToInt(Integer::intValue).sum());
+        assertEquals(List.of(90, 90, 75, 75, 75, 75), durations);
+    }
+
+    @Test
+    void generateSizesFiveDayEightHourWeekWithoutNinetySixMinuteSessions() {
+        List<String> slots = List.of("08:00-10:00");
+        List<String> days = List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY");
+        GenerateCalendarRequest request = generateRequest(
+                1, LocalDate.parse("2026-06-22"), LocalDate.parse("2026-06-26"));
+
+        List<CalendarTask> saved = runGenerate(days, slots, request, 5);
+
+        assertEquals(5, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+        List<Integer> durations = durations(saved);
+        durations.forEach(duration -> assertEquals(0, duration % 15, "duration must be a multiple of 15"));
+        assertFalse(durations.contains(96), "must not produce 96-minute sessions");
+        assertEquals(480, durations.stream().mapToInt(Integer::intValue).sum());
+    }
+
+    @Test
+    void generateNeverPlacesASessionLongerThanItsSelectedWindow() {
+        // Windows are only 60 minutes; a 90-minute block must be clamped, never placed as-is.
+        List<String> slots = List.of("08:00-09:00");
+        List<String> days = List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY");
+        GenerateCalendarRequest request = generateRequest(
+                1, LocalDate.parse("2026-06-22"), LocalDate.parse("2026-06-26"));
+
+        List<CalendarTask> saved = runGenerate(days, slots, request, 4);
+
+        assertAllTasksWithinWindows(saved, slots);
+        List<Integer> durations = durations(saved);
+        durations.forEach(duration -> {
+            assertEquals(0, duration % 15, "duration must be a multiple of 15");
+            assertTrue(duration <= 60, "duration must fit inside the 60-minute window");
+        });
+        assertFalse(durations.contains(90), "a 90-minute task must not be placed in a 60-minute window");
+    }
+
+    @Test
+    void generateDoesNotMultiplyTaskCountByNumberOfSelectedSlots() {
+        List<String> slots = List.of("08:00-10:00", "14:00-16:00", "19:00-21:00");
+        List<String> days = List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY");
+        GenerateCalendarRequest request = generateRequest(
+                1, LocalDate.parse("2026-06-22"), LocalDate.parse("2026-06-27"));
+
+        List<CalendarTask> saved = runGenerate(days, slots, request, 4);
+
+        // 4 learning steps -> 4 tasks. The 3 slots only offer placement options.
+        assertEquals(4, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+        durations(saved).forEach(duration -> assertEquals(0, duration % 15, "duration must be a multiple of 15"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void generateRejectsAiDraftWithOddDurationAndFallsBackToHumanFriendlyRulePlan() {
+        List<String> slots = List.of("08:00-10:00");
+        prepareGenerateMocks(slots);
+        when(scheduleRunRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarTaskRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> new ArrayList<>((List<CalendarTask>) invocation.getArgument(0)));
+        when(geminiCalendarPlannerClient.isReady()).thenReturn(true);
+        when(geminiCalendarPlannerClient.generate(any())).thenReturn(oddDurationDraft());
+
+        calendarService.generate("user-1", workspace.getWorkspaceId(), generateRequest(1));
+
+        ArgumentCaptor<List<CalendarTask>> captor = ArgumentCaptor.forClass(List.class);
+        verify(calendarTaskRepository).saveAllAndFlush(captor.capture());
+        List<CalendarTask> saved = captor.getValue();
+
+        assertEquals(4, saved.size());
+        assertAllTasksWithinWindows(saved, slots);
+        // AI draft rejected (80m is not a multiple of 15) -> rule-based plan persisted instead.
+        saved.forEach(task -> {
+            assertEquals(CalendarTaskSource.SYSTEM_GENERATED, task.getSource());
+            assertEquals(0, task.getDurationMinutes() % 15, "fallback durations must be multiples of 15");
+        });
+    }
+
+    private AiCalendarPlanDraft oddDurationDraft() {
+        // Structurally valid plan inside the 08:00-10:00 window, but 80 minutes is not human-friendly.
+        List<String> dates = List.of("2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25");
+        List<AiCalendarTaskSuggestion> suggestions = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            suggestions.add(new AiCalendarTaskSuggestion(
+                    i,
+                    "Study session " + (i + 1),
+                    "Focus block",
+                    LocalDate.parse(dates.get(i)),
+                    LocalTime.parse("08:00:00"),
+                    80,
+                    CalendarTaskCategory.DEEP_STUDY,
+                    CalendarTaskPriority.MEDIUM,
+                    "Odd duration"
+            ));
+        }
+        return new AiCalendarPlanDraft(List.of(), suggestions);
+    }
+
     private AiCalendarPlanDraft outOfWindowDraft() {
         List<String> dates = List.of("2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25");
         List<AiCalendarTaskSuggestion> suggestions = new ArrayList<>();
@@ -568,6 +685,10 @@ class CalendarServiceTest {
     }
 
     private void prepareGenerateMocks(List<String> slots, List<String> days) {
+        prepareGenerateMocks(slots, days, 4);
+    }
+
+    private void prepareGenerateMocks(List<String> slots, List<String> days, int stepCount) {
         whenOwnedWorkspace(workspace.getWorkspaceId());
         Roadmap roadmap = new Roadmap();
         roadmap.setRoadmapId(UUID.randomUUID());
@@ -575,7 +696,7 @@ class CalendarServiceTest {
         when(roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspace.getWorkspaceId()))
                 .thenReturn(Optional.of(roadmap));
         when(roadmapStepRepository.findByRoadmapRoadmapIdOrderBySequenceNoAsc(roadmap.getRoadmapId()))
-                .thenReturn(buildSteps(roadmap, 4));
+                .thenReturn(buildSteps(roadmap, stepCount));
         when(calendarTaskRepository.findByRoadmapRoadmapIdAndStatusNot(any(), any()))
                 .thenReturn(List.of());
         when(onboardingProfileRepository.findByWorkspaceWorkspaceId(workspace.getWorkspaceId()))
@@ -642,6 +763,38 @@ class CalendarServiceTest {
         ArgumentCaptor<List<CalendarTask>> captor = ArgumentCaptor.forClass(List.class);
         verify(calendarTaskRepository).saveAllAndFlush(captor.capture());
         return captor.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<CalendarTask> runGenerate(
+            List<String> days,
+            List<String> slots,
+            GenerateCalendarRequest request,
+            int stepCount
+    ) {
+        prepareGenerateMocks(slots, days, stepCount);
+        when(scheduleRunRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarTaskRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> new ArrayList<>((List<CalendarTask>) invocation.getArgument(0)));
+
+        calendarService.generate("user-1", workspace.getWorkspaceId(), request);
+
+        ArgumentCaptor<List<CalendarTask>> captor = ArgumentCaptor.forClass(List.class);
+        verify(calendarTaskRepository).saveAllAndFlush(captor.capture());
+        return captor.getValue();
+    }
+
+    private GenerateCalendarRequest generateRequest(int sessionsPerDay, LocalDate startDate, LocalDate endDate) {
+        GenerateCalendarRequest request = new GenerateCalendarRequest();
+        request.setStartDate(startDate);
+        request.setSessionsPerDay(Math.max(1, sessionsPerDay));
+        request.setIncludeReviewSessions(false);
+        request.setEndDate(endDate);
+        return request;
+    }
+
+    private List<Integer> durations(List<CalendarTask> tasks) {
+        return tasks.stream().map(CalendarTask::getDurationMinutes).toList();
     }
 
     private void assertAllTasksWithinWindows(List<CalendarTask> tasks, List<String> slots) {

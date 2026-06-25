@@ -21,11 +21,13 @@ import org.springframework.web.client.RestClientException;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class GeminiCalendarPlannerClient {
 
-    // Reasonable per-task duration bounds. Wider than a single default session
-    // (60 min) so legitimate long study slots are not rejected, but tight enough
-    // to drop junk values.
-    private static final int MIN_DURATION_MINUTES = 15;
-    private static final int MAX_DURATION_MINUTES = 240;
+    // Per-task duration must be a human-friendly study block: a multiple of 15 minutes within
+    // [MIN_DURATION_MINUTES, MAX_DURATION_MINUTES]. This mirrors StudySessionSizingPolicy so the AI
+    // cannot reintroduce odd values like 80/96/113; anything else is rejected and the caller falls
+    // back to the rule-based plan.
+    private static final int DURATION_BLOCK_MINUTES = 15;
+    private static final int MIN_DURATION_MINUTES = 30;
+    private static final int MAX_DURATION_MINUTES = 120;
     // Downstream (CalendarService) cleans/truncates titles to 90 and descriptions
     // to 250 chars; these caps only reject obviously runaway AI output.
     private static final int MAX_TITLE_LENGTH = 160;
@@ -136,7 +138,12 @@ public class GeminiCalendarPlannerClient {
                 - Keep every task within the study days and time windows reflected by its suggestedTaskDate
                   and suggestedStartTime. Treat suggestedTaskDate as a suggestion you may fine-tune, not a locked
                   date, but never move a task to a different day-of-week or outside its suggested time window.
-                - durationMinutes must stay between 30 and 120 and must not push the task past its suggested window.
+                - suggestedDurationMinutes is a planned, human-friendly study block. Reuse it as-is whenever
+                  possible. The selected time windows are availability pools, NOT a list of required sessions:
+                  do not create one task per window and do not multiply the number of tasks.
+                - durationMinutes must be a MULTIPLE OF 15, stay between 30 and 120, fit inside the task's
+                  suggested time window, and must not push the task past that window. Never invent odd
+                  durations such as 80, 96 or 113 minutes; prefer 45, 60, 75, 90 and only use 105 or 120 when needed.
                 - title must be short and clear; do NOT start it with mechanical numbered prefixes such as
                   "Step 1", "Topic 1", "Task 1".
                 - taskDate format YYYY-MM-DD, startTime format HH:mm:ss. category and priority must be valid enums.
@@ -277,8 +284,9 @@ public class GeminiCalendarPlannerClient {
         }
         if (task.durationMinutes() == null
                 || task.durationMinutes() < MIN_DURATION_MINUTES
-                || task.durationMinutes() > MAX_DURATION_MINUTES) {
-            log.warn("[AI] Invalid calendar draft: duration out of range at index {}", task.taskIndex());
+                || task.durationMinutes() > MAX_DURATION_MINUTES
+                || task.durationMinutes() % DURATION_BLOCK_MINUTES != 0) {
+            log.warn("[AI] Invalid calendar draft: non-human-friendly duration at index {}", task.taskIndex());
             return false;
         }
         if (task.category() == null || task.priority() == null) {

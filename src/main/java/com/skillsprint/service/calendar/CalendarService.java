@@ -371,6 +371,7 @@ public class CalendarService {
         LocalDate endDate = request.getEndDate();
         LocalTime dailyStartTime = request.getDailyStartTime() == null ? firstTimeWindow.startTime() : request.getDailyStartTime();
         int sessionMinutes = resolveSessionMinutes(request, firstTimeWindow);
+        int weeklyStudyMinutes = resolveWeeklyStudyMinutes(onboarding.getStudyHoursPerWeek(), studyDays.size());
         int sessionsPerDay = defaultPositive(
                 request.getSessionsPerDay(),
                 sessionsPerDayFromWeeklyHours(onboarding.getStudyHoursPerWeek(), sessionMinutes, studyDays.size())
@@ -383,6 +384,7 @@ public class CalendarService {
             studyDays,
             dailyStartTime,
             sessionMinutes,
+            weeklyStudyMinutes,
             Math.min(sessionsPerDay, MAX_SESSIONS_PER_DAY),
             includeReviewSessions,
             endDate,
@@ -578,6 +580,7 @@ public class CalendarService {
         int maxSessionsPerDay = Math.min(resolveSessionsPerDay(config, drafts.size()), windows.size());
         int[] sessionsUsedByDay = new int[studyDates.size()];
 
+        List<SessionPlacement> placements = new ArrayList<>();
         for (int i = 0; i < drafts.size(); i++) {
             TaskDraft draft = drafts.get(i);
             int preferredDayIndex = resolvePreferredStudyDayIndex(i, drafts.size(), studyDates.size());
@@ -594,29 +597,59 @@ public class CalendarService {
             }
 
             int sessionIndexInDay = sessionsUsedByDay[dayIndex];
-            LocalDate taskDate = studyDates.get(dayIndex);
-            TimeWindow window = windows.get(sessionIndexInDay);
-            int duration = sessionDurationFor(window, config.sessionMinutes());
-            LocalTime startTime = window.startTime();
-            LocalTime endTime = startTime.plusMinutes(duration);
+            placements.add(new SessionPlacement(draft, studyDates.get(dayIndex), windows.get(sessionIndexInDay)));
+            sessionsUsedByDay[dayIndex]++;
+        }
 
+        return sizePlacements(placements, config);
+    }
+
+    /**
+     * Assigns each placed session a human-friendly duration drawn from the weekly distribution
+     * computed by {@link StudySessionSizingPolicy}. The distribution is reset per calendar week
+     * (Monday-anchored) so every week mirrors the same clean shape (e.g. 90/90/75/75/75/75), and
+     * each value is finally clamped to the concrete window it sits in so no task spills past the
+     * user's availability and every duration stays a multiple of 15.
+     */
+    private List<PlannedTask> sizePlacements(List<SessionPlacement> placements, ScheduleConfig config) {
+        int maxWindowMinutes = placements.stream()
+                .mapToInt(placement -> windowMinutes(placement.window()))
+                .max()
+                .orElse(config.sessionMinutes());
+        List<Integer> weeklyPattern = StudySessionSizingPolicy.planWeeklyDurations(
+                config.weeklyStudyMinutes(),
+                config.studyDays().size(),
+                maxWindowMinutes
+        );
+
+        java.util.Map<LocalDate, Integer> sessionsByWeek = new java.util.HashMap<>();
+        List<PlannedTask> plannedTasks = new ArrayList<>(placements.size());
+        for (SessionPlacement placement : placements) {
+            LocalDate weekKey = placement.taskDate()
+                    .with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            int indexInWeek = sessionsByWeek.merge(weekKey, 1, Integer::sum) - 1;
+
+            int plannedMinutes = weeklyPattern.isEmpty()
+                    ? config.sessionMinutes()
+                    : weeklyPattern.get(indexInWeek % weeklyPattern.size());
+            int duration = StudySessionSizingPolicy.fitToWindow(plannedMinutes, windowMinutes(placement.window()));
+
+            LocalTime startTime = placement.window().startTime();
             plannedTasks.add(new PlannedTask(
-                    draft,
-                    taskDate,
+                    placement.draft(),
+                    placement.taskDate(),
                     startTime,
-                    endTime,
+                    startTime.plusMinutes(duration),
                     duration,
                     CalendarTaskSource.SYSTEM_GENERATED
             ));
-            sessionsUsedByDay[dayIndex]++;
         }
 
         return plannedTasks;
     }
 
-    private int sessionDurationFor(TimeWindow window, int sessionMinutes) {
-        int windowMinutes = (int) Duration.between(window.startTime(), window.endTime()).toMinutes();
-        return Math.max(1, Math.min(sessionMinutes, windowMinutes));
+    private int windowMinutes(TimeWindow window) {
+        return (int) Duration.between(window.startTime(), window.endTime()).toMinutes();
     }
 
     private int resolveAvailableStudyDayCount(ScheduleConfig config, int taskCount) {
@@ -1178,6 +1211,21 @@ public class CalendarService {
         return defaultPositive(slotMinutes, DEFAULT_SESSION_MINUTES);
     }
 
+    /**
+     * Weekly study budget in minutes, used by {@link StudySessionSizingPolicy} to size sessions.
+     * Falls back to one default-length session per selected study day when onboarding never captured
+     * a weekly commitment.
+     */
+    private int resolveWeeklyStudyMinutes(BigDecimal studyHoursPerWeek, int studyDayCount) {
+        int fallback = Math.max(1, studyDayCount) * DEFAULT_SESSION_MINUTES;
+        if (studyHoursPerWeek == null || studyHoursPerWeek.compareTo(BigDecimal.ZERO) <= 0) {
+            return fallback;
+        }
+        return studyHoursPerWeek.multiply(BigDecimal.valueOf(60))
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
+    }
+
     private int sessionsPerDayFromWeeklyHours(BigDecimal studyHoursPerWeek, int sessionMinutes, int studyDayCount) {
         if (studyHoursPerWeek == null || studyHoursPerWeek.compareTo(BigDecimal.ZERO) <= 0 || studyDayCount <= 0) {
             return DEFAULT_SESSIONS_PER_DAY;
@@ -1250,7 +1298,16 @@ public class CalendarService {
             if (suggestion.startTime() == null || suggestion.durationMinutes() == null || suggestion.durationMinutes() <= 0) {
                 return false;
             }
-            LocalTime endTime = suggestion.startTime().plusMinutes(suggestion.durationMinutes());
+            // Reject AI output that drifts back to odd, sub-minimum or over-cap durations: the planner
+            // contract is human-friendly multiples of 15 within [MIN_SCHEDULED, HARD_MAX]. Anything
+            // else falls back to the rule-based plan.
+            int aiDuration = suggestion.durationMinutes();
+            if (!StudySessionSizingPolicy.isHumanFriendly(aiDuration)
+                    || aiDuration < StudySessionSizingPolicy.MIN_SCHEDULED_SESSION_MINUTES
+                    || aiDuration > StudySessionSizingPolicy.HARD_MAX_SESSION_MINUTES) {
+                return false;
+            }
+            LocalTime endTime = suggestion.startTime().plusMinutes(aiDuration);
             if (!endTime.isAfter(suggestion.startTime())) {
                 return false;
             }
@@ -1383,11 +1440,15 @@ public class CalendarService {
     private record TimeWindow(LocalTime startTime, LocalTime endTime) {
     }
 
+    private record SessionPlacement(TaskDraft draft, LocalDate taskDate, TimeWindow window) {
+    }
+
     private record ScheduleConfig(
             LocalDate startDate,
             Set<WeekDay> studyDays,
             LocalTime dailyStartTime,
             int sessionMinutes,
+            int weeklyStudyMinutes,
             int sessionsPerDay,
             boolean includeReviewSessions,
             LocalDate endDate,
@@ -1402,6 +1463,7 @@ public class CalendarService {
                     studyDays,
                     dailyStartTime,
                     sessionMinutes,
+                    weeklyStudyMinutes,
                     value,
                     includeReviewSessions,
                     endDate,
