@@ -86,6 +86,14 @@ class GeminiCalendarPlannerClientTest {
     }
 
     @Test
+    void parseResponseRejectsNonHumanFriendlyDuration() throws Exception {
+        // 80 minutes is not a multiple of 15, so the draft must be discarded entirely.
+        String oddDuration = "{\"warnings\":[],\"tasks\":[" + taskJson(0, 80) + "]}";
+
+        assertNull(client.parseResponse(geminiResponse("STOP", oddDuration), inputs()));
+    }
+
+    @Test
     void parseResponseAcceptsValidResponseWithMissingFinishReason() throws Exception {
         String response = geminiResponse(null, validTaskJson());
 
@@ -113,9 +121,13 @@ class GeminiCalendarPlannerClientTest {
     }
 
     private String taskJson(int index) {
+        return taskJson(index, 60);
+    }
+
+    private String taskJson(int index, int durationMinutes) {
         return "{\"taskIndex\":" + index + ",\"title\":\"Master Java basics\","
                 + "\"description\":\"Study core syntax\",\"taskDate\":\"2026-06-22\","
-                + "\"startTime\":\"08:00:00\",\"durationMinutes\":60,"
+                + "\"startTime\":\"08:00:00\",\"durationMinutes\":" + durationMinutes + ","
                 + "\"category\":\"DEEP_STUDY\",\"priority\":\"MEDIUM\",\"reason\":\"ok\"}";
     }
 
