@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillsprint.dto.request.marketplace.CreateMarketplaceItemRequest;
+import com.skillsprint.dto.request.marketplace.SubmitMarketplaceQuizRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceQuizAttemptResponse;
 import com.skillsprint.entity.MarketplaceItem;
+import com.skillsprint.entity.MarketplaceQuizAttempt;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
 import com.skillsprint.entity.Quiz;
 import com.skillsprint.entity.QuizOption;
@@ -14,10 +17,12 @@ import com.skillsprint.entity.Roadmap;
 import com.skillsprint.entity.RoadmapStep;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
+import com.skillsprint.enums.marketplace.MarketplaceQuizAttemptType;
 import com.skillsprint.enums.quiz.QuizStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceItemRepository;
+import com.skillsprint.repository.MarketplaceQuizAttemptRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.QuizOptionRepository;
 import com.skillsprint.repository.QuizQuestionRepository;
@@ -26,6 +31,10 @@ import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +51,7 @@ public class MarketplaceCreatorService {
     static final int MINIMUM_QUESTION_COUNT = 20;
 
     MarketplaceItemRepository marketplaceItemRepository;
+    MarketplaceQuizAttemptRepository marketplaceQuizAttemptRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     StudyWorkspaceRepository workspaceRepository;
     RoadmapRepository roadmapRepository;
@@ -134,6 +144,112 @@ public class MarketplaceCreatorService {
         snapshotRepository.save(snapshot);
 
         return toResponse(item, snapshot);
+    }
+
+    @Transactional
+    public MarketplaceQuizAttemptResponse validateFullPack(
+            String userId,
+            UUID itemId,
+            SubmitMarketplaceQuizRequest request
+    ) {
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+
+        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        Map<UUID, UUID> correctOptions = correctOptions(snapshot);
+        Map<UUID, UUID> submittedAnswers = new HashMap<>();
+        for (SubmitMarketplaceQuizRequest.AnswerRequest answer : request.getAnswers()) {
+            if (submittedAnswers.put(answer.getQuestionId(), answer.getSelectedOptionId()) != null) {
+                throw new AppException(ErrorCode.QUIZ_INVALID_ANSWER, "Không được gửi trùng đáp án cho một câu hỏi");
+            }
+        }
+        if (!submittedAnswers.keySet().equals(correctOptions.keySet())) {
+            throw new AppException(ErrorCode.QUIZ_INVALID_ANSWER, "Cần trả lời toàn bộ câu hỏi trong Quiz Pack");
+        }
+
+        int correctCount = 0;
+        for (Map.Entry<UUID, UUID> answer : submittedAnswers.entrySet()) {
+            if (answer.getValue().equals(correctOptions.get(answer.getKey()))) {
+                correctCount++;
+            }
+        }
+        int questionCount = correctOptions.size();
+        int score = (int) Math.round(correctCount * 100.0 / questionCount);
+
+        MarketplaceQuizAttempt attempt = new MarketplaceQuizAttempt();
+        attempt.setItem(item);
+        attempt.setUser(item.getCreator());
+        attempt.setAttemptType(MarketplaceQuizAttemptType.CREATOR_VALIDATION);
+        attempt.setScore(score);
+        attempt.setCorrectCount(correctCount);
+        attempt.setQuestionCount(questionCount);
+        attempt.setDurationSeconds(request.getDurationSeconds());
+        attempt.setSuspicious(false);
+        attempt.setCompletedAt(java.time.Instant.now());
+        attempt = marketplaceQuizAttemptRepository.save(attempt);
+
+        item.setCreatorValidationScore(score);
+        marketplaceItemRepository.save(item);
+        return toAttemptResponse(attempt);
+    }
+
+    @Transactional
+    public MarketplaceItemResponse submitForReview(String userId, UUID itemId) {
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+        if (item.getCreatorValidationScore() == null || item.getCreatorValidationScore() < 90) {
+            throw new AppException(ErrorCode.MARKETPLACE_CREATOR_VALIDATION_REQUIRED);
+        }
+
+        item.setStatus(MarketplaceItemStatus.PENDING_REVIEW);
+        item = marketplaceItemRepository.save(item);
+        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        return toResponse(item, snapshot);
+    }
+
+    private Map<UUID, UUID> correctOptions(MarketplaceQuizPackSnapshot snapshot) {
+        Map<UUID, UUID> correctOptions = new HashMap<>();
+        Set<UUID> seenQuestions = new HashSet<>();
+        snapshot.getContent().path("chapters").forEach(chapter -> chapter.path("quiz").path("questions").forEach(question -> {
+            UUID questionId = UUID.fromString(question.path("questionId").asText());
+            if (!seenQuestions.add(questionId)) {
+                throw new AppException(ErrorCode.QUIZ_INVALID_ANSWER, "Snapshot Quiz Pack không hợp lệ");
+            }
+            UUID correctOptionId = null;
+            for (com.fasterxml.jackson.databind.JsonNode option : question.path("options")) {
+                if (option.path("correct").asBoolean(false)) {
+                    if (correctOptionId != null) {
+                        throw new AppException(ErrorCode.QUIZ_INVALID_ANSWER, "Snapshot có nhiều đáp án đúng");
+                    }
+                    correctOptionId = UUID.fromString(option.path("optionId").asText());
+                }
+            }
+            if (correctOptionId == null) {
+                throw new AppException(ErrorCode.QUIZ_INVALID_ANSWER, "Snapshot thiếu đáp án đúng");
+            }
+            correctOptions.put(questionId, correctOptionId);
+        }));
+        return correctOptions;
+    }
+
+    private MarketplaceQuizAttemptResponse toAttemptResponse(MarketplaceQuizAttempt attempt) {
+        return MarketplaceQuizAttemptResponse.builder()
+                .attemptId(attempt.getAttemptId())
+                .itemId(attempt.getItem().getItemId())
+                .score(attempt.getScore())
+                .correctCount(attempt.getCorrectCount())
+                .questionCount(attempt.getQuestionCount())
+                .durationSeconds(attempt.getDurationSeconds())
+                .completedAt(attempt.getCompletedAt())
+                .build();
     }
 
     private MarketplaceItemResponse toResponse(MarketplaceItem item, MarketplaceQuizPackSnapshot snapshot) {

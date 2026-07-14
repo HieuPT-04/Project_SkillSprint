@@ -98,6 +98,7 @@ public enum ErrorCode {
     MARKETPLACE_ITEM_NOT_FOUND("Không tìm thấy Quiz Pack", HttpStatus.NOT_FOUND),
     MARKETPLACE_WORKSPACE_NOT_ELIGIBLE("Workspace cần có roadmap và đầy đủ quiz trước khi đăng bán", HttpStatus.BAD_REQUEST),
     MARKETPLACE_ITEM_NOT_EDITABLE("Quiz Pack hiện không thể chỉnh sửa", HttpStatus.CONFLICT),
+    MARKETPLACE_CREATOR_VALIDATION_REQUIRED("Creator cần đạt ít nhất 90 điểm ở Full Pack Challenge trước khi gửi duyệt", HttpStatus.BAD_REQUEST),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
