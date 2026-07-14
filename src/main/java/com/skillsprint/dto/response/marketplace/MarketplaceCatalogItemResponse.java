@@ -18,5 +18,7 @@ public class MarketplaceCatalogItemResponse {
     Integer chapterCount;
     Integer quizCount;
     Integer questionCount;
+    Double averageRating;
+    Integer reviewCount;
     Instant publishedAt;
 }

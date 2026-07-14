@@ -5,11 +5,13 @@ import com.skillsprint.dto.response.marketplace.MarketplaceCatalogItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemDetailResponse;
 import com.skillsprint.entity.MarketplaceItem;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
+import com.skillsprint.entity.MarketplaceReview;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceItemRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
+import com.skillsprint.repository.MarketplaceReviewRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +30,7 @@ public class MarketplaceCatalogService {
 
     MarketplaceItemRepository marketplaceItemRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
+    MarketplaceReviewRepository reviewRepository;
 
     @Transactional(readOnly = true)
     public List<MarketplaceCatalogItemResponse> getPublishedItems(String subject) {
@@ -86,6 +89,8 @@ public class MarketplaceCatalogService {
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
+                .averageRating(averageRating(itemId))
+                .reviewCount(reviewCount(itemId))
                 .publishedAt(item.getPublishedAt())
                 .chapters(chapters)
                 .previewQuestions(questions)
@@ -105,7 +110,18 @@ public class MarketplaceCatalogService {
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
+                .averageRating(averageRating(item.getItemId()))
+                .reviewCount(reviewCount(item.getItemId()))
                 .publishedAt(item.getPublishedAt())
                 .build();
+    }
+
+    private double averageRating(UUID itemId) {
+        List<MarketplaceReview> reviews = reviewRepository.findByItemItemId(itemId);
+        return reviews.isEmpty() ? 0 : reviews.stream().mapToInt(MarketplaceReview::getRating).average().orElse(0);
+    }
+
+    private int reviewCount(UUID itemId) {
+        return reviewRepository.findByItemItemId(itemId).size();
     }
 }
