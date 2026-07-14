@@ -37,7 +37,7 @@ class MarketplaceChallengeServiceTest {
         when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
                 "buyer", itemId, MarketplacePurchaseStatus.ACTIVE)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.submit("buyer", itemId, new com.skillsprint.dto.request.marketplace.SubmitMarketplaceQuizRequest()))
+        assertThatThrownBy(() -> service.submit("buyer", itemId, new com.skillsprint.dto.request.marketplace.SubmitMarketplaceChallengeRequest()))
                 .isInstanceOf(AppException.class);
     }
 

@@ -2,6 +2,7 @@ package com.skillsprint.controller.marketplace;
 
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.SubmitMarketplaceQuizRequest;
+import com.skillsprint.dto.request.marketplace.SubmitMarketplaceChallengeRequest;
 import com.skillsprint.dto.response.marketplace.*;
 import com.skillsprint.service.marketplace.MarketplaceChallengeService;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api/marketplace/items") @RequiredArgsConstructor @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MarketplaceChallengeController {
     MarketplaceChallengeService marketplaceChallengeService;
-    @PostMapping("/{itemId}/challenge/submit") public ResponseEntity<ApiResponse<MarketplaceQuizAttemptResponse>> submit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID itemId,@Valid @RequestBody SubmitMarketplaceQuizRequest request){ return ResponseEntity.ok(ApiResponse.success("Nộp Full Pack Challenge thành công",marketplaceChallengeService.submit(jwt.getSubject(),itemId,request))); }
+    @PostMapping("/{itemId}/challenge/start") public ResponseEntity<ApiResponse<MarketplaceChallengeSessionResponse>> start(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID itemId){ return ResponseEntity.ok(ApiResponse.success("Bắt đầu Full Pack Challenge",marketplaceChallengeService.start(jwt.getSubject(),itemId))); }
+    @PostMapping("/{itemId}/challenge/submit") public ResponseEntity<ApiResponse<MarketplaceQuizAttemptResponse>> submit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID itemId,@Valid @RequestBody SubmitMarketplaceChallengeRequest request){ return ResponseEntity.ok(ApiResponse.success("Nộp Full Pack Challenge thành công",marketplaceChallengeService.submit(jwt.getSubject(),itemId,request))); }
     @GetMapping("/{itemId}/leaderboard") public ResponseEntity<ApiResponse<List<MarketplaceLeaderboardEntryResponse>>> leaderboard(@PathVariable UUID itemId){ return ResponseEntity.ok(ApiResponse.success(marketplaceChallengeService.leaderboard(itemId))); }
 }

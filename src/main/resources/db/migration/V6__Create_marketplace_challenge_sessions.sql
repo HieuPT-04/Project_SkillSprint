@@ -1,0 +1,10 @@
+CREATE TABLE marketplace_challenge_sessions (
+    session_id UUID PRIMARY KEY,
+    item_id UUID NOT NULL REFERENCES marketplace_items(item_id),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id),
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
