@@ -1,3 +1,3 @@
 package com.skillsprint.enums.marketplace;
 
-public enum WalletTransactionReferenceType { MARKETPLACE_PURCHASE, MARKETPLACE_EARNING }
+public enum WalletTransactionReferenceType { ADMIN_ADJUSTMENT, MARKETPLACE_PURCHASE, MARKETPLACE_EARNING }
