@@ -31,8 +31,9 @@ public class MarketplaceAdminService {
     UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public List<MarketplaceItemResponse> getPendingItems() {
-        return marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PENDING_REVIEW)
+    public List<MarketplaceItemResponse> getItems(MarketplaceItemStatus status) {
+        MarketplaceItemStatus effectiveStatus = status == null ? MarketplaceItemStatus.PENDING_REVIEW : status;
+        return marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(effectiveStatus)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -65,7 +66,14 @@ public class MarketplaceAdminService {
         User admin = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
 
-        item.setStatus(request.getStatus());
+        // A rejected pack returns to DRAFT so the Creator can fix it, refresh the
+        // snapshot, re-validate, and submit again; the review note stays visible.
+        item.setStatus(request.getStatus() == MarketplaceItemStatus.REJECTED
+                ? MarketplaceItemStatus.DRAFT
+                : request.getStatus());
+        if (request.getStatus() == MarketplaceItemStatus.REJECTED) {
+            item.setCreatorValidationScore(null);
+        }
         item.setReviewedBy(admin);
         item.setReviewNote(request.getReviewNote());
         item.setReviewedAt(Instant.now());

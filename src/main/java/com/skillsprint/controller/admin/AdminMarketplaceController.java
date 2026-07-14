@@ -4,6 +4,7 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.ReviewMarketplaceItemRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceAdminItemDetailResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
+import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
 import com.skillsprint.service.marketplace.MarketplaceAdminService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -32,8 +34,10 @@ public class AdminMarketplaceController {
     MarketplaceAdminService marketplaceAdminService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<MarketplaceItemResponse>>> getPendingItems() {
-        return ResponseEntity.ok(ApiResponse.success(marketplaceAdminService.getPendingItems()));
+    public ResponseEntity<ApiResponse<List<MarketplaceItemResponse>>> getItems(
+            @RequestParam(name = "status", required = false) MarketplaceItemStatus status
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(marketplaceAdminService.getItems(status)));
     }
 
     @GetMapping("/{itemId}")

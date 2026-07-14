@@ -3,6 +3,7 @@ package com.skillsprint.controller.marketplace;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.CreateMarketplaceItemRequest;
 import com.skillsprint.dto.request.marketplace.SubmitMarketplaceQuizRequest;
+import com.skillsprint.dto.response.marketplace.CreatorValidationPackResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceQuizAttemptResponse;
 import com.skillsprint.service.marketplace.MarketplaceCreatorService;
@@ -44,6 +45,25 @@ public class MarketplaceCreatorController {
     ) {
         MarketplaceItemResponse response = marketplaceCreatorService.createDraft(jwt.getSubject(), request);
         return ResponseEntity.ok(ApiResponse.success("Tạo nháp Quiz Pack thành công", response));
+    }
+
+    @GetMapping("/{itemId}/creator-validation")
+    public ResponseEntity<ApiResponse<CreatorValidationPackResponse>> getCreatorValidationPack(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID itemId
+    ) {
+        CreatorValidationPackResponse response = marketplaceCreatorService
+                .getCreatorValidationPack(jwt.getSubject(), itemId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{itemId}/refresh-snapshot")
+    public ResponseEntity<ApiResponse<MarketplaceItemResponse>> refreshSnapshot(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID itemId
+    ) {
+        MarketplaceItemResponse response = marketplaceCreatorService.refreshSnapshot(jwt.getSubject(), itemId);
+        return ResponseEntity.ok(ApiResponse.success("Làm mới Quiz Pack snapshot thành công", response));
     }
 
     @PostMapping("/{itemId}/creator-validation")

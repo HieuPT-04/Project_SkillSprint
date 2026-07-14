@@ -1,10 +1,12 @@
 package com.skillsprint.service.marketplace;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillsprint.dto.request.marketplace.CreateMarketplaceItemRequest;
 import com.skillsprint.dto.request.marketplace.SubmitMarketplaceQuizRequest;
+import com.skillsprint.dto.response.marketplace.CreatorValidationPackResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceQuizAttemptResponse;
 import com.skillsprint.entity.MarketplaceItem;
@@ -30,6 +32,7 @@ import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,6 +71,108 @@ public class MarketplaceCreatorService {
                         com.skillsprint.enums.workspace.WorkspaceStatus.DELETED)
                 .orElseThrow(() -> new AppException(ErrorCode.WORKSPACE_NOT_FOUND));
 
+        PackContent pack = buildPackContent(userId, workspace);
+
+        MarketplaceItem item = new MarketplaceItem();
+        item.setCreator(workspace.getUser());
+        item.setSourceWorkspace(workspace);
+        item.setTitle(request.getTitle().trim());
+        item.setDescription(request.getDescription());
+        item.setSubject(request.getSubject().trim());
+        item.setPriceCoins(request.getPriceCoins());
+        item.setStatus(MarketplaceItemStatus.DRAFT);
+        item = marketplaceItemRepository.save(item);
+
+        MarketplaceQuizPackSnapshot snapshot = new MarketplaceQuizPackSnapshot();
+        snapshot.setItem(item);
+        snapshot.setChapterCount(pack.chapterCount());
+        snapshot.setQuizCount(pack.quizCount());
+        snapshot.setQuestionCount(pack.questionCount());
+        snapshot.setContent(pack.content());
+        snapshotRepository.save(snapshot);
+
+        return toResponse(item, snapshot);
+    }
+
+    @Transactional(readOnly = true)
+    public CreatorValidationPackResponse getCreatorValidationPack(String userId, UUID itemId) {
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+
+        List<CreatorValidationPackResponse.ChapterResponse> chapters = new ArrayList<>();
+        for (JsonNode chapterNode : snapshot.getContent().path("chapters")) {
+            List<CreatorValidationPackResponse.QuestionResponse> questions = new ArrayList<>();
+            for (JsonNode questionNode : chapterNode.path("quiz").path("questions")) {
+                List<CreatorValidationPackResponse.OptionResponse> options = new ArrayList<>();
+                for (JsonNode optionNode : questionNode.path("options")) {
+                    options.add(CreatorValidationPackResponse.OptionResponse.builder()
+                            .optionId(UUID.fromString(optionNode.path("optionId").asText()))
+                            .label(optionNode.path("label").asText())
+                            .text(optionNode.path("text").asText())
+                            .sequenceNo(optionNode.path("sequenceNo").asInt())
+                            .build());
+                }
+                questions.add(CreatorValidationPackResponse.QuestionResponse.builder()
+                        .questionId(UUID.fromString(questionNode.path("questionId").asText()))
+                        .type(questionNode.path("type").asText())
+                        .text(questionNode.path("text").asText())
+                        .sequenceNo(questionNode.path("sequenceNo").asInt())
+                        .options(options)
+                        .build());
+            }
+            chapters.add(CreatorValidationPackResponse.ChapterResponse.builder()
+                    .sequenceNo(chapterNode.path("sequenceNo").asInt())
+                    .title(chapterNode.path("title").asText())
+                    .summary(chapterNode.path("summary").isNull() ? null : chapterNode.path("summary").asText())
+                    .quizTitle(chapterNode.path("quiz").path("title").asText())
+                    .questions(questions)
+                    .build());
+        }
+
+        return CreatorValidationPackResponse.builder()
+                .itemId(item.getItemId())
+                .sourceWorkspaceId(item.getSourceWorkspace().getWorkspaceId())
+                .title(item.getTitle())
+                .chapterCount(snapshot.getChapterCount())
+                .quizCount(snapshot.getQuizCount())
+                .questionCount(snapshot.getQuestionCount())
+                .chapters(chapters)
+                .build();
+    }
+
+    @Transactional
+    public MarketplaceItemResponse refreshSnapshot(String userId, UUID itemId) {
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+        StudyWorkspace workspace = workspaceRepository
+                .findByWorkspaceIdAndUserUserIdAndStatusNot(item.getSourceWorkspace().getWorkspaceId(), userId,
+                        com.skillsprint.enums.workspace.WorkspaceStatus.DELETED)
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSPACE_NOT_FOUND));
+
+        PackContent pack = buildPackContent(userId, workspace);
+
+        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        snapshot.setChapterCount(pack.chapterCount());
+        snapshot.setQuizCount(pack.quizCount());
+        snapshot.setQuestionCount(pack.questionCount());
+        snapshot.setContent(pack.content());
+        snapshotRepository.save(snapshot);
+
+        item.setCreatorValidationScore(null);
+        item = marketplaceItemRepository.save(item);
+        return toResponse(item, snapshot);
+    }
+
+    private PackContent buildPackContent(String userId, StudyWorkspace workspace) {
         Roadmap roadmap = roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspace.getWorkspaceId())
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_WORKSPACE_NOT_ELIGIBLE));
         List<RoadmapStep> steps = roadmapStepRepository.findByRoadmapRoadmapIdOrderBySequenceNoAsc(roadmap.getRoadmapId());
@@ -125,25 +230,10 @@ public class MarketplaceCreatorService {
                     "Quiz Pack cần tối thiểu " + MINIMUM_QUESTION_COUNT + " câu hỏi");
         }
 
-        MarketplaceItem item = new MarketplaceItem();
-        item.setCreator(workspace.getUser());
-        item.setSourceWorkspace(workspace);
-        item.setTitle(request.getTitle().trim());
-        item.setDescription(request.getDescription());
-        item.setSubject(request.getSubject().trim());
-        item.setPriceCoins(request.getPriceCoins());
-        item.setStatus(MarketplaceItemStatus.DRAFT);
-        item = marketplaceItemRepository.save(item);
+        return new PackContent(content, steps.size(), steps.size(), questionCount);
+    }
 
-        MarketplaceQuizPackSnapshot snapshot = new MarketplaceQuizPackSnapshot();
-        snapshot.setItem(item);
-        snapshot.setChapterCount(steps.size());
-        snapshot.setQuizCount(steps.size());
-        snapshot.setQuestionCount(questionCount);
-        snapshot.setContent(content);
-        snapshotRepository.save(snapshot);
-
-        return toResponse(item, snapshot);
+    private record PackContent(ObjectNode content, int chapterCount, int quizCount, int questionCount) {
     }
 
     @Transactional(readOnly = true)
