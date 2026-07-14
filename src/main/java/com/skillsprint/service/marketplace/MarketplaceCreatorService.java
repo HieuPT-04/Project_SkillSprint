@@ -146,6 +146,14 @@ public class MarketplaceCreatorService {
         return toResponse(item, snapshot);
     }
 
+    @Transactional(readOnly = true)
+    public List<MarketplaceItemResponse> getMyItems(String userId) {
+        return marketplaceItemRepository.findByCreatorUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(item -> toResponse(item, snapshotRepository.findByItemItemId(item.getItemId())
+                        .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND))))
+                .toList();
+    }
+
     @Transactional
     public MarketplaceQuizAttemptResponse validateFullPack(
             String userId,

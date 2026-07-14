@@ -14,11 +14,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/marketplace/items")
@@ -27,6 +29,13 @@ import java.util.UUID;
 public class MarketplaceCreatorController {
 
     MarketplaceCreatorService marketplaceCreatorService;
+
+    @GetMapping("/mine")
+    public ResponseEntity<ApiResponse<List<MarketplaceItemResponse>>> getMyItems(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(marketplaceCreatorService.getMyItems(jwt.getSubject())));
+    }
 
     @PostMapping
     public ResponseEntity<ApiResponse<MarketplaceItemResponse>> createDraft(
