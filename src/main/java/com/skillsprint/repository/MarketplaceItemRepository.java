@@ -11,6 +11,11 @@ public interface MarketplaceItemRepository extends JpaRepository<MarketplaceItem
 
     List<MarketplaceItem> findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus status);
 
+    List<MarketplaceItem> findByStatusAndSubjectIgnoreCaseOrderByPublishedAtDesc(
+            MarketplaceItemStatus status,
+            String subject
+    );
+
     List<MarketplaceItem> findByCreatorUserIdOrderByCreatedAtDesc(String userId);
 
     Optional<MarketplaceItem> findByItemIdAndCreatorUserId(UUID itemId, String userId);
