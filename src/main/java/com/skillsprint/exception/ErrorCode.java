@@ -99,6 +99,9 @@ public enum ErrorCode {
     MARKETPLACE_WORKSPACE_NOT_ELIGIBLE("Workspace cần có roadmap và đầy đủ quiz trước khi đăng bán", HttpStatus.BAD_REQUEST),
     MARKETPLACE_ITEM_NOT_EDITABLE("Quiz Pack hiện không thể chỉnh sửa", HttpStatus.CONFLICT),
     MARKETPLACE_CREATOR_VALIDATION_REQUIRED("Creator cần đạt ít nhất 90 điểm ở Full Pack Challenge trước khi gửi duyệt", HttpStatus.BAD_REQUEST),
+    MARKETPLACE_ALREADY_PURCHASED("Bạn đã mua Quiz Pack này", HttpStatus.CONFLICT),
+    MARKETPLACE_CREATOR_CANNOT_PURCHASE("Creator không thể mua Quiz Pack của chính mình", HttpStatus.BAD_REQUEST),
+    WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),

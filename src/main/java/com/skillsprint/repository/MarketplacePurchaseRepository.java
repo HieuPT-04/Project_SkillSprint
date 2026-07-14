@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MarketplacePurchaseRepository extends JpaRepository<MarketplacePurchase, UUID> {
 
+    boolean existsByUserUserIdAndItemItemId(String userId, UUID itemId);
+
     boolean existsByUserUserIdAndItemItemIdAndStatus(String userId, UUID itemId, MarketplacePurchaseStatus status);
 
     List<MarketplacePurchase> findByUserUserIdAndStatusOrderByPurchasedAtDesc(String userId, MarketplacePurchaseStatus status);
