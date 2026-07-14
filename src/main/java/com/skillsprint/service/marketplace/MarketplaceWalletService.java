@@ -2,11 +2,13 @@ package com.skillsprint.service.marketplace;
 
 import com.skillsprint.dto.request.marketplace.AdjustWalletRequest;
 import com.skillsprint.dto.response.marketplace.WalletBalanceResponse;
+import com.skillsprint.dto.response.marketplace.WalletTransactionResponse;
 import com.skillsprint.entity.*;
 import com.skillsprint.enums.marketplace.*;
 import com.skillsprint.exception.*;
 import com.skillsprint.repository.*;
 import java.util.UUID;
+import java.util.List;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
@@ -30,4 +32,8 @@ public class MarketplaceWalletService {
         transactionRepository.save(transaction);
         return WalletBalanceResponse.builder().userId(userId).balance(after).build();
     }
+    @Transactional(readOnly=true)
+    public WalletBalanceResponse getBalance(String userId) { return walletRepository.findByUserIdForUpdate(userId).map(w -> WalletBalanceResponse.builder().userId(userId).balance(w.getBalance()).build()).orElse(WalletBalanceResponse.builder().userId(userId).balance(0).build()); }
+    @Transactional(readOnly=true)
+    public List<WalletTransactionResponse> getTransactions(String userId) { return transactionRepository.findByWalletUserUserIdOrderByCreatedAtDesc(userId).stream().map(t -> WalletTransactionResponse.builder().direction(t.getDirection()).amount(t.getAmount()).balanceAfter(t.getBalanceAfter()).referenceType(t.getReferenceType()).createdAt(t.getCreatedAt()).build()).toList(); }
 }
