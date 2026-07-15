@@ -118,6 +118,7 @@ class SubscriptionApiFlowTest {
                         .plan(UserServicePlanResponse.builder()
                                 .planId(planId)
                                 .planName("Premium")
+                                .planType(ServicePlanType.ADMIN_DEFAULT)
                                 .monthlyPrice(new BigDecimal("200000"))
                                 .currency("VND")
                                 .build())
@@ -132,7 +133,8 @@ class SubscriptionApiFlowTest {
                 .andExpect(jsonPath("$.message").value("Lấy gói hiện tại thành công"))
                 .andExpect(jsonPath("$.data.subscriptionId").value(subscriptionId.toString()))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.data.plan.planName").value("Premium"));
+                .andExpect(jsonPath("$.data.plan.planName").value("Premium"))
+                .andExpect(jsonPath("$.data.plan.planType").value("ADMIN_DEFAULT"));
 
         verify(subscriptionService).getCurrentSubscription(USER_ID);
     }

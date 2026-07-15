@@ -1,5 +1,6 @@
 package com.skillsprint.dto.response.subscription;
 
+import com.skillsprint.enums.plan.ServicePlanType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,7 @@ public class UserServicePlanResponse {
 
     UUID planId;
     String planName;
+    ServicePlanType planType;
     String description;
     List<String> benefits;
     String badgeColor;

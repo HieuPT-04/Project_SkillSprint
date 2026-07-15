@@ -42,6 +42,7 @@ public class SubscriptionMapper {
         return UserServicePlanResponse.builder()
                 .planId(plan.getPlanId())
                 .planName(plan.getPlanName())
+                .planType(plan.getPlanType())
                 .description(plan.getDescription())
                 .benefits(defaultList(plan.getBenefits()))
                 .badgeColor(plan.getBadgeColor())
