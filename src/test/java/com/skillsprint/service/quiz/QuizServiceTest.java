@@ -7,10 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skillsprint.configuration.ai.GeminiProperties;
 import com.skillsprint.dto.request.quiz.SubmitQuizRequest;
 import com.skillsprint.dto.response.quiz.QuizAttemptResponse;
 import com.skillsprint.dto.response.quiz.QuizResponse;
@@ -38,22 +43,37 @@ import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.quiz.ai.AiQuizDraft;
+import com.skillsprint.service.quiz.ai.AiQuizGenerationException;
+import com.skillsprint.service.quiz.ai.AiQuizGenerationFailureReason;
+import com.skillsprint.service.quiz.ai.AiQuizGenerationInput;
 import com.skillsprint.service.quiz.ai.AiQuizOptionDraft;
 import com.skillsprint.service.quiz.ai.AiQuizQuestionDraft;
 import com.skillsprint.service.quiz.ai.GeminiQuizClient;
 import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import com.skillsprint.service.subscription.SubscriptionService;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class QuizServiceTest {
@@ -91,13 +111,45 @@ class QuizServiceTest {
     @Mock
     SubscriptionService subscriptionService;
 
+    RecordingTransactionManager transactionManager;
     QuizService quizService;
     User user;
     StudyWorkspace workspace;
     RoadmapStep step;
 
+    /**
+     * Real (if trivial) transaction manager so {@code TransactionSynchronizationManager}
+     * reflects the actual transaction boundaries QuizService creates — letting tests
+     * assert that Gemini runs outside a transaction and persistence inside one.
+     */
+    static class RecordingTransactionManager extends AbstractPlatformTransactionManager {
+
+        final AtomicInteger startedTransactions = new AtomicInteger();
+        final AtomicInteger commits = new AtomicInteger();
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {
+            startedTransactions.incrementAndGet();
+        }
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {
+            commits.incrementAndGet();
+        }
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {
+        }
+    }
+
     @BeforeEach
     void setUp() {
+        transactionManager = new RecordingTransactionManager();
         quizService = new QuizService(
                 roadmapStepRepository,
                 materialChunkRepository,
@@ -109,7 +161,8 @@ class QuizServiceTest {
                 geminiQuizClient,
                 quotaService,
                 pointService,
-                subscriptionService
+                subscriptionService,
+                transactionManager
         );
         user = user("user-1");
         workspace = workspace(user);
@@ -117,16 +170,12 @@ class QuizServiceTest {
     }
 
     @Test
-    void generateReturnsControlledFailureAndDoesNotSaveQuizWhenAiDraftUnavailable() {
-        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
-        when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
-                step.getStepId(),
-                "user-1",
-                QuizStatus.ACTIVE
-        )).thenReturn(Optional.empty());
-        when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
-                .thenReturn(List.of(chunk("Core Java summary")));
-        when(geminiQuizClient.generate(any(RoadmapStep.class), anyList())).thenReturn(null);
+    void generateReturnsControlledFailureAndDoesNotSaveQuizWhenAiDraftFailsNormalization() {
+        stubNoActiveQuizWithChunks();
+        // A draft that slipped past client-side validation but cannot be normalized
+        // into 5 valid questions must never be saved as a fallback quiz.
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenReturn(new AiQuizDraft(List.of(aiQuestion(1))));
 
         AppException exception = assertThrows(
                 AppException.class,
@@ -145,38 +194,9 @@ class QuizServiceTest {
     void generateSavesAiQuizAndHidesCorrectAnswersForLearnerWhenDraftIsValid() {
         List<QuizQuestion> savedQuestions = new ArrayList<>();
         List<QuizOption> savedOptions = new ArrayList<>();
-        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
-        when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
-                step.getStepId(),
-                "user-1",
-                QuizStatus.ACTIVE
-        )).thenReturn(Optional.empty());
-        when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
-                .thenReturn(List.of(chunk("Core Java summary")));
-        when(geminiQuizClient.generate(any(RoadmapStep.class), anyList())).thenReturn(aiDraft());
-        when(quizRepository.save(any(Quiz.class))).thenAnswer(invocation -> {
-            Quiz quiz = invocation.getArgument(0);
-            quiz.setQuizId(UUID.randomUUID());
-            return quiz;
-        });
-        when(quizQuestionRepository.save(any(QuizQuestion.class))).thenAnswer(invocation -> {
-            QuizQuestion question = invocation.getArgument(0);
-            question.setQuestionId(UUID.randomUUID());
-            savedQuestions.add(question);
-            return question;
-        });
-        when(quizOptionRepository.save(any(QuizOption.class))).thenAnswer(invocation -> {
-            QuizOption option = invocation.getArgument(0);
-            option.setOptionId(UUID.randomUUID());
-            savedOptions.add(option);
-            return option;
-        });
-        when(quizQuestionRepository.findByQuizQuizIdOrderBySequenceNoAsc(any(UUID.class)))
-                .thenAnswer(invocation -> savedQuestions);
-        when(quizOptionRepository.findByQuestionQuizQuizIdOrderByQuestionSequenceNoAscSequenceNoAsc(any(UUID.class)))
-                .thenAnswer(invocation -> savedOptions);
-        when(quizAttemptRepository.findFirstByQuizQuizIdAndUserUserIdOrderBySubmittedAtDesc(any(UUID.class), any()))
-                .thenReturn(Optional.empty());
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenReturn(aiDraft());
+        stubQuizPersistence(savedQuestions, savedOptions);
 
         QuizResponse response = quizService.generate("user-1", step.getStepId());
 
@@ -185,8 +205,289 @@ class QuizServiceTest {
         assertEquals(20, savedOptions.size());
         assertTrue(savedQuestions.stream().allMatch(q -> q.getType() == QuizQuestionType.SINGLE_CHOICE));
         assertNull(response.getQuestions().get(0).getOptions().get(0).getCorrect());
-        verify(quotaService).validateFeature("user-1", PlanFeatureKeys.QUIZ_GENERATION);
-        verify(quotaService).validateCanAccessRoadmapStep("user-1", step);
+        // Once in the prepare phase and once more in the write phase's revalidation.
+        verify(quotaService, times(2)).validateFeature("user-1", PlanFeatureKeys.QUIZ_GENERATION);
+        verify(quotaService, times(2)).validateCanAccessRoadmapStep("user-1", step);
+    }
+
+    @Test
+    void generateRetriesAfterRateLimitAndCreatesExactlyOneQuiz() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.RATE_LIMITED, 429, Duration.ofSeconds(1)))
+                .thenReturn(aiDraft());
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>());
+
+        QuizResponse response = quizService.generate("user-1", step.getStepId());
+
+        assertEquals(5, response.getQuestionCount());
+        verify(geminiQuizClient, times(2)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, times(1)).save(any(Quiz.class));
+    }
+
+    @Test
+    void generateRetriesAfterUpstreamFailureAndCreatesExactlyOneQuiz() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                // Timeout / connection failure: no upstream status available.
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.UPSTREAM_UNAVAILABLE))
+                // Upstream 5xx.
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.UPSTREAM_UNAVAILABLE, 503, null))
+                .thenReturn(aiDraft());
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>());
+
+        QuizResponse response = quizService.generate("user-1", step.getStepId());
+
+        assertEquals(5, response.getQuestionCount());
+        verify(geminiQuizClient, times(3)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, times(1)).save(any(Quiz.class));
+    }
+
+    @Test
+    void generateRetriesAfterInvalidDraftAndCreatesExactlyOneQuiz() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.INVALID_AI_DRAFT))
+                .thenReturn(aiDraft());
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>());
+
+        QuizResponse response = quizService.generate("user-1", step.getStepId());
+
+        assertEquals(5, response.getQuestionCount());
+        verify(geminiQuizClient, times(2)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, times(1)).save(any(Quiz.class));
+    }
+
+    @Test
+    void generateStopsAfterMaxAttemptsWhenRetryableFailurePersists() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.UPSTREAM_UNAVAILABLE, 503, null));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quizService.generate("user-1", step.getStepId())
+        );
+
+        assertEquals(ErrorCode.QUIZ_GENERATION_UNAVAILABLE, exception.getErrorCode());
+        verify(geminiQuizClient, times(3)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, never()).save(any());
+    }
+
+    @Test
+    void generateDoesNotRetryInvalidConfigurationFailures() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenThrow(new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.INVALID_CONFIGURATION, 401, null));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quizService.generate("user-1", step.getStepId())
+        );
+
+        assertEquals(ErrorCode.QUIZ_GENERATION_UNAVAILABLE, exception.getErrorCode());
+        verify(geminiQuizClient, times(1)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, never()).save(any());
+    }
+
+    @Test
+    void generateDoesNotRetryWhenGeminiIsNotReady() {
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class)))
+                .thenThrow(new AiQuizGenerationException(AiQuizGenerationFailureReason.NOT_READY));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quizService.generate("user-1", step.getStepId())
+        );
+
+        assertEquals(ErrorCode.QUIZ_GENERATION_UNAVAILABLE, exception.getErrorCode());
+        verify(geminiQuizClient, times(1)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, never()).save(any());
+    }
+
+    @Test
+    void generateRunsGeminiRetriesAndBackoffOutsideAnyTransaction() {
+        List<Boolean> geminiSawActiveTransaction = new ArrayList<>();
+        List<Boolean> saveSawActiveTransaction = new ArrayList<>();
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenAnswer(invocation -> {
+            geminiSawActiveTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
+            if (geminiSawActiveTransaction.size() == 1) {
+                throw new AiQuizGenerationException(
+                        AiQuizGenerationFailureReason.UPSTREAM_UNAVAILABLE, 503, null);
+            }
+            return aiDraft();
+        });
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>(),
+                () -> saveSawActiveTransaction.add(TransactionSynchronizationManager.isActualTransactionActive()));
+
+        quizService.generate("user-1", step.getStepId());
+
+        assertEquals(List.of(false, false), geminiSawActiveTransaction);
+        assertTrue(saveSawActiveTransaction.stream().allMatch(Boolean::booleanValue));
+        assertEquals(2, transactionManager.commits.get());
+    }
+
+    @Test
+    void generatePersistsQuizQuestionsAndOptionsInOneWriteTransaction() {
+        List<Integer> transactionIdAtEachSave = new ArrayList<>();
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenReturn(aiDraft());
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>(),
+                () -> transactionIdAtEachSave.add(transactionManager.startedTransactions.get()));
+
+        quizService.generate("user-1", step.getStepId());
+
+        // 1 quiz + 5 questions + 20 options, all inside the same (second) transaction.
+        assertEquals(26, transactionIdAtEachSave.size());
+        assertTrue(transactionIdAtEachSave.stream().allMatch(txId -> txId == 2));
+        assertEquals(2, transactionManager.commits.get());
+    }
+
+    @Test
+    void generateReturnsConcurrentlyCreatedQuizInsteadOfCreatingDuplicate() {
+        Quiz concurrentlyCreated = quiz();
+        QuizQuestion question = question(concurrentlyCreated, 1);
+        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
+        // No active quiz in the prepare phase, but one appears in the write-phase
+        // re-check because another request finished while Gemini was generating.
+        when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
+                step.getStepId(),
+                "user-1",
+                QuizStatus.ACTIVE
+        )).thenReturn(Optional.empty()).thenReturn(Optional.of(concurrentlyCreated));
+        when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
+                .thenReturn(List.of(chunk("Core Java summary")));
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenReturn(aiDraft());
+        when(quizQuestionRepository.findByQuizQuizIdOrderBySequenceNoAsc(concurrentlyCreated.getQuizId()))
+                .thenReturn(List.of(question));
+        when(quizOptionRepository.findByQuestionQuizQuizIdOrderByQuestionSequenceNoAscSequenceNoAsc(
+                concurrentlyCreated.getQuizId()))
+                .thenReturn(List.of(option(question, "A", true, 1), option(question, "B", false, 2)));
+        when(quizAttemptRepository.findFirstByQuizQuizIdAndUserUserIdOrderBySubmittedAtDesc(
+                concurrentlyCreated.getQuizId(), "user-1"))
+                .thenReturn(Optional.empty());
+
+        QuizResponse response = quizService.generate("user-1", step.getStepId());
+
+        assertEquals(concurrentlyCreated.getQuizId(), response.getQuizId());
+        verify(quizRepository, never()).save(any());
+        verify(quizQuestionRepository, never()).save(any());
+        verify(quizOptionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateHidesCorrectAnswersWhenAdminPlanIsDowngradedDuringGeneration() {
+        // The user is ADMIN_DEFAULT while Gemini generates, but is downgraded before
+        // the write phase runs. The response must reflect the CURRENT entitlement
+        // (queried inside the write transaction), never a stale prepare-phase value.
+        AtomicBoolean downgraded = new AtomicBoolean(false);
+        when(subscriptionService.hasAdminDefaultPlan("user-1")).thenAnswer(invocation -> !downgraded.get());
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenAnswer(invocation -> {
+            downgraded.set(true);
+            return aiDraft();
+        });
+        stubQuizPersistence(new ArrayList<>(), new ArrayList<>());
+
+        QuizResponse response = quizService.generate("user-1", step.getStepId());
+
+        assertTrue(response.getQuestions().stream()
+                .flatMap(question -> question.getOptions().stream())
+                .allMatch(option -> option.getCorrect() == null));
+        // The write phase asked for the entitlement after the downgrade.
+        verify(subscriptionService).hasAdminDefaultPlan("user-1");
+    }
+
+    @Test
+    void generateFailsWithoutPersistingWhenQuizFeatureIsRevokedDuringGeneration() {
+        // Prepare phase passes the feature check; the write phase re-check fails
+        // because the plan was downgraded while Gemini was generating.
+        doNothing()
+                .doThrow(new AppException(ErrorCode.PREMIUM_FEATURE_REQUIRED))
+                .when(quotaService).validateFeature("user-1", PlanFeatureKeys.QUIZ_GENERATION);
+        stubNoActiveQuizWithChunks();
+        when(geminiQuizClient.generate(any(AiQuizGenerationInput.class))).thenReturn(aiDraft());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quizService.generate("user-1", step.getStepId())
+        );
+
+        assertEquals(ErrorCode.PREMIUM_FEATURE_REQUIRED, exception.getErrorCode());
+        verify(geminiQuizClient, times(1)).generate(any(AiQuizGenerationInput.class));
+        verify(quizRepository, never()).save(any());
+        verify(quizQuestionRepository, never()).save(any());
+        verify(quizOptionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateRetriesThroughRealRestClientAfterUpstreamRateLimit() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        String draftJson = objectMapper.writeValueAsString(aiDraft());
+        byte[] geminiSuccessBody = objectMapper.writeValueAsString(Map.of(
+                "candidates", List.of(Map.of(
+                        "content", Map.of(
+                                "parts", List.of(Map.of("text", draftJson)))))
+        )).getBytes(StandardCharsets.UTF_8);
+
+        AtomicInteger upstreamCalls = new AtomicInteger();
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", exchange -> {
+            if (upstreamCalls.incrementAndGet() == 1) {
+                exchange.sendResponseHeaders(429, -1);
+            } else {
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, geminiSuccessBody.length);
+                exchange.getResponseBody().write(geminiSuccessBody);
+            }
+            exchange.close();
+        });
+        upstream.start();
+        try {
+            GeminiQuizClient realClient = new GeminiQuizClient(
+                    new GeminiProperties(
+                            true,
+                            "test-key",
+                            "gemini-test",
+                            "http://127.0.0.1:" + upstream.getAddress().getPort(),
+                            18000
+                    ),
+                    objectMapper,
+                    RestClient.builder()
+            );
+            QuizService serviceWithRealClient = new QuizService(
+                    roadmapStepRepository,
+                    materialChunkRepository,
+                    quizRepository,
+                    quizQuestionRepository,
+                    quizOptionRepository,
+                    quizAttemptRepository,
+                    quizAttemptAnswerRepository,
+                    realClient,
+                    quotaService,
+                    pointService,
+                    subscriptionService,
+                    transactionManager
+            );
+            stubNoActiveQuizWithChunks();
+            stubQuizPersistence(new ArrayList<>(), new ArrayList<>());
+
+            QuizResponse response = serviceWithRealClient.generate("user-1", step.getStepId());
+
+            assertEquals(5, response.getQuestionCount());
+            assertEquals(2, upstreamCalls.get());
+            verify(quizRepository, times(1)).save(any(Quiz.class));
+        } finally {
+            upstream.stop(0);
+        }
     }
 
     @Test
@@ -273,6 +574,55 @@ class QuizServiceTest {
         assertEquals(ErrorCode.QUIZ_INVALID_ANSWER, exception.getErrorCode());
         verify(quizAttemptRepository, never()).save(any());
         verify(quizAttemptAnswerRepository, never()).saveAll(anyList());
+    }
+
+    private void stubNoActiveQuizWithChunks() {
+        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
+        when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
+                step.getStepId(),
+                "user-1",
+                QuizStatus.ACTIVE
+        )).thenReturn(Optional.empty());
+        when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
+                .thenReturn(List.of(chunk("Core Java summary")));
+    }
+
+    private void stubQuizPersistence(List<QuizQuestion> savedQuestions, List<QuizOption> savedOptions) {
+        stubQuizPersistence(savedQuestions, savedOptions, () -> {
+        });
+    }
+
+    private void stubQuizPersistence(
+            List<QuizQuestion> savedQuestions,
+            List<QuizOption> savedOptions,
+            Runnable onSave
+    ) {
+        when(quizRepository.save(any(Quiz.class))).thenAnswer(invocation -> {
+            onSave.run();
+            Quiz quiz = invocation.getArgument(0);
+            quiz.setQuizId(UUID.randomUUID());
+            return quiz;
+        });
+        when(quizQuestionRepository.save(any(QuizQuestion.class))).thenAnswer(invocation -> {
+            onSave.run();
+            QuizQuestion question = invocation.getArgument(0);
+            question.setQuestionId(UUID.randomUUID());
+            savedQuestions.add(question);
+            return question;
+        });
+        when(quizOptionRepository.save(any(QuizOption.class))).thenAnswer(invocation -> {
+            onSave.run();
+            QuizOption option = invocation.getArgument(0);
+            option.setOptionId(UUID.randomUUID());
+            savedOptions.add(option);
+            return option;
+        });
+        when(quizQuestionRepository.findByQuizQuizIdOrderBySequenceNoAsc(any(UUID.class)))
+                .thenAnswer(invocation -> savedQuestions);
+        when(quizOptionRepository.findByQuestionQuizQuizIdOrderByQuestionSequenceNoAscSequenceNoAsc(any(UUID.class)))
+                .thenAnswer(invocation -> savedOptions);
+        when(quizAttemptRepository.findFirstByQuizQuizIdAndUserUserIdOrderBySubmittedAtDesc(any(UUID.class), any()))
+                .thenReturn(Optional.empty());
     }
 
     private QuizAttempt captureAttempt() {
