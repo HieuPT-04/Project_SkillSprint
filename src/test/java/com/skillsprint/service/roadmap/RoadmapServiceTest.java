@@ -36,6 +36,7 @@ import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.TopicRepository;
+import com.skillsprint.service.calendar.CalendarService;
 import com.skillsprint.service.notification.NotificationService;
 import com.skillsprint.service.points.PointService;
 import com.skillsprint.service.subscription.QuotaService;
@@ -83,6 +84,9 @@ class RoadmapServiceTest {
     PointService pointService;
 
     @Mock
+    CalendarService calendarService;
+
+    @Mock
     NotificationService notificationService;
 
     RoadmapService roadmapService;
@@ -102,6 +106,7 @@ class RoadmapServiceTest {
                 roadmapMapper,
                 quotaService,
                 pointService,
+                calendarService,
                 notificationService
         );
         user = user("user-1");
@@ -408,6 +413,56 @@ class RoadmapServiceTest {
         );
 
         assertEquals(ErrorCode.ROADMAP_NOT_FOUND, exception.getErrorCode());
+        verify(pointService, never()).awardRoadmapCompleted(any(), any(), any());
+    }
+
+    @Test
+    void claimRewardReconcilesStuckRoadmapBeforeRejectingThenAwards() {
+        // Legacy/stuck ADMIN_DEFAULT roadmap: every task is already COMPLETED but the old gate left
+        // the roadmap ACTIVE. claimReward must reconcile from the persisted step tasks (delegated to
+        // CalendarService), which promotes the roadmap to COMPLETED, and then award the reward.
+        UUID workspaceId = workspace.getWorkspaceId();
+        Roadmap roadmap = roadmap(1, RoadmapStatus.ACTIVE);
+        RoadmapStep first = step(roadmap, RoadmapStepStatus.COMPLETED);
+        RoadmapStep second = step(roadmap, RoadmapStepStatus.COMPLETED);
+        roadmap.setTotalSteps(2);
+        whenOwnedWorkspace(workspaceId);
+        when(roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspaceId))
+                .thenReturn(Optional.of(roadmap));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            roadmap.setStatus(RoadmapStatus.COMPLETED);
+            return null;
+        }).when(calendarService).reconcileRoadmapCompletion(roadmap);
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        )).thenReturn(List.of(first, second));
+        when(pointService.hasRoadmapStepCompletedPoints("user-1", first.getStepId())).thenReturn(true);
+        when(pointService.hasRoadmapStepCompletedPoints("user-1", second.getStepId())).thenReturn(true);
+
+        roadmapService.claimReward("user-1", workspaceId);
+
+        verify(calendarService).reconcileRoadmapCompletion(roadmap);
+        verify(pointService).awardRoadmapCompleted(user, workspace, roadmap.getRoadmapId());
+    }
+
+    @Test
+    void claimRewardStillRejectsWhenReconciliationCannotCompleteRoadmap() {
+        // Normal user whose study-time requirement is unmet: reconciliation is a no-op, the roadmap
+        // stays ACTIVE and the claim is rejected. Guards against reconciliation loosening normal gates.
+        UUID workspaceId = workspace.getWorkspaceId();
+        Roadmap roadmap = roadmap(1, RoadmapStatus.ACTIVE);
+        whenOwnedWorkspace(workspaceId);
+        when(roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspaceId))
+                .thenReturn(Optional.of(roadmap));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> roadmapService.claimReward("user-1", workspaceId)
+        );
+
+        assertEquals(ErrorCode.ROADMAP_NOT_FOUND, exception.getErrorCode());
+        verify(calendarService).reconcileRoadmapCompletion(roadmap);
         verify(pointService, never()).awardRoadmapCompleted(any(), any(), any());
     }
 

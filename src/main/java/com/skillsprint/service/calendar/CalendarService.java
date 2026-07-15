@@ -958,16 +958,26 @@ public class CalendarService {
         };
     }
 
-    private void completeRoadmapStepIfReady(RoadmapStep step) {
-        List<CalendarTask> activeStepTasks = calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
-                step.getStepId(),
-                CalendarTaskStatus.CANCELLED
-        );
-        boolean stepReady = activeStepTasks.stream()
-                .allMatch(task -> task.getStatus() == CalendarTaskStatus.COMPLETED)
-                && hasEnoughStudyMinutesForStep(step);
+    /**
+     * Re-evaluates every step of the roadmap against {@link #isStepCompletionEligible} and promotes
+     * whatever is now eligible, reusing the exact same path {@link #completeTask} takes. This is the
+     * reconciliation entry point used by the claim-reward flow to heal roadmaps that were left
+     * ACTIVE by the old gate (notably ADMIN_DEFAULT roadmaps whose tasks are all COMPLETED but had
+     * no valid study minutes). It is transactional and idempotent: already-completed steps only
+     * re-run the idempotent point awards, and normal plans are unaffected because their study-time
+     * requirement is unchanged.
+     */
+    @Transactional
+    public void reconcileRoadmapCompletion(Roadmap roadmap) {
+        if (roadmap == null || roadmap.getStatus() == RoadmapStatus.COMPLETED) {
+            return;
+        }
+        roadmapStepRepository.findByRoadmapRoadmapIdOrderBySequenceNoAsc(roadmap.getRoadmapId())
+                .forEach(this::completeRoadmapStepIfReady);
+    }
 
-        if (!stepReady) {
+    private void completeRoadmapStepIfReady(RoadmapStep step) {
+        if (!isStepCompletionEligible(step)) {
             return;
         }
 
@@ -1001,10 +1011,41 @@ public class CalendarService {
     }
 
     private void awardRoadmapStepPointsIfEligible(RoadmapStep step) {
-        if (!hasEnoughStudyMinutesForStep(step)) {
+        if (!isStepStudyTimeSatisfied(step)) {
             return;
         }
         pointService.awardRoadmapStepCompleted(step.getWorkspace().getUser(), step.getWorkspace(), step.getStepId());
+    }
+
+    /**
+     * Single, shared source of truth for roadmap-step completion eligibility, applied consistently
+     * by {@link #completeRoadmapStepIfReady}, {@link #awardRoadmapStepPointsIfEligible} and the
+     * {@link #reconcileRoadmapCompletion} claim-reward path. A step is eligible only when every
+     * non-CANCELLED calendar task linked to it is COMPLETED AND the study-time gate is satisfied.
+     * ADMIN_DEFAULT plans bypass ONLY the study-time gate — they must still complete every task, so
+     * they can never claim a reward while any task/step is still incomplete.
+     */
+    private boolean isStepCompletionEligible(RoadmapStep step) {
+        return areAllActiveStepTasksCompleted(step) && isStepStudyTimeSatisfied(step);
+    }
+
+    private boolean areAllActiveStepTasksCompleted(RoadmapStep step) {
+        List<CalendarTask> activeStepTasks = calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        );
+        return !activeStepTasks.isEmpty()
+                && activeStepTasks.stream().allMatch(task -> task.getStatus() == CalendarTaskStatus.COMPLETED);
+    }
+
+    /**
+     * Study-time half of the completion policy. Normal plans must accumulate enough valid study
+     * minutes for the step; ADMIN_DEFAULT test plans bypass only this requirement (never the
+     * task-completion requirement above).
+     */
+    private boolean isStepStudyTimeSatisfied(RoadmapStep step) {
+        return isAdminDefaultPlan(step.getWorkspace().getUser().getUserId())
+                || hasEnoughStudyMinutesForStep(step);
     }
 
     private void awardRoadmapPointsIfEligible(Roadmap roadmap) {

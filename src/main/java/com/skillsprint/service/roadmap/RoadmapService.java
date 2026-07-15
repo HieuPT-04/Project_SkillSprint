@@ -24,6 +24,7 @@ import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.RoadmapStepResourceRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.TopicRepository;
+import com.skillsprint.service.calendar.CalendarService;
 import com.skillsprint.service.learningstructure.LearningStructureService;
 import com.skillsprint.service.subscription.QuotaService;
 import com.skillsprint.service.points.PointService;
@@ -98,6 +99,7 @@ public class RoadmapService {
     RoadmapMapper roadmapMapper;
     QuotaService quotaService;
     PointService pointService;
+    CalendarService calendarService;
     com.skillsprint.service.notification.NotificationService notificationService;
 
     @Transactional
@@ -157,6 +159,14 @@ public class RoadmapService {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
         Roadmap roadmap = roadmapRepository.findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(workspaceId)
                 .orElseThrow(() -> new AppException(ErrorCode.ROADMAP_NOT_FOUND));
+
+        // Heal roadmaps left ACTIVE by the old completion gate before rejecting the claim. This
+        // reconciles from the persisted step tasks using the shared eligibility policy, so a stuck
+        // ADMIN_DEFAULT roadmap whose tasks are already all COMPLETED is promoted here. It is
+        // idempotent and leaves normal plans (with an unsatisfied study-time requirement) untouched.
+        if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
+            calendarService.reconcileRoadmapCompletion(roadmap);
+        }
 
         if (roadmap.getStatus() != RoadmapStatus.COMPLETED) {
             throw new AppException(ErrorCode.ROADMAP_NOT_FOUND, "Lộ trình học chưa được hoàn thành.");

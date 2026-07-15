@@ -295,9 +295,13 @@ class CalendarServiceTest {
     }
 
     @Test
-    void completeTaskAllowsAdminDefaultPlanWithoutValidStudyMinutes() {
+    void completeTaskCompletesAdminDefaultStepAndRoadmapWithZeroValidStudyMinutes() {
+        // ADMIN_DEFAULT completing the last required task with zero valid study minutes must still
+        // complete the step and roadmap and create the idempotent ROADMAP_STEP_COMPLETED award,
+        // bypassing ONLY the study-time gate.
         Roadmap roadmap = roadmap(1);
         RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        roadmap.setCurrentStep(step);
         CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
         ServicePlan adminPlan = new ServicePlan();
         adminPlan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
@@ -308,25 +312,126 @@ class CalendarServiceTest {
 
         when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
         when(subscriptionService.getCurrentPlan("user-1")).thenReturn(adminPlan);
+        when(calendarTaskRepository.save(task)).thenReturn(task);
         when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
                 step.getStepId(),
                 CalendarTaskStatus.CANCELLED
         )).thenReturn(List.of(task));
-        when(studySessionRepository.sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
-                "user-1",
-                step.getStepId(),
-                StudySessionStatus.COMPLETED,
-                15
-        )).thenReturn(0L);
+        when(roadmapStepRepository.save(any(RoadmapStep.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        )).thenReturn(List.of(step));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatusOrderBySequenceNoAsc(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.UPCOMING
+        )).thenReturn(List.of());
         when(calendarMapper.toTaskResponse(task)).thenReturn(expected);
 
         CalendarTaskResponse response = calendarService.completeTask("user-1", task.getTaskId());
 
         assertSame(expected, response);
         assertEquals(CalendarTaskStatus.COMPLETED, task.getStatus());
+        assertEquals(RoadmapStepStatus.COMPLETED, step.getStatus());
+        assertEquals(RoadmapStatus.COMPLETED, roadmap.getStatus());
+        assertEquals(1, roadmap.getCompletedSteps());
+        assertEquals(BigDecimal.valueOf(100).setScale(2), roadmap.getProgressPercent());
+        verify(pointService, org.mockito.Mockito.atLeastOnce())
+                .awardRoadmapStepCompleted(user, workspace, step.getStepId());
+        // The valid-study-time gate is bypassed for ADMIN_DEFAULT: no study-minute lookups happen.
         verify(studySessionRepository, never()).sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
                 any(), any(), any(), anyInt()
         );
+        verify(studySessionRepository, never()).sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
+                any(), any(), any(), anyInt()
+        );
+    }
+
+    @Test
+    void completeTaskLeavesAdminDefaultRoadmapIncompleteWhileAnyRequiredTaskRemains() {
+        // ADMIN_DEFAULT must still complete every task: with one required task left TODO, completing
+        // another one cannot complete the step or roadmap.
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        roadmap.setCurrentStep(step);
+        CalendarTask completedTask = roadmapTask(step, CalendarTaskStatus.TODO);
+        CalendarTask pendingTask = roadmapTask(step, CalendarTaskStatus.TODO);
+        ServicePlan adminPlan = new ServicePlan();
+        adminPlan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
+        CalendarTaskResponse expected = CalendarTaskResponse.builder()
+                .taskId(completedTask.getTaskId())
+                .status(CalendarTaskStatus.COMPLETED)
+                .build();
+
+        when(calendarTaskRepository.findById(completedTask.getTaskId())).thenReturn(Optional.of(completedTask));
+        when(subscriptionService.getCurrentPlan("user-1")).thenReturn(adminPlan);
+        when(calendarTaskRepository.save(completedTask)).thenReturn(completedTask);
+        when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        )).thenReturn(List.of(completedTask, pendingTask));
+        when(calendarMapper.toTaskResponse(completedTask)).thenReturn(expected);
+
+        CalendarTaskResponse response = calendarService.completeTask("user-1", completedTask.getTaskId());
+
+        assertSame(expected, response);
+        assertEquals(CalendarTaskStatus.COMPLETED, completedTask.getStatus());
+        assertEquals(RoadmapStepStatus.CURRENT, step.getStatus());
+        assertEquals(RoadmapStatus.ACTIVE, roadmap.getStatus());
+        verify(roadmapStepRepository, never()).save(any());
+        verify(pointService, never()).awardRoadmapStepCompleted(any(), any(), any());
+    }
+
+    @Test
+    void reconcileRoadmapCompletionHealsStuckAdminDefaultRoadmap() {
+        // Legacy stuck ADMIN_DEFAULT roadmap: tasks were completed before the fix but the step and
+        // roadmap were left ACTIVE by the old study-time gate. Reconciliation must promote them and
+        // create the idempotent step award, without any valid-study-minute lookup.
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        roadmap.setCurrentStep(step);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.COMPLETED);
+        ServicePlan adminPlan = new ServicePlan();
+        adminPlan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
+
+        when(subscriptionService.getCurrentPlan("user-1")).thenReturn(adminPlan);
+        when(roadmapStepRepository.findByRoadmapRoadmapIdOrderBySequenceNoAsc(roadmap.getRoadmapId()))
+                .thenReturn(List.of(step));
+        when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        )).thenReturn(List.of(task));
+        when(roadmapStepRepository.save(any(RoadmapStep.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatus(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.COMPLETED
+        )).thenReturn(List.of(step));
+        when(roadmapStepRepository.findByRoadmapRoadmapIdAndStatusOrderBySequenceNoAsc(
+                roadmap.getRoadmapId(),
+                RoadmapStepStatus.UPCOMING
+        )).thenReturn(List.of());
+
+        calendarService.reconcileRoadmapCompletion(roadmap);
+
+        assertEquals(RoadmapStepStatus.COMPLETED, step.getStatus());
+        assertEquals(RoadmapStatus.COMPLETED, roadmap.getStatus());
+        assertEquals(1, roadmap.getCompletedSteps());
+        verify(pointService, org.mockito.Mockito.atLeastOnce())
+                .awardRoadmapStepCompleted(user, workspace, step.getStepId());
+        verify(studySessionRepository, never()).sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
+                any(), any(), any(), anyInt()
+        );
+    }
+
+    @Test
+    void reconcileRoadmapCompletionIsNoOpForAlreadyCompletedRoadmap() {
+        Roadmap roadmap = roadmap(1);
+        roadmap.setStatus(RoadmapStatus.COMPLETED);
+
+        calendarService.reconcileRoadmapCompletion(roadmap);
+
+        verify(roadmapStepRepository, never()).findByRoadmapRoadmapIdOrderBySequenceNoAsc(any());
+        verify(pointService, never()).awardRoadmapStepCompleted(any(), any(), any());
     }
 
     @Test
