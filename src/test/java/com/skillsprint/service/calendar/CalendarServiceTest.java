@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import com.skillsprint.dto.request.calendar.UpdateCalendarTaskRequest;
 import com.skillsprint.dto.request.calendar.UpdateCalendarTaskStatusRequest;
 import com.skillsprint.dto.response.calendar.CalendarTaskResponse;
 import com.skillsprint.entity.CalendarTask;
+import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.OnboardingProfile;
 import com.skillsprint.entity.Roadmap;
 import com.skillsprint.entity.RoadmapStep;
@@ -30,6 +32,7 @@ import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import com.skillsprint.enums.calendar.ClassifiedBy;
 import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import com.skillsprint.enums.learningstructure.DifficultyLevel;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.roadmap.RoadmapStatus;
 import com.skillsprint.enums.roadmap.RoadmapStepStatus;
 import com.skillsprint.enums.session.StudySessionStatus;
@@ -289,6 +292,41 @@ class CalendarServiceTest {
         assertEquals(CalendarTaskStatus.TODO, task.getStatus());
         verify(calendarTaskRepository, never()).save(any());
         verify(roadmapStepRepository, never()).save(any());
+    }
+
+    @Test
+    void completeTaskAllowsAdminDefaultPlanWithoutValidStudyMinutes() {
+        Roadmap roadmap = roadmap(1);
+        RoadmapStep step = roadmapStep(roadmap, 96, RoadmapStepStatus.CURRENT);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        ServicePlan adminPlan = new ServicePlan();
+        adminPlan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
+        CalendarTaskResponse expected = CalendarTaskResponse.builder()
+                .taskId(task.getTaskId())
+                .status(CalendarTaskStatus.COMPLETED)
+                .build();
+
+        when(calendarTaskRepository.findById(task.getTaskId())).thenReturn(Optional.of(task));
+        when(subscriptionService.getCurrentPlan("user-1")).thenReturn(adminPlan);
+        when(calendarTaskRepository.findByRoadmapStepStepIdAndStatusNot(
+                step.getStepId(),
+                CalendarTaskStatus.CANCELLED
+        )).thenReturn(List.of(task));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndRoadmapStepAndStatus(
+                "user-1",
+                step.getStepId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(0L);
+        when(calendarMapper.toTaskResponse(task)).thenReturn(expected);
+
+        CalendarTaskResponse response = calendarService.completeTask("user-1", task.getTaskId());
+
+        assertSame(expected, response);
+        assertEquals(CalendarTaskStatus.COMPLETED, task.getStatus());
+        verify(studySessionRepository, never()).sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                any(), any(), any(), anyInt()
+        );
     }
 
     @Test
