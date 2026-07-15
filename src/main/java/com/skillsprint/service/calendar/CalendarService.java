@@ -17,6 +17,7 @@ import com.skillsprint.entity.OnboardingProfile;
 import com.skillsprint.entity.Roadmap;
 import com.skillsprint.entity.RoadmapProgressLog;
 import com.skillsprint.entity.RoadmapStep;
+import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.enums.calendar.CalendarScheduleRunStatus;
 import com.skillsprint.enums.calendar.CalendarScheduleScope;
@@ -28,6 +29,7 @@ import com.skillsprint.enums.calendar.ClassifiedBy;
 import com.skillsprint.enums.calendar.EisenhowerQuadrant;
 import com.skillsprint.enums.calendar.WeekDay;
 import com.skillsprint.enums.learningstructure.DifficultyLevel;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.roadmap.RoadmapProgressActionType;
 import com.skillsprint.enums.roadmap.RoadmapStatus;
 import com.skillsprint.enums.roadmap.RoadmapStepStatus;
@@ -1052,10 +1054,17 @@ public class CalendarService {
     }
 
     private void ensureTaskHasEnoughValidStudyMinutes(CalendarTask task) {
-        if (task.getRoadmapStep() == null || hasEnoughValidStudyMinutesForTask(task)) {
+        if (task.getRoadmapStep() == null
+                || isAdminDefaultPlan(task.getUser().getUserId())
+                || hasEnoughValidStudyMinutesForTask(task)) {
             return;
         }
         throw new AppException(ErrorCode.CALENDAR_TASK_STUDY_TIME_REQUIRED);
+    }
+
+    private boolean isAdminDefaultPlan(String userId) {
+        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
+        return plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT;
     }
 
     private boolean hasEnoughValidStudyMinutesForTask(CalendarTask task) {
