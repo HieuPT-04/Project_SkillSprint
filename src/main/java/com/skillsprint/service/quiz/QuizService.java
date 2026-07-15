@@ -26,6 +26,8 @@ import com.skillsprint.repository.QuizQuestionRepository;
 import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.service.quiz.ai.AiQuizDraft;
+import com.skillsprint.service.quiz.ai.AiQuizGenerationException;
+import com.skillsprint.service.quiz.ai.AiQuizGenerationInput;
 import com.skillsprint.service.quiz.ai.AiQuizOptionDraft;
 import com.skillsprint.service.quiz.ai.AiQuizQuestionDraft;
 import com.skillsprint.service.quiz.ai.GeminiQuizClient;
@@ -40,15 +42,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -58,6 +64,13 @@ public class QuizService {
 
     private static final int QUESTION_COUNT = 5;
     private static final int PASSING_SCORE = 70;
+
+    /** Total generation attempts against Gemini: the initial call plus 2 retries. */
+    private static final int MAX_GENERATION_ATTEMPTS = 3;
+    /** Exponential backoff before retry attempts 2 and 3. */
+    private static final long[] RETRY_DELAYS_MS = {500L, 1_000L};
+    /** Upper bound applied to an upstream Retry-After hint so a retry never stalls the request. */
+    private static final long MAX_RETRY_AFTER_MS = 5_000L;
 
     RoadmapStepRepository roadmapStepRepository;
     MaterialChunkRepository materialChunkRepository;
@@ -70,21 +83,79 @@ public class QuizService {
     QuotaService quotaService;
     PointService pointService;
     SubscriptionService subscriptionService;
+    PlatformTransactionManager transactionManager;
 
-    @Transactional
+    /**
+     * Deliberately NOT {@code @Transactional}. Generation is split into three phases
+     * so the slow external Gemini call (with its retries, timeouts, and backoff)
+     * never holds a database transaction or pooled connection:
+     * <ol>
+     *   <li>short read-only transaction: validate access, return any existing active
+     *       quiz, otherwise snapshot the prompt inputs into an immutable value object;</li>
+     *   <li>no transaction: Gemini call with bounded retry/backoff;</li>
+     *   <li>short write transaction: revalidate, re-check for a concurrently created
+     *       active quiz, and persist quiz + questions + options atomically.</li>
+     * </ol>
+     * The phases run through {@link TransactionTemplate} (not self-invoked
+     * {@code @Transactional} methods, which the Spring proxy would ignore).
+     */
     public QuizResponse generate(String userId, UUID stepId) {
+        PreparedQuizGeneration prepared = inReadOnlyTransaction(() -> prepareGeneration(userId, stepId));
+        if (prepared.existingQuiz() != null) {
+            return prepared.existingQuiz();
+        }
+
+        AiQuizDraft draft = generateDraftWithRetry(prepared.input());
+        List<AiQuizQuestionDraft> questionDrafts = normalizeDraft(draft);
+        if (questionDrafts.isEmpty()) {
+            // The draft survived client-side validation but not normalization. Do NOT
+            // save a low-quality fallback quiz with generic, meta, or placeholder
+            // questions — fail in a controlled way so the client can show a friendly
+            // retry message.
+            log.warn("[AI] Quiz generation unavailable for step {}: no valid AI draft produced", stepId);
+            throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
+        }
+
+        return inWriteTransaction(() -> saveGeneratedQuiz(userId, stepId, questionDrafts));
+    }
+
+    /**
+     * Phase 1 (read-only transaction): access checks plus everything the
+     * non-transactional Gemini phase will need, snapshotted into immutable values
+     * before the transaction — and with it the ability to touch lazy JPA state — ends.
+     */
+    private PreparedQuizGeneration prepareGeneration(String userId, UUID stepId) {
         quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
 
-        boolean includeCorrectAnswers = subscriptionService.hasAdminDefaultPlan(userId);
-        return quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
-                        stepId,
-                        userId,
-                        QuizStatus.ACTIVE
-                )
-                .map(quiz -> toQuizResponse(quiz, includeCorrectAnswers))
-                .orElseGet(() -> createQuiz(step, includeCorrectAnswers));
+        Optional<Quiz> existing = quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
+                stepId,
+                userId,
+                QuizStatus.ACTIVE
+        );
+        if (existing.isPresent()) {
+            // Entitlement is evaluated here only because the response is built and
+            // returned immediately, inside this same transaction.
+            return new PreparedQuizGeneration(
+                    toQuizResponse(existing.get(), subscriptionService.hasAdminDefaultPlan(userId)), null);
+        }
+
+        List<MaterialChunk> chunks = materialChunkRepository
+                .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(step.getWorkspace().getWorkspaceId());
+        return new PreparedQuizGeneration(null, AiQuizGenerationInput.from(step, chunks));
+    }
+
+    /**
+     * Phase 1 result: either an existing quiz to return as-is, or the Gemini prompt
+     * snapshot. Deliberately carries NO plan-derived entitlement into the generation
+     * path: Gemini can take tens of seconds, and the plan may change meanwhile, so
+     * the write phase re-derives every entitlement itself.
+     */
+    private record PreparedQuizGeneration(
+            QuizResponse existingQuiz,
+            AiQuizGenerationInput input
+    ) {
     }
 
     @Transactional(readOnly = true)
@@ -216,19 +287,36 @@ public class QuizService {
         return toAttemptResponse(attempt, results);
     }
 
-    private QuizResponse createQuiz(RoadmapStep step, boolean includeCorrectAnswers) {
-        List<MaterialChunk> chunks = materialChunkRepository
-                .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(step.getWorkspace().getWorkspaceId());
-        AiQuizDraft draft = geminiQuizClient.generate(step, chunks);
-        List<AiQuizQuestionDraft> questionDrafts = normalizeDraft(draft);
-        if (questionDrafts.isEmpty()) {
-            // Gemini returned null / failed / timed out / quota exhausted, or its draft failed
-            // validation. Do NOT save a low-quality fallback quiz with generic, meta, or
-            // placeholder questions — fail in a controlled way so the client can show a
-            // friendly retry message.
-            log.warn("[AI] Quiz generation unavailable for step {}: no valid AI draft produced",
-                    step.getStepId());
-            throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
+    /**
+     * Phase 3 (short write transaction): revalidate access, re-check that no other
+     * request created an active quiz while Gemini was generating (returning that
+     * quiz instead of a duplicate), then persist quiz + questions + options
+     * atomically.
+     *
+     * <p>Every plan-derived entitlement is re-evaluated HERE, not carried over from
+     * the prepare phase: the plan may have been downgraded while Gemini was
+     * generating, and a stale snapshot would let a demoted user keep the feature or
+     * see the correct-answer key.
+     */
+    private QuizResponse saveGeneratedQuiz(
+            String userId,
+            UUID stepId,
+            List<AiQuizQuestionDraft> questionDrafts
+    ) {
+        quotaService.validateFeature(userId, PlanFeatureKeys.QUIZ_GENERATION);
+        RoadmapStep step = findOwnedStep(userId, stepId);
+        quotaService.validateCanAccessRoadmapStep(userId, step);
+        boolean includeCorrectAnswers = subscriptionService.hasAdminDefaultPlan(userId);
+
+        Optional<Quiz> concurrentlyCreated = quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
+                stepId,
+                userId,
+                QuizStatus.ACTIVE
+        );
+        if (concurrentlyCreated.isPresent()) {
+            log.info("[AI] Active quiz for step {} was created concurrently; returning it instead of a duplicate",
+                    stepId);
+            return toQuizResponse(concurrentlyCreated.get(), includeCorrectAnswers);
         }
 
         Quiz quiz = new Quiz();
@@ -265,6 +353,67 @@ public class QuizService {
         }
 
         return toQuizResponse(savedQuiz, includeCorrectAnswers);
+    }
+
+    /**
+     * Phase 2 (no transaction): calls Gemini with a bounded retry — up to
+     * {@link #MAX_GENERATION_ATTEMPTS} total attempts with exponential backoff,
+     * retrying only transient failures (429, 5xx, timeouts, invalid drafts).
+     * Configuration problems fail immediately. Whatever the reason, the
+     * caller-facing failure stays {@code QUIZ_GENERATION_UNAVAILABLE} so the API
+     * contract is unchanged; the classified reason is only logged.
+     */
+    private AiQuizDraft generateDraftWithRetry(AiQuizGenerationInput input) {
+        for (int attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+            try {
+                return geminiQuizClient.generate(input);
+            } catch (AiQuizGenerationException ex) {
+                // Safe by construction: reason + upstream status only, never prompts,
+                // keys, material content, or generated question content.
+                log.warn("[AI] Quiz generation attempt {}/{} failed for step {}: reason={}, upstreamStatus={}",
+                        attempt,
+                        MAX_GENERATION_ATTEMPTS,
+                        input.stepId(),
+                        ex.getReason(),
+                        ex.getUpstreamStatus()
+                );
+                if (!ex.isRetryable() || attempt == MAX_GENERATION_ATTEMPTS) {
+                    throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
+                }
+                sleepBeforeRetry(backoffMillis(attempt, ex));
+            }
+        }
+        // Unreachable: the loop either returns or throws on the last attempt.
+        throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
+    }
+
+    private long backoffMillis(int attempt, AiQuizGenerationException ex) {
+        long delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length) - 1];
+        if (ex.getRetryAfter() != null) {
+            // Honor the upstream Retry-After hint when it asks for a longer wait,
+            // but never beyond the safety cap.
+            delay = Math.max(delay, Math.min(ex.getRetryAfter().toMillis(), MAX_RETRY_AFTER_MS));
+        }
+        return delay;
+    }
+
+    private void sleepBeforeRetry(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AppException(ErrorCode.QUIZ_GENERATION_UNAVAILABLE);
+        }
+    }
+
+    private <T> T inReadOnlyTransaction(Supplier<T> work) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setReadOnly(true);
+        return template.execute(status -> work.get());
+    }
+
+    private <T> T inWriteTransaction(Supplier<T> work) {
+        return new TransactionTemplate(transactionManager).execute(status -> work.get());
     }
 
     private List<AiQuizQuestionDraft> normalizeDraft(AiQuizDraft draft) {
