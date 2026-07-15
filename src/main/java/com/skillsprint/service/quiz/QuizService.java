@@ -13,8 +13,6 @@ import com.skillsprint.entity.QuizAttemptAnswer;
 import com.skillsprint.entity.QuizOption;
 import com.skillsprint.entity.QuizQuestion;
 import com.skillsprint.entity.RoadmapStep;
-import com.skillsprint.entity.ServicePlan;
-import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.quiz.QuizAttemptStatus;
 import com.skillsprint.enums.quiz.QuizQuestionType;
 import com.skillsprint.enums.quiz.QuizStatus;
@@ -79,7 +77,7 @@ public class QuizService {
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
 
-        boolean includeCorrectAnswers = isAdminDefault(userId);
+        boolean includeCorrectAnswers = subscriptionService.hasAdminDefaultPlan(userId);
         return quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
                         stepId,
                         userId,
@@ -102,7 +100,7 @@ public class QuizService {
                 )
                 .orElseThrow(() -> new AppException(ErrorCode.QUIZ_NOT_FOUND));
 
-        return toQuizResponse(quiz, isAdminDefault(userId));
+        return toQuizResponse(quiz, subscriptionService.hasAdminDefaultPlan(userId));
     }
 
     @Transactional
@@ -398,11 +396,6 @@ public class QuizService {
                 .submittedAt(attempt.getSubmittedAt())
                 .results(results)
                 .build();
-    }
-
-    private boolean isAdminDefault(String userId) {
-        ServicePlan plan = subscriptionService.getCurrentPlan(userId);
-        return plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT;
     }
 
     private RoadmapStep findOwnedStep(String userId, UUID stepId) {

@@ -21,10 +21,8 @@ import com.skillsprint.entity.QuizAttemptAnswer;
 import com.skillsprint.entity.QuizOption;
 import com.skillsprint.entity.QuizQuestion;
 import com.skillsprint.entity.RoadmapStep;
-import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.entity.User;
-import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.quiz.QuizAttemptStatus;
 import com.skillsprint.enums.quiz.QuizQuestionType;
 import com.skillsprint.enums.quiz.QuizStatus;
@@ -196,9 +194,7 @@ class QuizServiceTest {
         Quiz quiz = quiz();
         QuizQuestion question = question(quiz, 1);
         QuizOption correct = option(question, "A", true, 1);
-        ServicePlan plan = new ServicePlan();
-        plan.setPlanType(ServicePlanType.ADMIN_DEFAULT);
-        when(subscriptionService.getCurrentPlan("user-1")).thenReturn(plan);
+        when(subscriptionService.hasAdminDefaultPlan("user-1")).thenReturn(true);
         when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
         when(quizRepository.findFirstByRoadmapStepStepIdAndUserUserIdAndStatus(
                 step.getStepId(),

@@ -32,6 +32,7 @@ import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
+import com.skillsprint.service.subscription.SubscriptionService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
@@ -62,6 +63,7 @@ public class MarketplaceCreatorService {
     QuizRepository quizRepository;
     QuizQuestionRepository quizQuestionRepository;
     QuizOptionRepository quizOptionRepository;
+    SubscriptionService subscriptionService;
     ObjectMapper objectMapper;
 
     @Transactional
@@ -103,6 +105,7 @@ public class MarketplaceCreatorService {
         }
         MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        boolean includeCorrectAnswers = subscriptionService.hasAdminDefaultPlan(userId);
 
         List<CreatorValidationPackResponse.ChapterResponse> chapters = new ArrayList<>();
         for (JsonNode chapterNode : snapshot.getContent().path("chapters")) {
@@ -115,6 +118,7 @@ public class MarketplaceCreatorService {
                             .label(optionNode.path("label").asText())
                             .text(optionNode.path("text").asText())
                             .sequenceNo(optionNode.path("sequenceNo").asInt())
+                            .correct(includeCorrectAnswers ? optionNode.path("correct").asBoolean(false) : null)
                             .build());
                 }
                 questions.add(CreatorValidationPackResponse.QuestionResponse.builder()

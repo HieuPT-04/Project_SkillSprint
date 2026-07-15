@@ -36,6 +36,7 @@ import com.skillsprint.repository.QuizRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.RoadmapStepRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
+import com.skillsprint.service.subscription.SubscriptionService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +60,7 @@ class MarketplaceCreatorServiceTest {
     @Mock QuizRepository quizRepository;
     @Mock QuizQuestionRepository quizQuestionRepository;
     @Mock QuizOptionRepository quizOptionRepository;
+    @Mock SubscriptionService subscriptionService;
     @Spy ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks MarketplaceCreatorService service;
 
@@ -100,7 +102,7 @@ class MarketplaceCreatorServiceTest {
     }
 
     @Test
-    void validationPackNeverExposesCorrectAnswers() throws Exception {
+    void validationPackDoesNotExposeCorrectAnswersForNonAdminDefaultPlan() throws Exception {
         UUID itemId = UUID.randomUUID();
         MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.DRAFT);
         UUID questionId = UUID.randomUUID();
@@ -119,6 +121,27 @@ class MarketplaceCreatorServiceTest {
         assertThat(response.getChapters().get(0).getQuestions().get(0).getOptions()).hasSize(2);
         // sanitizing must not mutate the persisted snapshot JSON
         assertThat(snapshot.getContent().at("/chapters/0/quiz/questions/0/options/0/correct").asBoolean()).isTrue();
+    }
+
+    @Test
+    void adminDefaultValidationPackExposesCorrectAnswers() throws Exception {
+        UUID itemId = UUID.randomUUID();
+        MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.DRAFT);
+        UUID questionId = UUID.randomUUID();
+        UUID correctOptionId = UUID.randomUUID();
+        UUID wrongOptionId = UUID.randomUUID();
+        MarketplaceQuizPackSnapshot snapshot = snapshot(item, snapshotContent(questionId, correctOptionId, wrongOptionId));
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
+        when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
+        when(subscriptionService.hasAdminDefaultPlan("creator")).thenReturn(true);
+
+        CreatorValidationPackResponse response = service.getCreatorValidationPack("creator", itemId);
+
+        List<CreatorValidationPackResponse.OptionResponse> options = response.getChapters().get(0)
+                .getQuestions().get(0).getOptions();
+        assertThat(options).extracting(CreatorValidationPackResponse.OptionResponse::getCorrect)
+                .containsExactly(true, false);
+        assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"correct\":true", "\"correct\":false");
     }
 
     @Test
