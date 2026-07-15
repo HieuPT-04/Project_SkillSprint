@@ -121,6 +121,16 @@ public class SubscriptionService {
         return ensureDefaultFreeSubscription(userId).getPlan();
     }
 
+    /**
+     * Returns whether the user has the dedicated internal admin test plan.
+     * This is intentionally plan-based rather than role-based because test-only
+     * features (such as answer-key auto-fill) follow the subscription contract.
+     */
+    public boolean hasAdminDefaultPlan(String userId) {
+        ServicePlan plan = getCurrentPlan(userId);
+        return plan != null && plan.getPlanType() == ServicePlanType.ADMIN_DEFAULT;
+    }
+
     private Subscription createSubscription(User user, ServicePlanType planType, Instant startAt, Instant endAt) {
         ServicePlan plan = servicePlanRepository.findByPlanType(planType)
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PLAN_NOT_FOUND));

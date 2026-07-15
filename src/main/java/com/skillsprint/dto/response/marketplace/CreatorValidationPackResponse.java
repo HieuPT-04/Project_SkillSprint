@@ -1,5 +1,6 @@
 package com.skillsprint.dto.response.marketplace;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
@@ -39,10 +40,15 @@ public class CreatorValidationPackResponse {
 
     @Getter
     @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class OptionResponse {
         UUID optionId;
         String label;
         String text;
         Integer sequenceNo;
+
+        // The snapshot answer key is exposed only to the ADMIN_DEFAULT test plan.
+        // Null is omitted from JSON for every other user.
+        Boolean correct;
     }
 }
