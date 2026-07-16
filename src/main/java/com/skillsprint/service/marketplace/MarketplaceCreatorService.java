@@ -10,6 +10,7 @@ import com.skillsprint.dto.response.marketplace.CreatorValidationPackResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceQuizAttemptResponse;
 import com.skillsprint.entity.MarketplaceItem;
+import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.entity.MarketplaceQuizAttempt;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
 import com.skillsprint.entity.Quiz;
@@ -64,6 +65,7 @@ public class MarketplaceCreatorService {
     QuizQuestionRepository quizQuestionRepository;
     QuizOptionRepository quizOptionRepository;
     SubscriptionService subscriptionService;
+    MarketplacePackVersionService packVersionService;
     ObjectMapper objectMapper;
 
     @Transactional
@@ -93,7 +95,9 @@ public class MarketplaceCreatorService {
         snapshot.setContent(pack.content());
         snapshotRepository.save(snapshot);
 
-        return toResponse(item, snapshot);
+        MarketplacePackVersion version = packVersionService.createInitialVersion(item, snapshot);
+
+        return toResponse(item, snapshot, MarketplacePackVersionIdentity.of(version));
     }
 
     @Transactional(readOnly = true)
@@ -138,8 +142,12 @@ public class MarketplaceCreatorService {
                     .build());
         }
 
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         return CreatorValidationPackResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .sourceWorkspaceId(item.getSourceWorkspace().getWorkspaceId())
                 .title(item.getTitle())
                 .chapterCount(snapshot.getChapterCount())
@@ -173,7 +181,7 @@ public class MarketplaceCreatorService {
 
         item.setCreatorValidationScore(null);
         item = marketplaceItemRepository.save(item);
-        return toResponse(item, snapshot);
+        return toResponse(item, snapshot, syncedIdentity(item, snapshot));
     }
 
     private PackContent buildPackContent(String userId, StudyWorkspace workspace) {
@@ -242,9 +250,15 @@ public class MarketplaceCreatorService {
 
     @Transactional(readOnly = true)
     public List<MarketplaceItemResponse> getMyItems(String userId) {
-        return marketplaceItemRepository.findByCreatorUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(item -> toResponse(item, snapshotRepository.findByItemItemId(item.getItemId())
-                        .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND))))
+        List<MarketplaceItem> items = marketplaceItemRepository.findByCreatorUserIdOrderByCreatedAtDesc(userId);
+        Map<UUID, MarketplacePackVersionIdentity> identities =
+                packVersionService.identitiesOf(items.stream().map(MarketplaceItem::getItemId).toList());
+        return items.stream()
+                .map(item -> toResponse(
+                        item,
+                        snapshotRepository.findByItemItemId(item.getItemId())
+                                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND)),
+                        identities.getOrDefault(item.getItemId(), MarketplacePackVersionIdentity.EMPTY)))
                 .toList();
     }
 
@@ -284,6 +298,7 @@ public class MarketplaceCreatorService {
 
         MarketplaceQuizAttempt attempt = new MarketplaceQuizAttempt();
         attempt.setItem(item);
+        attempt.setPackVersion(packVersionService.findByItemId(itemId).orElse(null));
         attempt.setUser(item.getCreator());
         attempt.setAttemptType(MarketplaceQuizAttemptType.CREATOR_VALIDATION);
         attempt.setScore(score);
@@ -296,7 +311,7 @@ public class MarketplaceCreatorService {
 
         item.setCreatorValidationScore(score);
         marketplaceItemRepository.save(item);
-        return toAttemptResponse(attempt);
+        return toAttemptResponse(attempt, syncedIdentity(item, snapshot));
     }
 
     @Transactional
@@ -314,7 +329,12 @@ public class MarketplaceCreatorService {
         item = marketplaceItemRepository.save(item);
         MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
-        return toResponse(item, snapshot);
+        return toResponse(item, snapshot, syncedIdentity(item, snapshot));
+    }
+
+    private MarketplacePackVersionIdentity syncedIdentity(MarketplaceItem item, MarketplaceQuizPackSnapshot snapshot) {
+        return MarketplacePackVersionIdentity.ofNullable(
+                packVersionService.syncFromLegacyItem(item, snapshot).orElse(null));
     }
 
     private Map<UUID, UUID> correctOptions(MarketplaceQuizPackSnapshot snapshot) {
@@ -342,10 +362,16 @@ public class MarketplaceCreatorService {
         return correctOptions;
     }
 
-    private MarketplaceQuizAttemptResponse toAttemptResponse(MarketplaceQuizAttempt attempt) {
+    private MarketplaceQuizAttemptResponse toAttemptResponse(
+            MarketplaceQuizAttempt attempt,
+            MarketplacePackVersionIdentity identity
+    ) {
         return MarketplaceQuizAttemptResponse.builder()
                 .attemptId(attempt.getAttemptId())
                 .itemId(attempt.getItem().getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .score(attempt.getScore())
                 .correctCount(attempt.getCorrectCount())
                 .questionCount(attempt.getQuestionCount())
@@ -354,9 +380,16 @@ public class MarketplaceCreatorService {
                 .build();
     }
 
-    private MarketplaceItemResponse toResponse(MarketplaceItem item, MarketplaceQuizPackSnapshot snapshot) {
+    private MarketplaceItemResponse toResponse(
+            MarketplaceItem item,
+            MarketplaceQuizPackSnapshot snapshot,
+            MarketplacePackVersionIdentity identity
+    ) {
         return MarketplaceItemResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .sourceWorkspaceId(item.getSourceWorkspace().getWorkspaceId())
                 .title(item.getTitle())
                 .description(item.getDescription())
