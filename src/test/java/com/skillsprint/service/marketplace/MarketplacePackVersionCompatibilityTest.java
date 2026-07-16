@@ -58,6 +58,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceOwnershipService marketplaceOwnershipService;
 
     MarketplaceItem item;
     MarketplaceQuizPackSnapshot snapshot;
@@ -83,6 +84,10 @@ class MarketplacePackVersionCompatibilityTest {
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of());
         lenient().when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot));
+        lenient().when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", item.getItemId(), "Bạn chưa mua Quiz Pack này"))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.LEGACY_PURCHASE, null));
     }
 
     @Test
@@ -136,7 +141,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedLibraryListExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
         when(purchaseRepository.findByUserUserIdAndStatusOrderByPurchasedAtDesc(
                 "buyer", MarketplacePurchaseStatus.ACTIVE)).thenReturn(List.of(purchase()));
 
@@ -148,10 +153,38 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedPackDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService);
-        when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                "buyer", item.getItemId(), MarketplacePurchaseStatus.ACTIVE)).thenReturn(true);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
 
+        PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
+
+        assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+    }
+
+    @Test
+    void legacyPurchasedPackStillOpensWhenVersionMappingIsMissing() {
+        MarketplaceLibraryService service = new MarketplaceLibraryService(
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+        when(packVersionService.identityOf(item.getItemId())).thenReturn(MarketplacePackVersionIdentity.EMPTY);
+
+        PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
+
+        assertThat(response.getItemId()).isEqualTo(item.getItemId());
+        assertThat(response.getVersionId()).isNull();
+    }
+
+    @Test
+    void entitlementOwnerCanOpenVersionContentWithoutLegacyPurchase() {
+        version.setTitle("Version content");
+        version.setSubject("Toan");
+        version.setQuestionCount(1);
+        version.setContent(new ObjectMapper().createObjectNode());
+        when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", item.getItemId(), "Bạn chưa mua Quiz Pack này"))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.ENTITLEMENT, version));
+
+        MarketplaceLibraryService service = new MarketplaceLibraryService(
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
