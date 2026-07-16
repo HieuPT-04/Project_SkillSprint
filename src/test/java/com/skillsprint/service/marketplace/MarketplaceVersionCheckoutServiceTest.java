@@ -62,6 +62,7 @@ class MarketplaceVersionCheckoutServiceTest {
     @Mock UserRepository userRepository;
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
+    @Mock MarketplaceCheckoutAuditService checkoutAuditService;
 
     private MarketplaceVersionCheckoutService service;
     private MarketplacePackVersion version;
@@ -81,7 +82,8 @@ class MarketplaceVersionCheckoutServiceTest {
                 userRepository,
                 walletRepository,
                 walletTransactionRepository,
-                new MarketplaceCheckoutMapper());
+                new MarketplaceCheckoutMapper(),
+                checkoutAuditService);
 
         versionId = UUID.randomUUID();
         User creator = user("creator", "creator@example.com");
@@ -172,6 +174,7 @@ class MarketplaceVersionCheckoutServiceTest {
         verify(walletTransactionRepository).save(transactionCaptor.capture());
         assertThat(transactionCaptor.getValue().getReferenceType()).isEqualTo(WalletTransactionReferenceType.MARKETPLACE_SALE);
         assertThat(transactionCaptor.getValue().getBalanceAfter()).isEqualTo(400);
+        verify(checkoutAuditService).recordCompletedCheckout(saleCaptor.getValue(), settlementCaptor.getValue());
     }
 
     @Test
@@ -199,6 +202,7 @@ class MarketplaceVersionCheckoutServiceTest {
         verify(walletRepository, never()).save(any());
         verify(earningEntryRepository, never()).save(any());
         verify(platformRevenueEntryRepository, never()).save(any());
+        verify(checkoutAuditService, never()).recordCompletedCheckout(any(), any());
     }
 
     @Test
