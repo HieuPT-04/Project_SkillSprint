@@ -17,4 +17,6 @@ public class WalletTransaction extends BaseAuditEntity {
     @Column(name = "balance_after", nullable = false) private Integer balanceAfter;
     @Enumerated(EnumType.STRING) @Column(name = "reference_type", nullable = false, length = 40) private WalletTransactionReferenceType referenceType;
     @Column(name = "reference_id", nullable = false) private UUID referenceId;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "adjusted_by_user_id") private User adjustedBy;
+    @Column(name = "adjustment_reason", length = 500) private String adjustmentReason;
 }

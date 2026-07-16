@@ -3,6 +3,8 @@ package com.skillsprint.service.marketplace;
 import com.skillsprint.dto.request.marketplace.AdjustWalletRequest;
 import com.skillsprint.dto.response.marketplace.WalletBalanceResponse;
 import com.skillsprint.dto.response.marketplace.WalletTransactionResponse;
+import com.skillsprint.dto.response.marketplace.AdminWalletResponse;
+import com.skillsprint.dto.response.marketplace.AdminWalletTransactionResponse;
 import com.skillsprint.entity.*;
 import com.skillsprint.enums.marketplace.*;
 import com.skillsprint.exception.*;
@@ -18,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class MarketplaceWalletService {
     UserRepository userRepository; UserWalletRepository walletRepository; WalletTransactionRepository transactionRepository;
     @Transactional
-    public WalletBalanceResponse adjust(String userId, AdjustWalletRequest request) {
+    public WalletBalanceResponse adjust(String adminUserId, String userId, AdjustWalletRequest request) {
         if (request.getAmount() == 0) throw new AppException(ErrorCode.VALIDATION_ERROR, "amount phải khác 0");
+        User admin = userRepository.findById(adminUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
         User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
         UserWallet wallet = walletRepository.findByUserIdForUpdate(userId).orElseGet(() -> { UserWallet value = new UserWallet(); value.setUser(user); return walletRepository.saveAndFlush(value); });
         int before = wallet.getBalance(); int after = before + request.getAmount();
@@ -29,8 +33,31 @@ public class MarketplaceWalletService {
         transaction.setDirection(request.getAmount() > 0 ? WalletTransactionDirection.CREDIT : WalletTransactionDirection.DEBIT);
         transaction.setAmount(Math.abs(request.getAmount())); transaction.setBalanceBefore(before); transaction.setBalanceAfter(after);
         transaction.setReferenceType(WalletTransactionReferenceType.ADMIN_ADJUSTMENT); transaction.setReferenceId(UUID.randomUUID());
+        transaction.setAdjustedBy(admin); transaction.setAdjustmentReason(request.getReason().trim());
         transactionRepository.save(transaction);
         return WalletBalanceResponse.builder().userId(userId).balance(after).build();
+    }
+    @Transactional(readOnly=true)
+    public AdminWalletResponse getAdminWallet(String userId) {
+        userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
+        int balance = walletRepository.findByUserUserId(userId).map(UserWallet::getBalance).orElse(0);
+        List<AdminWalletTransactionResponse> recentTransactions = transactionRepository
+                .findTop20ByWalletUserUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(transaction -> AdminWalletTransactionResponse.builder()
+                        .transactionId(transaction.getTransactionId())
+                        .direction(transaction.getDirection())
+                        .amount(transaction.getAmount())
+                        .balanceBefore(transaction.getBalanceBefore())
+                        .balanceAfter(transaction.getBalanceAfter())
+                        .referenceType(transaction.getReferenceType())
+                        .adjustedByUserId(transaction.getAdjustedBy() != null ? transaction.getAdjustedBy().getUserId() : null)
+                        .adjustedByName(transaction.getAdjustedBy() != null ? transaction.getAdjustedBy().getFullName() : null)
+                        .adjustmentReason(transaction.getAdjustmentReason())
+                        .createdAt(transaction.getCreatedAt())
+                        .build())
+                .toList();
+        return AdminWalletResponse.builder().userId(userId).balance(balance).recentTransactions(recentTransactions).build();
     }
     @Transactional(readOnly=true)
     public WalletBalanceResponse getBalance(String userId) { return walletRepository.findByUserUserId(userId).map(w -> WalletBalanceResponse.builder().userId(userId).balance(w.getBalance()).build()).orElse(WalletBalanceResponse.builder().userId(userId).balance(0).build()); }
