@@ -15,6 +15,6 @@ public class WalletTransaction extends BaseAuditEntity {
     @Column(nullable = false) private Integer amount;
     @Column(name = "balance_before", nullable = false) private Integer balanceBefore;
     @Column(name = "balance_after", nullable = false) private Integer balanceAfter;
-    @Enumerated(EnumType.STRING) @Column(name = "reference_type", nullable = false, length = 30) private WalletTransactionReferenceType referenceType;
+    @Enumerated(EnumType.STRING) @Column(name = "reference_type", nullable = false, length = 40) private WalletTransactionReferenceType referenceType;
     @Column(name = "reference_id", nullable = false) private UUID referenceId;
 }

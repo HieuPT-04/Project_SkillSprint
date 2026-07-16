@@ -143,6 +143,9 @@ public enum ErrorCode {
     PAYMENT_ALREADY_CONFIRMED("Giao dịch đã được xác nhận trước đó", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_ERROR("Không thể xử lý thanh toán", HttpStatus.BAD_GATEWAY),
     PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST),
+    PAYMENT_PURPOSE_MISMATCH("Giao dịch thanh toán không đúng mục đích", HttpStatus.CONFLICT),
+    COIN_TOP_UP_NOT_AVAILABLE("Nạp Coin hiện chưa khả dụng", HttpStatus.SERVICE_UNAVAILABLE),
+    COIN_PACKAGE_NOT_FOUND("Không tìm thấy gói nạp Coin", HttpStatus.NOT_FOUND),
     SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED("Không thể mua gói thấp hơn gói hiện tại", HttpStatus.BAD_REQUEST),
 
     // Notification

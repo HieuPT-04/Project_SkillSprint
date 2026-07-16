@@ -13,3 +13,27 @@ server:
   # Default HTTP port for the backend application.
   port: 8080
 
+app:
+  payment:
+    coin:
+      # Server-owned Coin package catalogue, shared by every profile. A top-up request
+      # may only name a package `key`; the VND price and Coin quantity are always read
+      # from here and never from the request body.
+      enabled: ${COIN_TOP_UP_ENABLED:true}
+      packages:
+        - key: COIN_50
+          coin-amount: 50
+          vnd-amount: 10000
+        - key: COIN_100
+          coin-amount: 100
+          vnd-amount: 19000
+        - key: COIN_300
+          coin-amount: 300
+          vnd-amount: 54000
+        - key: COIN_500
+          coin-amount: 500
+          vnd-amount: 85000
+        - key: COIN_1000
+          coin-amount: 1000
+          vnd-amount: 160000
+
