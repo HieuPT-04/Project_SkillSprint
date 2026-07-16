@@ -33,7 +33,7 @@ public class MarketplaceWalletService {
         return WalletBalanceResponse.builder().userId(userId).balance(after).build();
     }
     @Transactional(readOnly=true)
-    public WalletBalanceResponse getBalance(String userId) { return walletRepository.findByUserIdForUpdate(userId).map(w -> WalletBalanceResponse.builder().userId(userId).balance(w.getBalance()).build()).orElse(WalletBalanceResponse.builder().userId(userId).balance(0).build()); }
+    public WalletBalanceResponse getBalance(String userId) { return walletRepository.findByUserUserId(userId).map(w -> WalletBalanceResponse.builder().userId(userId).balance(w.getBalance()).build()).orElse(WalletBalanceResponse.builder().userId(userId).balance(0).build()); }
     // Scoped to the caller's own wallet by the repository query, so one user's ledger can
     // never appear in another user's history.
     @Transactional(readOnly=true)
