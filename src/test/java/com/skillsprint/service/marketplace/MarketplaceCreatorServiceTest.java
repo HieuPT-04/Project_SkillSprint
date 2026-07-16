@@ -3,6 +3,7 @@ package com.skillsprint.service.marketplace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -61,8 +63,19 @@ class MarketplaceCreatorServiceTest {
     @Mock QuizQuestionRepository quizQuestionRepository;
     @Mock QuizOptionRepository quizOptionRepository;
     @Mock SubscriptionService subscriptionService;
+    @Mock MarketplacePackVersionService packVersionService;
     @Spy ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks MarketplaceCreatorService service;
+
+    @BeforeEach
+    void stubVersionIdentity() {
+        // These tests predate the pack/version foundation and assert legacy item
+        // behavior only; the additive identity fields have their own coverage in
+        // MarketplacePackVersionCompatibilityTest.
+        lenient().when(packVersionService.identityOf(any()))
+                .thenReturn(MarketplacePackVersionIdentity.EMPTY);
+        lenient().when(packVersionService.findByItemId(any())).thenReturn(Optional.empty());
+    }
 
     @Test
     void creatorRetrievesOwnDraftValidationPack() {

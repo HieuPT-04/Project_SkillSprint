@@ -16,6 +16,7 @@ import com.skillsprint.enums.calendar.CalendarTaskPriority;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import com.skillsprint.enums.community.CommunityPostStatus;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.points.PointEventType;
@@ -171,12 +172,60 @@ class RepositoryQueryBehaviorTest {
 
         assertEquals(1, paidSearch.getTotalElements());
         assertEquals(alice.getUserId(), paidSearch.getContent().get(0).getUser().getUserId());
-        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByStatus(PaymentStatus.PAID));
-        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByStatusAndPaidAtBetween(
+        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatus(
+                PaymentPurpose.SUBSCRIPTION,
+                PaymentStatus.PAID
+        ));
+        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                PaymentPurpose.SUBSCRIPTION,
                 PaymentStatus.PAID,
                 Instant.parse("2026-06-24T00:00:00Z"),
                 Instant.parse("2026-06-25T00:00:00Z")
         ));
+    }
+
+    @Test
+    void paymentRepositoryRevenueSumsExcludePaidCoinTopUps() {
+        ServicePlan plan = servicePlanRepository.save(plan());
+        Instant paidAt = Instant.parse("2026-06-24T08:00:00Z");
+        Instant dayStart = Instant.parse("2026-06-24T00:00:00Z");
+        Instant nextDayStart = Instant.parse("2026-06-25T00:00:00Z");
+
+        PaymentTransaction subscription = payment(alice, plan, PaymentStatus.PAID, "TXN-1", "PROVIDER-1", "200000");
+        subscription.setPaidAt(paidAt);
+        // A paid Coin top-up on the same day: a wallet deposit, never product revenue.
+        PaymentTransaction topUp = payment(bob, plan, PaymentStatus.PAID, "TXN-2", "PROVIDER-2", "19000");
+        topUp.setPurpose(PaymentPurpose.COIN_TOP_UP);
+        topUp.setPlan(null);
+        topUp.setSubscriptionMonths(0);
+        topUp.setCoinAmount(100);
+        topUp.setCoinPackageKey("COIN_100");
+        topUp.setPaidAt(paidAt);
+        paymentTransactionRepository.saveAllAndFlush(List.of(subscription, topUp));
+
+        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatus(
+                PaymentPurpose.SUBSCRIPTION,
+                PaymentStatus.PAID
+        ));
+        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtAfter(
+                PaymentPurpose.SUBSCRIPTION,
+                PaymentStatus.PAID,
+                dayStart
+        ));
+        assertEquals(new BigDecimal("200000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                PaymentPurpose.SUBSCRIPTION,
+                PaymentStatus.PAID,
+                dayStart,
+                nextDayStart
+        ));
+
+        // The top-up is still stored and summable in its own right; it is only kept out
+        // of the subscription revenue figures.
+        assertEquals(new BigDecimal("19000.00"), paymentTransactionRepository.sumAmountByPurposeAndStatus(
+                PaymentPurpose.COIN_TOP_UP,
+                PaymentStatus.PAID
+        ));
+        assertEquals(2, paymentTransactionRepository.countByStatus(PaymentStatus.PAID));
     }
 
     private CalendarTask calendarTask(String title, LocalDate date, LocalTime start, LocalTime end) {

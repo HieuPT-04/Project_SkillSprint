@@ -28,6 +28,7 @@ public class MarketplaceAdminService {
 
     MarketplaceItemRepository marketplaceItemRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
+    MarketplacePackVersionService packVersionService;
     UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -43,8 +44,12 @@ public class MarketplaceAdminService {
     public MarketplaceAdminItemDetailResponse getItemDetail(UUID itemId) {
         MarketplaceItem item = findItem(itemId);
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(itemId);
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         return MarketplaceAdminItemDetailResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .creatorId(item.getCreator().getUserId())
                 .creatorName(item.getCreator().getFullName())
                 .title(item.getTitle())
@@ -79,6 +84,9 @@ public class MarketplaceAdminService {
         item.setReviewedAt(Instant.now());
         item.setPublishedAt(request.getStatus() == MarketplaceItemStatus.PUBLISHED ? Instant.now() : null);
         item = marketplaceItemRepository.save(item);
+        // Mirrors the moderation outcome onto Version 1, including the saleable
+        // marker: publishing makes it saleable, suspending or rejecting clears it.
+        packVersionService.syncFromLegacyItem(item, findSnapshot(itemId));
         return toResponse(item);
     }
 
@@ -103,8 +111,12 @@ public class MarketplaceAdminService {
 
     private MarketplaceItemResponse toResponse(MarketplaceItem item) {
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(item.getItemId());
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(item.getItemId());
         return MarketplaceItemResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .sourceWorkspaceId(item.getSourceWorkspace().getWorkspaceId())
                 .title(item.getTitle())
                 .description(item.getDescription())

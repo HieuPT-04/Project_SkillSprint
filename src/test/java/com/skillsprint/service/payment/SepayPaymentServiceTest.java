@@ -3,6 +3,7 @@ package com.skillsprint.service.payment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,6 +22,7 @@ import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
@@ -57,6 +59,9 @@ class SepayPaymentServiceTest {
 
     @Mock
     SubscriptionService subscriptionService;
+
+    @Mock
+    CoinTopUpService coinTopUpService;
 
     @Mock
     PaymentMapper paymentMapper;
@@ -173,6 +178,10 @@ class SepayPaymentServiceTest {
         assertEquals("123 456 789", savedTransaction.getBankAccountNumber());
         assertEquals(savedTransaction.getTxnRef(), savedTransaction.getTransferContent());
         assertNotNull(savedTransaction.getExpireAt());
+        assertEquals(PaymentPurpose.SUBSCRIPTION, savedTransaction.getPurpose());
+        assertEquals(1, savedTransaction.getSubscriptionMonths());
+        assertNull(savedTransaction.getCoinAmount());
+        assertNull(savedTransaction.getCoinPackageKey());
     }
 
     @Test
@@ -230,6 +239,107 @@ class SepayPaymentServiceTest {
         assertTrue(transaction.getRawCallbackData().contains("\"id\":9001"));
         verify(paymentTransactionRepository).save(transaction);
         verify(subscriptionService).activatePaidPlan("user-1", builderPlan);
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+    }
+
+    @Test
+    void handleWebhookCreditsCoinForTopUpPaymentWithoutTouchingSubscriptionState() {
+        PaymentTransaction transaction = topUpPayment("DH900", PaymentStatus.PENDING, "19000", 100);
+        when(paymentTransactionRepository.findByProviderTransactionId("9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findWithLockByTxnRef("DH900")).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(transaction)).thenReturn(transaction);
+
+        sepayPaymentService.handleWebhook(webhook("DH900", "19000"), "Bearer webhook-secret", null);
+
+        assertEquals(PaymentStatus.PAID, transaction.getStatus());
+        assertNotNull(transaction.getPaidAt());
+        verify(coinTopUpService).creditVerifiedTopUp(transaction);
+        verify(subscriptionService, never()).activatePaidPlan(any(), any(ServicePlan.class));
+    }
+
+    @Test
+    void handleWebhookDoesNotCreditCoinForAnExpiredTopUp() {
+        PaymentTransaction transaction = topUpPayment("DH900", PaymentStatus.PENDING, "19000", 100);
+        transaction.setExpireAt(Instant.now().minus(Duration.ofSeconds(1)));
+        when(paymentTransactionRepository.findByProviderTransactionId("9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findWithLockByTxnRef("DH900")).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(transaction)).thenReturn(transaction);
+
+        sepayPaymentService.handleWebhook(webhook("DH900", "19000"), "Bearer webhook-secret", null);
+
+        assertEquals(PaymentStatus.EXPIRED, transaction.getStatus());
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+    }
+
+    @Test
+    void handleWebhookDoesNotCreditCoinWhenTopUpAmountIsWrong() {
+        PaymentTransaction transaction = topUpPayment("DH900", PaymentStatus.PENDING, "19000", 100);
+        when(paymentTransactionRepository.findByProviderTransactionId("9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findWithLockByTxnRef("DH900")).thenReturn(Optional.of(transaction));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> sepayPaymentService.handleWebhook(webhook("DH900", "1000"), "Bearer webhook-secret", null)
+        );
+
+        assertEquals(ErrorCode.PAYMENT_INVALID_AMOUNT, exception.getErrorCode());
+        assertEquals(PaymentStatus.PENDING, transaction.getStatus());
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void handleWebhookDoesNotCreditCoinWhenReceiverAccountIsWrong() {
+        PaymentTransaction transaction = topUpPayment("DH900", PaymentStatus.PENDING, "19000", 100);
+        SepayWebhookRequest request = webhook("DH900", "19000");
+        request.setAccountNumber("999999");
+        request.setSubAccount(null);
+        when(paymentTransactionRepository.findByProviderTransactionId("9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findWithLockByTxnRef("DH900")).thenReturn(Optional.of(transaction));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> sepayPaymentService.handleWebhook(request, "Bearer webhook-secret", null)
+        );
+
+        assertEquals(ErrorCode.PAYMENT_INVALID_RECEIVER_ACCOUNT, exception.getErrorCode());
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+    }
+
+    @Test
+    void handleWebhookDoesNotCreditCoinWhenAuthenticationIsInvalid() {
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> sepayPaymentService.handleWebhook(webhook("DH900", "19000"), null, "wrong")
+        );
+
+        assertEquals(ErrorCode.PAYMENT_INVALID_SIGNATURE, exception.getErrorCode());
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+    }
+
+    @Test
+    void repeatedWebhookForAnAlreadyPaidTopUpDoesNotCreditAgain() {
+        // Same provider transaction delivered twice.
+        when(paymentTransactionRepository.findByProviderTransactionId("9001"))
+                .thenReturn(Optional.of(topUpPayment("DH900", PaymentStatus.PAID, "19000", 100)));
+
+        sepayPaymentService.handleWebhook(webhook("DH900", "19000"), "Bearer webhook-secret", null);
+
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+        verify(paymentTransactionRepository, never()).findWithLockByTxnRef(any());
+    }
+
+    @Test
+    void redeliveredWebhookForAPaymentAlreadyMarkedPaidDoesNotCreditAgain() {
+        // A different provider transaction id, but the payment already left PENDING.
+        PaymentTransaction transaction = topUpPayment("DH900", PaymentStatus.PAID, "19000", 100);
+        when(paymentTransactionRepository.findByProviderTransactionId("9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findWithLockByTxnRef("DH900")).thenReturn(Optional.of(transaction));
+
+        sepayPaymentService.handleWebhook(webhook("DH900", "19000"), "Bearer webhook-secret", null);
+
+        verify(coinTopUpService, never()).creditVerifiedTopUp(any());
+        verify(paymentTransactionRepository, never()).save(any());
     }
 
     @Test
@@ -368,10 +478,12 @@ class SepayPaymentServiceTest {
     private SepayPaymentService service(SepayProperties properties) {
         return new SepayPaymentService(
                 properties,
+                new SepayPaymentFactory(properties),
                 userRepository,
                 servicePlanRepository,
                 paymentTransactionRepository,
                 subscriptionService,
+                coinTopUpService,
                 paymentMapper,
                 objectMapper
         );
@@ -417,6 +529,15 @@ class SepayPaymentServiceTest {
         transaction.setBankAccountNumber("123 456 789");
         transaction.setBankAccountName("SKILL SPRINT");
         transaction.setTransferContent(txnRef);
+        return transaction;
+    }
+
+    private PaymentTransaction topUpPayment(String txnRef, PaymentStatus status, String amount, int coinAmount) {
+        PaymentTransaction transaction = payment(txnRef, status, null, amount);
+        transaction.setPurpose(PaymentPurpose.COIN_TOP_UP);
+        transaction.setSubscriptionMonths(0);
+        transaction.setCoinAmount(coinAmount);
+        transaction.setCoinPackageKey("COIN_" + coinAmount);
         return transaction;
     }
 

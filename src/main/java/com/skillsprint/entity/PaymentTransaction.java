@@ -1,6 +1,7 @@
 package com.skillsprint.entity;
 
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,9 +37,22 @@ public class PaymentTransaction extends BaseAuditEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "plan_id", nullable = false)
+    /** Set for {@link PaymentPurpose#SUBSCRIPTION} only; always null for a Coin top-up. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id")
     private ServicePlan plan;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose", nullable = false, length = 30)
+    private PaymentPurpose purpose = PaymentPurpose.SUBSCRIPTION;
+
+    /** Coin credited on a verified top-up. Set for {@link PaymentPurpose#COIN_TOP_UP} only. */
+    @Column(name = "coin_amount")
+    private Integer coinAmount;
+
+    /** The server-defined package this top-up was priced from. Top-ups only. */
+    @Column(name = "coin_package_key", length = 50)
+    private String coinPackageKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 30)

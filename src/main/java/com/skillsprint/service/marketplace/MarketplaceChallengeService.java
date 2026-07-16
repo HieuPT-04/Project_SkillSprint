@@ -25,6 +25,7 @@ public class MarketplaceChallengeService {
     MarketplaceQuizAttemptRepository attemptRepository;
     UserRepository userRepository;
     MarketplaceChallengeSessionRepository sessionRepository;
+    MarketplacePackVersionService packVersionService;
 
     @Transactional
     public MarketplaceChallengeSessionResponse start(String userId, UUID itemId) {
@@ -36,12 +37,16 @@ public class MarketplaceChallengeService {
         Instant now = Instant.now();
         MarketplaceChallengeSession session = new MarketplaceChallengeSession();
         session.setItem(snapshot.getItem());
+        session.setPackVersion(packVersionService.findByItemId(itemId).orElse(null));
         session.setUser(
                 userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND)));
         session.setStartedAt(now);
         session.setExpiresAt(now.plusSeconds(3600));
         session = sessionRepository.save(session);
-        return MarketplaceChallengeSessionResponse.builder().sessionId(session.getSessionId()).startedAt(now)
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
+        return MarketplaceChallengeSessionResponse.builder().sessionId(session.getSessionId())
+                .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
+                .startedAt(now)
                 .expiresAt(session.getExpiresAt()).build();
     }
 
@@ -88,6 +93,7 @@ public class MarketplaceChallengeService {
         long duration = java.time.Duration.between(session.getStartedAt(), Instant.now()).getSeconds();
         MarketplaceQuizAttempt attempt = new MarketplaceQuizAttempt();
         attempt.setItem(snapshot.getItem());
+        attempt.setPackVersion(session.getPackVersion());
         attempt.setUser(
                 userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND)));
         attempt.setAttemptType(MarketplaceQuizAttemptType.RANKED);
@@ -100,7 +106,9 @@ public class MarketplaceChallengeService {
         attempt = attemptRepository.save(attempt);
         session.setCompletedAt(attempt.getCompletedAt());
         sessionRepository.save(session);
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         return MarketplaceQuizAttemptResponse.builder().attemptId(attempt.getAttemptId()).itemId(itemId)
+                .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
                 .score(attempt.getScore()).correctCount(hit).questionCount(correct.size())
                 .durationSeconds(attempt.getDurationSeconds()).completedAt(attempt.getCompletedAt()).build();
     }

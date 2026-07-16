@@ -9,6 +9,8 @@ import lombok.*;
 public class MarketplaceChallengeSession extends BaseAuditEntity {
     @Id @GeneratedValue(strategy=GenerationType.UUID) @Column(name="session_id") private UUID sessionId;
     @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="item_id",nullable=false) private MarketplaceItem item;
+    /** Nullable until every legacy row is backfilled; see V7 migration notes. */
+    @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="pack_version_id") private MarketplacePackVersion packVersion;
     @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="user_id",nullable=false) private User user;
     @Column(name="started_at",nullable=false) private Instant startedAt;
     @Column(name="expires_at",nullable=false) private Instant expiresAt;

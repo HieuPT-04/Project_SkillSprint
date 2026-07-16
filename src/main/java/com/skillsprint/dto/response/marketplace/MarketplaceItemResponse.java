@@ -11,6 +11,9 @@ import lombok.Getter;
 public class MarketplaceItemResponse {
 
     UUID itemId;
+    UUID packId;
+    UUID versionId;
+    Integer versionNo;
     UUID sourceWorkspaceId;
     String title;
     String description;

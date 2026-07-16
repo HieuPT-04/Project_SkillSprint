@@ -14,6 +14,7 @@ import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class MarketplaceCatalogService {
     MarketplaceItemRepository marketplaceItemRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     MarketplaceReviewRepository reviewRepository;
+    MarketplacePackVersionService packVersionService;
 
     @Transactional(readOnly = true)
     public List<MarketplaceCatalogItemResponse> getPublishedItems(String subject) {
@@ -38,7 +40,13 @@ public class MarketplaceCatalogService {
                 ? marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED)
                 : marketplaceItemRepository.findByStatusAndSubjectIgnoreCaseOrderByPublishedAtDesc(
                         MarketplaceItemStatus.PUBLISHED, subject.trim());
-        return items.stream().map(this::toCatalogResponse).toList();
+        Map<UUID, MarketplacePackVersionIdentity> identities =
+                packVersionService.identitiesOf(items.stream().map(MarketplaceItem::getItemId).toList());
+        return items.stream()
+                .map(item -> toCatalogResponse(
+                        item,
+                        identities.getOrDefault(item.getItemId(), MarketplacePackVersionIdentity.EMPTY)))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -79,8 +87,12 @@ public class MarketplaceCatalogService {
             }
         }
 
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         return MarketplaceItemDetailResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .title(item.getTitle())
                 .description(item.getDescription())
                 .subject(item.getSubject())
@@ -97,11 +109,17 @@ public class MarketplaceCatalogService {
                 .build();
     }
 
-    private MarketplaceCatalogItemResponse toCatalogResponse(MarketplaceItem item) {
+    private MarketplaceCatalogItemResponse toCatalogResponse(
+            MarketplaceItem item,
+            MarketplacePackVersionIdentity identity
+    ) {
         MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(item.getItemId())
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
         return MarketplaceCatalogItemResponse.builder()
                 .itemId(item.getItemId())
+                .packId(identity.packId())
+                .versionId(identity.versionId())
+                .versionNo(identity.versionNo())
                 .title(item.getTitle())
                 .description(item.getDescription())
                 .subject(item.getSubject())

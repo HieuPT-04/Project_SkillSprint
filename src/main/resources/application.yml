@@ -13,3 +13,27 @@ server:
   # Default HTTP port for the backend application.
   port: 8080
 
+app:
+  payment:
+    coin:
+      # Server-owned Coin package catalogue. The fixed product policy is 1 VND = 1 Coin:
+      # package key, Coin quantity, and VND price use the same denomination. A request
+      # may only name a package key; it can never supply an amount or override this rate.
+      enabled: ${COIN_TOP_UP_ENABLED:true}
+      packages:
+        - key: COIN_10000
+          coin-amount: 10000
+          vnd-amount: 10000
+        - key: COIN_50000
+          coin-amount: 50000
+          vnd-amount: 50000
+        - key: COIN_100000
+          coin-amount: 100000
+          vnd-amount: 100000
+        - key: COIN_200000
+          coin-amount: 200000
+          vnd-amount: 200000
+        - key: COIN_500000
+          coin-amount: 500000
+          vnd-amount: 500000
+

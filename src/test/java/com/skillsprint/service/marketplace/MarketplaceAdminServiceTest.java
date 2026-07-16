@@ -3,6 +3,7 @@ package com.skillsprint.service.marketplace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import com.skillsprint.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -34,8 +36,18 @@ class MarketplaceAdminServiceTest {
 
     @Mock MarketplaceItemRepository marketplaceItemRepository;
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
+    @Mock MarketplacePackVersionService packVersionService;
     @Mock UserRepository userRepository;
     @InjectMocks MarketplaceAdminService service;
+
+    @BeforeEach
+    void stubVersionIdentity() {
+        // These tests predate the pack/version foundation and assert legacy item
+        // behavior only; the additive identity fields have their own coverage in
+        // MarketplacePackVersionCompatibilityTest.
+        lenient().when(packVersionService.identityOf(any()))
+                .thenReturn(MarketplacePackVersionIdentity.EMPTY);
+    }
 
     @Test
     void listDefaultsToPendingReview() {

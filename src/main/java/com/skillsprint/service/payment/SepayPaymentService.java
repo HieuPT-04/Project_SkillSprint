@@ -11,6 +11,7 @@ import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
@@ -22,8 +23,6 @@ import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.subscription.SubscriptionService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,18 +43,18 @@ public class SepayPaymentService {
     static final int SUBSCRIPTION_MONTHS = 1;
 
     SepayProperties sepayProperties;
+    SepayPaymentFactory sepayPaymentFactory;
     UserRepository userRepository;
     ServicePlanRepository servicePlanRepository;
     PaymentTransactionRepository paymentTransactionRepository;
     SubscriptionService subscriptionService;
+    CoinTopUpService coinTopUpService;
     PaymentMapper paymentMapper;
     ObjectMapper objectMapper;
 
     @Transactional
     public SepayPaymentResponse createPayment(String userId, CreateSepayPaymentRequest request) {
-        if (!sepayProperties.ready()) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, "SePay chưa được cấu hình đầy đủ");
-        }
+        sepayPaymentFactory.requireReady();
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
@@ -70,23 +69,13 @@ public class SepayPaymentService {
                 .multiply(BigDecimal.valueOf(SUBSCRIPTION_MONTHS))
                 .setScale(0, RoundingMode.HALF_UP);
 
-        PaymentTransaction transaction = new PaymentTransaction();
-        transaction.setUser(user);
+        PaymentTransaction transaction = sepayPaymentFactory.newPendingPayment(user, amount);
+        transaction.setPurpose(PaymentPurpose.SUBSCRIPTION);
         transaction.setPlan(plan);
-        transaction.setProvider(PaymentProvider.SEPAY);
-        transaction.setStatus(PaymentStatus.PENDING);
-        transaction.setTxnRef(generatePaymentCode());
-        transaction.setAmount(amount);
-        transaction.setCurrency("VND");
         transaction.setSubscriptionMonths(SUBSCRIPTION_MONTHS);
-        transaction.setExpireAt(Instant.now().plusSeconds(sepayProperties.expireMinutesValue() * 60L));
-        transaction.setBankCode(sepayProperties.bankCode().trim());
-        transaction.setBankAccountNumber(sepayProperties.bankAccountNumber().trim());
-        transaction.setBankAccountName(sepayProperties.bankAccountName().trim());
-        transaction.setTransferContent(transaction.getTxnRef());
 
         PaymentTransaction savedTransaction = paymentTransactionRepository.save(transaction);
-        savedTransaction.setQrCodeUrl(buildQrCodeUrl(savedTransaction));
+        savedTransaction.setQrCodeUrl(sepayPaymentFactory.buildQrCodeUrl(savedTransaction));
 
         return toSepayPaymentResponse(paymentTransactionRepository.save(savedTransaction));
     }
@@ -131,6 +120,14 @@ public class SepayPaymentService {
         transaction.setStatus(PaymentStatus.PAID);
         transaction.setPaidAt(Instant.now());
         paymentTransactionRepository.save(transaction);
+
+        // The payment's purpose decides what a verified transfer buys. A subscription
+        // payment can never credit Coin and a top-up can never activate a plan, because
+        // only one of these branches ever runs for a given payment.
+        if (transaction.getPurpose() == PaymentPurpose.COIN_TOP_UP) {
+            coinTopUpService.creditVerifiedTopUp(transaction);
+            return;
+        }
 
         subscriptionService.activatePaidPlan(
                 transaction.getUser().getUserId(),
@@ -329,27 +326,6 @@ public class SepayPaymentService {
                         .build())
                 .expiredAt(transaction.getExpireAt())
                 .build();
-    }
-
-    private String buildQrCodeUrl(PaymentTransaction transaction) {
-        if (sepayProperties.qrBaseUrl() == null || sepayProperties.qrBaseUrl().isBlank()) {
-            return null;
-        }
-
-        return sepayProperties.qrBaseUrl()
-                .replace("{bankCode}", encode(transaction.getBankCode()))
-                .replace("{accountNumber}", encode(transaction.getBankAccountNumber()))
-                .replace("{amount}", transaction.getAmount().toPlainString())
-                .replace("{content}", encode(transaction.getTransferContent()));
-    }
-
-    private String generatePaymentCode() {
-        return "DH" + System.currentTimeMillis() + UUID.randomUUID().toString().replace("-", "").substring(0, 6)
-                .toUpperCase();
-    }
-
-    private String encode(String value) {
-        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     private String toJson(SepayWebhookRequest request) {

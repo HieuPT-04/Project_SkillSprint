@@ -9,6 +9,9 @@ import lombok.Getter;
 public class MarketplacePurchaseResponse {
     UUID purchaseId;
     UUID itemId;
+    UUID packId;
+    UUID versionId;
+    Integer versionNo;
     Integer priceCoins;
     Integer remainingCoins;
     Instant purchasedAt;

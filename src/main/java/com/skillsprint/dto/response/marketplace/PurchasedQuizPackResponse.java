@@ -7,5 +7,6 @@ import lombok.Getter;
 
 @Getter @Builder
 public class PurchasedQuizPackResponse {
-    UUID itemId; String title; String subject; Integer questionCount; JsonNode content;
+    UUID itemId; UUID packId; UUID versionId; Integer versionNo;
+    String title; String subject; Integer questionCount; JsonNode content;
 }

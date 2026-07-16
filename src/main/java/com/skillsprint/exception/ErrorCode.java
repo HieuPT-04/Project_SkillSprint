@@ -101,6 +101,8 @@ public enum ErrorCode {
     MARKETPLACE_CREATOR_VALIDATION_REQUIRED("Creator cần đạt ít nhất 90 điểm ở Full Pack Challenge trước khi gửi duyệt", HttpStatus.BAD_REQUEST),
     MARKETPLACE_ALREADY_PURCHASED("Bạn đã mua Quiz Pack này", HttpStatus.CONFLICT),
     MARKETPLACE_CREATOR_CANNOT_PURCHASE("Creator không thể mua Quiz Pack của chính mình", HttpStatus.BAD_REQUEST),
+    MARKETPLACE_PACK_VERSION_NOT_FOUND("Không tìm thấy phiên bản Quiz Pack", HttpStatus.NOT_FOUND),
+    MARKETPLACE_PACK_SALEABLE_VERSION_CONFLICT("Quiz Pack đã có một phiên bản đang được bán", HttpStatus.CONFLICT),
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     // AI Tutor
@@ -141,6 +143,9 @@ public enum ErrorCode {
     PAYMENT_ALREADY_CONFIRMED("Giao dịch đã được xác nhận trước đó", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_ERROR("Không thể xử lý thanh toán", HttpStatus.BAD_GATEWAY),
     PAYMENT_PLAN_NOT_PAYABLE("Gói này không cần thanh toán", HttpStatus.BAD_REQUEST),
+    PAYMENT_PURPOSE_MISMATCH("Giao dịch thanh toán không đúng mục đích", HttpStatus.CONFLICT),
+    COIN_TOP_UP_NOT_AVAILABLE("Nạp Coin hiện chưa khả dụng", HttpStatus.SERVICE_UNAVAILABLE),
+    COIN_PACKAGE_NOT_FOUND("Không tìm thấy gói nạp Coin", HttpStatus.NOT_FOUND),
     SUBSCRIPTION_DOWNGRADE_NOT_ALLOWED("Không thể mua gói thấp hơn gói hiện tại", HttpStatus.BAD_REQUEST),
 
     // Notification
