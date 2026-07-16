@@ -14,11 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service @RequiredArgsConstructor @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MarketplaceReviewService {
-    MarketplacePurchaseRepository purchaseRepository; MarketplaceItemRepository itemRepository; MarketplaceReviewRepository reviewRepository; UserRepository userRepository;
+    MarketplaceItemRepository itemRepository; MarketplaceReviewRepository reviewRepository; UserRepository userRepository;
     MarketplacePackVersionService packVersionService;
+    MarketplaceOwnershipService marketplaceOwnershipService;
 
     @Transactional public MarketplaceReviewResponse upsert(String userId, UUID itemId, UpsertMarketplaceReviewRequest request) {
-        if(!purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(userId,itemId,MarketplacePurchaseStatus.ACTIVE)) throw new AppException(ErrorCode.FORBIDDEN,"Bạn cần mua Quiz Pack trước khi đánh giá");
+        marketplaceOwnershipService.requireActiveOwnership(userId, itemId, "Bạn cần mua Quiz Pack trước khi đánh giá");
         MarketplaceReview review=reviewRepository.findByItemItemIdAndUserUserId(itemId,userId).orElseGet(MarketplaceReview::new);
         if(review.getReviewId()==null) { review.setItem(itemRepository.findById(itemId).orElseThrow(()->new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND))); review.setUser(userRepository.findById(userId).orElseThrow(()->new AppException(ErrorCode.USER_PROFILE_NOT_FOUND))); }
         if(review.getPackVersion()==null) review.setPackVersion(packVersionService.findByItemId(itemId).orElse(null));

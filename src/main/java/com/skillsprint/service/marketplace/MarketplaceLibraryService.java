@@ -37,6 +37,7 @@ public class MarketplaceLibraryService {
     MarketplaceEntitlementRepository entitlementRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     MarketplacePackVersionService packVersionService;
+    MarketplaceOwnershipService marketplaceOwnershipService;
 
     @Transactional(readOnly = true)
     public List<MarketplaceCatalogItemResponse> getMyPacks(String userId) {
@@ -68,18 +69,13 @@ public class MarketplaceLibraryService {
 
     @Transactional(readOnly = true)
     public PurchasedQuizPackResponse getMyPack(String userId, UUID itemId) {
-        MarketplacePackVersion version = packVersionService.requireByItemId(itemId);
-        boolean hasLegacyPurchase = purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                userId, itemId, MarketplacePurchaseStatus.ACTIVE);
-        boolean hasEntitlement = entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                userId, version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE);
-        if (!hasLegacyPurchase && !hasEntitlement) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa mua Quiz Pack này");
-        }
-        if (hasLegacyPurchase && !hasEntitlement) {
+        MarketplaceOwnershipService.Ownership ownership = marketplaceOwnershipService.requireActiveOwnership(
+                userId, itemId, "Bạn chưa mua Quiz Pack này");
+        if (ownership.isLegacyPurchase()) {
             return legacyPackResponse(itemId);
         }
 
+        MarketplacePackVersion version = ownership.packVersion();
         JsonNode safe = version.getContent().deepCopy();
         scrubCorrectAnswers(safe);
         return PurchasedQuizPackResponse.builder()
