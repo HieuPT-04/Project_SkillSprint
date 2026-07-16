@@ -7,6 +7,7 @@ package com.skillsprint.enums.marketplace;
 public enum WalletTransactionReferenceType {
     ADMIN_ADJUSTMENT,
     MARKETPLACE_PURCHASE,
+    MARKETPLACE_SALE,
     MARKETPLACE_EARNING,
     /** Credit from a verified SePay VND top-up; {@code referenceId} is the payment id. */
     COIN_TOP_UP,

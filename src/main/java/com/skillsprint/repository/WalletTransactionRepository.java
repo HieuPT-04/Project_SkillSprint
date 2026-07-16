@@ -2,6 +2,8 @@ package com.skillsprint.repository;
 
 import com.skillsprint.entity.WalletTransaction;
 import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -18,6 +20,11 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
      */
     boolean existsByReferenceTypeAndReferenceId(
             WalletTransactionReferenceType referenceType,
-            java.util.UUID referenceId
+            UUID referenceId
+    );
+
+    Optional<WalletTransaction> findByReferenceTypeAndReferenceId(
+            WalletTransactionReferenceType referenceType,
+            UUID referenceId
     );
 }

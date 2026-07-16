@@ -23,6 +23,7 @@ import com.skillsprint.entity.UserWallet;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
 import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
 import com.skillsprint.repository.MarketplaceItemRepository;
+import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
@@ -52,6 +53,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
     @Mock MarketplaceReviewRepository reviewRepository;
     @Mock MarketplacePurchaseRepository purchaseRepository;
+    @Mock MarketplaceEntitlementRepository entitlementRepository;
     @Mock UserRepository userRepository;
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
@@ -73,6 +75,13 @@ class MarketplacePackVersionCompatibilityTest {
         lenient().when(packVersionService.identitiesOf(any()))
                 .thenReturn(Map.of(item.getItemId(), identity));
         lenient().when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
+        lenient().when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
+        lenient().when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
+        lenient().when(entitlementRepository.findByBuyerUserIdAndStatusOrderByGrantedAtDesc(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
         lenient().when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot));
     }
 
@@ -127,7 +136,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedLibraryListExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, snapshotRepository, packVersionService);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService);
         when(purchaseRepository.findByUserUserIdAndStatusOrderByPurchasedAtDesc(
                 "buyer", MarketplacePurchaseStatus.ACTIVE)).thenReturn(List.of(purchase()));
 
@@ -139,7 +148,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedPackDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, snapshotRepository, packVersionService);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService);
         when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
                 "buyer", item.getItemId(), MarketplacePurchaseStatus.ACTIVE)).thenReturn(true);
 
