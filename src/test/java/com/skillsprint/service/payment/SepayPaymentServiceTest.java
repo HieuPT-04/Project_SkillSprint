@@ -3,6 +3,7 @@ package com.skillsprint.service.payment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,6 +22,7 @@ import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
@@ -173,6 +175,10 @@ class SepayPaymentServiceTest {
         assertEquals("123 456 789", savedTransaction.getBankAccountNumber());
         assertEquals(savedTransaction.getTxnRef(), savedTransaction.getTransferContent());
         assertNotNull(savedTransaction.getExpireAt());
+        assertEquals(PaymentPurpose.SUBSCRIPTION, savedTransaction.getPurpose());
+        assertEquals(1, savedTransaction.getSubscriptionMonths());
+        assertNull(savedTransaction.getCoinAmount());
+        assertNull(savedTransaction.getCoinPackageKey());
     }
 
     @Test
@@ -368,6 +374,7 @@ class SepayPaymentServiceTest {
     private SepayPaymentService service(SepayProperties properties) {
         return new SepayPaymentService(
                 properties,
+                new SepayPaymentFactory(properties),
                 userRepository,
                 servicePlanRepository,
                 paymentTransactionRepository,
