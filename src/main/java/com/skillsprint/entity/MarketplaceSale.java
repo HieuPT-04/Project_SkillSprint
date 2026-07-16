@@ -56,6 +56,12 @@ public class MarketplaceSale extends BaseAuditEntity {
     @Column(name = "gross_coin_amount", nullable = false)
     private Integer grossCoinAmount;
 
+    @Column(name = "original_gross_coin_amount", nullable = false)
+    private Integer originalGrossCoinAmount;
+
+    @Column(name = "discount_coin_amount", nullable = false)
+    private Integer discountCoinAmount;
+
     @Column(name = "gross_vnd_amount", nullable = false)
     private Long grossVndAmount;
 

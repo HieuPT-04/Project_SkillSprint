@@ -17,6 +17,9 @@ public class MarketplaceVersionPurchaseResponse {
     UUID packId;
     UUID packVersionId;
     Integer versionNo;
+    Boolean upgrade;
+    Integer originalGrossCoinAmount;
+    Integer discountCoinAmount;
     Integer grossCoinAmount;
     Integer creatorAmount;
     Integer platformAmount;

@@ -36,4 +36,15 @@ public class MarketplaceVersionCheckoutController {
                 .purchaseWithCoins(jwt.getSubject(), versionId, request);
         return ResponseEntity.ok(ApiResponse.success("Mua phiên bản Quiz Pack thành công", response));
     }
+
+    @PostMapping("/{versionId}/upgrade/coins")
+    public ResponseEntity<ApiResponse<MarketplaceVersionPurchaseResponse>> upgradeWithCoins(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID versionId,
+            @Valid @RequestBody PurchaseMarketplacePackVersionRequest request
+    ) {
+        MarketplaceVersionPurchaseResponse response = marketplaceVersionCheckoutService
+                .upgradeWithCoins(jwt.getSubject(), versionId, request);
+        return ResponseEntity.ok(ApiResponse.success("Nâng cấp phiên bản Quiz Pack thành công", response));
+    }
 }

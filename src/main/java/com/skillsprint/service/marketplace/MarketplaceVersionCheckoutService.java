@@ -45,6 +45,7 @@ public class MarketplaceVersionCheckoutService {
 
     static final int CREATOR_SHARE_BPS = 8_000;
     static final int PLATFORM_SHARE_BPS = 2_000;
+    static final int INITIAL_UPGRADE_DISCOUNT_COIN = 0;
     static final BigDecimal COIN_TO_VND_RATE = BigDecimal.ONE.setScale(4);
 
     MarketplacePackVersionRepository versionRepository;
@@ -64,11 +65,29 @@ public class MarketplaceVersionCheckoutService {
             UUID versionId,
             PurchaseMarketplacePackVersionRequest request
     ) {
+        return checkout(buyerId, versionId, request, false);
+    }
+
+    @Transactional
+    public MarketplaceVersionPurchaseResponse upgradeWithCoins(
+            String buyerId,
+            UUID versionId,
+            PurchaseMarketplacePackVersionRequest request
+    ) {
+        return checkout(buyerId, versionId, request, true);
+    }
+
+    private MarketplaceVersionPurchaseResponse checkout(
+            String buyerId,
+            UUID versionId,
+            PurchaseMarketplacePackVersionRequest request,
+            boolean upgrade
+    ) {
         MarketplaceSale existingSale = saleRepository
                 .findByBuyerUserIdAndIdempotencyKey(buyerId, request.getIdempotencyKey())
                 .orElse(null);
         if (existingSale != null) {
-            return replay(existingSale, versionId, buyerId);
+            return replay(existingSale, versionId, buyerId, upgrade);
         }
 
         MarketplacePackVersion version = versionRepository.findByVersionIdForUpdate(versionId)
@@ -83,27 +102,33 @@ public class MarketplaceVersionCheckoutService {
             throw new AppException(ErrorCode.MARKETPLACE_CREATOR_CANNOT_PURCHASE);
         }
 
+        MarketplaceEntitlement sourceEntitlement = upgrade
+                ? findUpgradeSourceEntitlement(buyerId, version)
+                : null;
+
         // The version lock serializes first-time buyers of this version. Rechecking after
         // acquiring it closes the race between two requests sharing an idempotency key.
         existingSale = saleRepository.findByBuyerUserIdAndIdempotencyKey(buyerId, request.getIdempotencyKey())
                 .orElse(null);
         if (existingSale != null) {
-            return replay(existingSale, versionId, buyerId);
+            return replay(existingSale, versionId, buyerId, upgrade);
         }
         if (entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
                 buyerId, versionId, MarketplaceEntitlementStatus.ACTIVE)) {
             throw new AppException(ErrorCode.MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS);
         }
 
-        int price = version.getPriceCoins();
         UserWallet wallet = walletRepository.findByUserIdForUpdate(buyerId).orElse(null);
         // The wallet lock serializes checkout requests for the same buyer, including
         // requests targeting different versions with the same idempotency key.
         existingSale = saleRepository.findByBuyerUserIdAndIdempotencyKey(buyerId, request.getIdempotencyKey())
                 .orElse(null);
         if (existingSale != null) {
-            return replay(existingSale, versionId, buyerId);
+            return replay(existingSale, versionId, buyerId, upgrade);
         }
+        int originalPrice = version.getPriceCoins();
+        int discount = upgrade ? INITIAL_UPGRADE_DISCOUNT_COIN : 0;
+        int price = originalPrice - discount;
         int balanceBefore = wallet == null ? 0 : wallet.getBalance();
         if (balanceBefore < price) {
             throw new AppException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
@@ -119,6 +144,9 @@ public class MarketplaceVersionCheckoutService {
         sale.setBuyer(buyer);
         sale.setPack(version.getPack());
         sale.setPackVersion(version);
+        sale.setSourceEntitlement(sourceEntitlement);
+        sale.setOriginalGrossCoinAmount(originalPrice);
+        sale.setDiscountCoinAmount(discount);
         sale.setGrossCoinAmount(price);
         sale.setGrossVndAmount((long) price);
         sale.setCoinToVndRate(COIN_TO_VND_RATE);
@@ -175,8 +203,26 @@ public class MarketplaceVersionCheckoutService {
         return checkoutMapper.toResponse(sale, entitlement, settlement, balanceAfter);
     }
 
-    private MarketplaceVersionPurchaseResponse replay(MarketplaceSale sale, UUID requestedVersionId, String buyerId) {
+    private MarketplaceEntitlement findUpgradeSourceEntitlement(String buyerId, MarketplacePackVersion targetVersion) {
+        return entitlementRepository
+                .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdAndPackVersionVersionNoLessThanOrderByPackVersionVersionNoDesc(
+                        buyerId,
+                        MarketplaceEntitlementStatus.ACTIVE,
+                        targetVersion.getPack().getPackId(),
+                        targetVersion.getVersionNo())
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_UPGRADE_SOURCE_ENTITLEMENT_NOT_FOUND));
+    }
+
+    private MarketplaceVersionPurchaseResponse replay(
+            MarketplaceSale sale,
+            UUID requestedVersionId,
+            String buyerId,
+            boolean upgrade
+    ) {
         if (!sale.getPackVersion().getVersionId().equals(requestedVersionId)) {
+            throw new AppException(ErrorCode.MARKETPLACE_CHECKOUT_IDEMPOTENCY_CONFLICT);
+        }
+        if ((sale.getSourceEntitlement() != null) != upgrade) {
             throw new AppException(ErrorCode.MARKETPLACE_CHECKOUT_IDEMPOTENCY_CONFLICT);
         }
 
