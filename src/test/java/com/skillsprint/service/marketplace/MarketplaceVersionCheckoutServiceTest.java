@@ -217,6 +217,72 @@ class MarketplaceVersionCheckoutServiceTest {
     }
 
     @Test
+    void upgradesFromAnEarlierEntitlementAndSnapshotsZeroDiscountPolicy() {
+        UUID targetVersionId = UUID.randomUUID();
+        MarketplacePackVersion targetVersion = new MarketplacePackVersion();
+        targetVersion.setVersionId(targetVersionId);
+        targetVersion.setPack(version.getPack());
+        targetVersion.setVersionNo(2);
+        targetVersion.setPriceCoins(200);
+        targetVersion.setSaleable(true);
+        MarketplaceEntitlement sourceEntitlement = new MarketplaceEntitlement();
+        sourceEntitlement.setEntitlementId(UUID.randomUUID());
+        sourceEntitlement.setBuyer(buyer);
+        sourceEntitlement.setPackVersion(version);
+        sourceEntitlement.setStatus(MarketplaceEntitlementStatus.ACTIVE);
+
+        when(versionRepository.findByVersionIdForUpdate(targetVersionId)).thenReturn(Optional.of(targetVersion));
+        when(entitlementRepository
+                .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdAndPackVersionVersionNoLessThanOrderByPackVersionVersionNoDesc(
+                        buyer.getUserId(),
+                        MarketplaceEntitlementStatus.ACTIVE,
+                        version.getPack().getPackId(),
+                        2))
+                .thenReturn(Optional.of(sourceEntitlement));
+
+        MarketplaceVersionPurchaseResponse response = service.upgradeWithCoins(
+                buyer.getUserId(), targetVersionId, request("upgrade-1"));
+
+        assertThat(wallet.getBalance()).isEqualTo(300);
+        assertThat(response.getUpgrade()).isTrue();
+        assertThat(response.getOriginalGrossCoinAmount()).isEqualTo(200);
+        assertThat(response.getDiscountCoinAmount()).isZero();
+        assertThat(response.getGrossCoinAmount()).isEqualTo(200);
+
+        ArgumentCaptor<MarketplaceSale> saleCaptor = ArgumentCaptor.forClass(MarketplaceSale.class);
+        verify(saleRepository).save(saleCaptor.capture());
+        assertThat(saleCaptor.getValue().getSourceEntitlement()).isSameAs(sourceEntitlement);
+        assertThat(saleCaptor.getValue().getOriginalGrossCoinAmount()).isEqualTo(200);
+        assertThat(saleCaptor.getValue().getDiscountCoinAmount()).isZero();
+    }
+
+    @Test
+    void upgradeRequiresAnEarlierEntitlementForTheSamePack() {
+        UUID targetVersionId = UUID.randomUUID();
+        MarketplacePackVersion targetVersion = new MarketplacePackVersion();
+        targetVersion.setVersionId(targetVersionId);
+        targetVersion.setPack(version.getPack());
+        targetVersion.setVersionNo(2);
+        targetVersion.setPriceCoins(200);
+        targetVersion.setSaleable(true);
+        when(versionRepository.findByVersionIdForUpdate(targetVersionId)).thenReturn(Optional.of(targetVersion));
+        when(entitlementRepository
+                .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdAndPackVersionVersionNoLessThanOrderByPackVersionVersionNoDesc(
+                        buyer.getUserId(),
+                        MarketplaceEntitlementStatus.ACTIVE,
+                        version.getPack().getPackId(),
+                        2))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.upgradeWithCoins(buyer.getUserId(), targetVersionId, request("upgrade-no-source")))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_UPGRADE_SOURCE_ENTITLEMENT_NOT_FOUND);
+
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
     void rejectsVersionsThatAreNotForSale() {
         version.setSaleable(false);
 

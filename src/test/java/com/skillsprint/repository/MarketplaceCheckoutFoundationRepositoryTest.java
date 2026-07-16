@@ -183,6 +183,8 @@ class MarketplaceCheckoutFoundationRepositoryTest {
         sale.setPack(pack);
         sale.setPackVersion(version);
         sale.setGrossCoinAmount(100);
+        sale.setOriginalGrossCoinAmount(100);
+        sale.setDiscountCoinAmount(0);
         sale.setGrossVndAmount(100L);
         sale.setCoinToVndRate(new BigDecimal("1.0000"));
         sale.setStatus(MarketplaceSaleStatus.COMPLETED);
