@@ -19,20 +19,29 @@ import org.springframework.transaction.annotation.Transactional;
 public class MarketplaceLibraryService {
     MarketplacePurchaseRepository purchaseRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
+    MarketplacePackVersionService packVersionService;
 
     @Transactional(readOnly = true)
     public List<MarketplaceCatalogItemResponse> getMyPacks(String userId) {
-        return purchaseRepository
-                .findByUserUserIdAndStatusOrderByPurchasedAtDesc(userId, MarketplacePurchaseStatus.ACTIVE).stream()
-                .map(p -> MarketplaceCatalogItemResponse.builder().itemId(p.getItem().getItemId())
-                        .title(p.getItem().getTitle())
-                        .description(p.getItem().getDescription()).subject(p.getItem().getSubject())
-                        .creatorName(p.getItem().getCreator().getFullName())
-                        .priceCoins(p.getPriceCoins()).chapterCount(snapshot(p.getItem().getItemId()).getChapterCount())
-                        .quizCount(snapshot(p.getItem().getItemId()).getQuizCount())
-                        .questionCount(snapshot(p.getItem().getItemId()).getQuestionCount())
-                        .publishedAt(p.getItem().getPublishedAt()).build())
-                .toList();
+        List<MarketplacePurchase> purchases = purchaseRepository
+                .findByUserUserIdAndStatusOrderByPurchasedAtDesc(userId, MarketplacePurchaseStatus.ACTIVE);
+        Map<UUID, MarketplacePackVersionIdentity> identities = packVersionService
+                .identitiesOf(purchases.stream().map(p -> p.getItem().getItemId()).distinct().toList());
+        return purchases.stream().map(p -> {
+            UUID itemId = p.getItem().getItemId();
+            MarketplacePackVersionIdentity identity =
+                    identities.getOrDefault(itemId, MarketplacePackVersionIdentity.EMPTY);
+            MarketplaceQuizPackSnapshot snapshot = snapshot(itemId);
+            return MarketplaceCatalogItemResponse.builder().itemId(itemId)
+                    .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
+                    .title(p.getItem().getTitle())
+                    .description(p.getItem().getDescription()).subject(p.getItem().getSubject())
+                    .creatorName(p.getItem().getCreator().getFullName())
+                    .priceCoins(p.getPriceCoins()).chapterCount(snapshot.getChapterCount())
+                    .quizCount(snapshot.getQuizCount())
+                    .questionCount(snapshot.getQuestionCount())
+                    .publishedAt(p.getItem().getPublishedAt()).build();
+        }).toList();
     }
 
     @Transactional(readOnly = true)
@@ -41,9 +50,12 @@ public class MarketplaceLibraryService {
                 MarketplacePurchaseStatus.ACTIVE))
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa mua Quiz Pack này");
         MarketplaceQuizPackSnapshot snapshot = snapshot(itemId);
+        MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         JsonNode safe = snapshot.getContent().deepCopy();
         scrubCorrectAnswers(safe);
-        return PurchasedQuizPackResponse.builder().itemId(itemId).title(snapshot.getItem().getTitle())
+        return PurchasedQuizPackResponse.builder().itemId(itemId)
+                .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
+                .title(snapshot.getItem().getTitle())
                 .subject(snapshot.getItem().getSubject())
                 .questionCount(snapshot.getQuestionCount()).content(safe).build();
     }

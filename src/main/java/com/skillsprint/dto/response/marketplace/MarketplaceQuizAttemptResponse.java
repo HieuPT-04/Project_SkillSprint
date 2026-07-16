@@ -11,6 +11,9 @@ public class MarketplaceQuizAttemptResponse {
 
     UUID attemptId;
     UUID itemId;
+    UUID packId;
+    UUID versionId;
+    Integer versionNo;
     Integer score;
     Integer correctCount;
     Integer questionCount;

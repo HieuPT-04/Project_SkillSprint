@@ -19,6 +19,7 @@ public class MarketplacePurchaseService {
     UserRepository userRepository;
     UserWalletRepository walletRepository;
     WalletTransactionRepository walletTransactionRepository;
+    MarketplacePackVersionService packVersionService;
 
     @Transactional
     public MarketplacePurchaseResponse purchaseWithCoins(String userId, UUID itemId) {
@@ -33,8 +34,10 @@ public class MarketplacePurchaseService {
         int price = item.getPriceCoins();
         if (wallet.getBalance() < price) throw new AppException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
         int before = wallet.getBalance(); wallet.setBalance(before - price); walletRepository.save(wallet);
+        MarketplacePackVersion version = packVersionService.findByItemId(itemId).orElse(null);
         MarketplacePurchase purchase = new MarketplacePurchase();
-        purchase.setUser(buyer); purchase.setItem(item); purchase.setPriceCoins(price); purchase.setPaymentMethod(MarketplacePaymentMethod.COIN);
+        purchase.setUser(buyer); purchase.setItem(item); purchase.setPackVersion(version);
+        purchase.setPriceCoins(price); purchase.setPaymentMethod(MarketplacePaymentMethod.COIN);
         purchase.setStatus(MarketplacePurchaseStatus.ACTIVE); purchase.setPurchasedAt(Instant.now()); purchase = purchaseRepository.save(purchase);
         if (price > 0) {
             WalletTransaction transaction = new WalletTransaction(); transaction.setWallet(wallet); transaction.setDirection(WalletTransactionDirection.DEBIT);
@@ -42,7 +45,10 @@ public class MarketplacePurchaseService {
             transaction.setReferenceType(WalletTransactionReferenceType.MARKETPLACE_PURCHASE); transaction.setReferenceId(purchase.getPurchaseId());
             walletTransactionRepository.save(transaction);
         }
-        return MarketplacePurchaseResponse.builder().purchaseId(purchase.getPurchaseId()).itemId(itemId).priceCoins(price)
+        MarketplacePackVersionIdentity identity = MarketplacePackVersionIdentity.ofNullable(version);
+        return MarketplacePurchaseResponse.builder().purchaseId(purchase.getPurchaseId()).itemId(itemId)
+                .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
+                .priceCoins(price)
                 .remainingCoins(wallet.getBalance()).purchasedAt(purchase.getPurchasedAt()).build();
     }
 }

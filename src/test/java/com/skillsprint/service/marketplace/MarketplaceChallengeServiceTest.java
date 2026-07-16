@@ -29,6 +29,7 @@ class MarketplaceChallengeServiceTest {
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
     @Mock MarketplaceQuizAttemptRepository attemptRepository;
     @Mock UserRepository userRepository;
+    @Mock MarketplacePackVersionService packVersionService;
     @InjectMocks MarketplaceChallengeService service;
 
     @Test

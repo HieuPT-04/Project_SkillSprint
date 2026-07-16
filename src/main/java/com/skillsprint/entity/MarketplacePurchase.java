@@ -39,6 +39,11 @@ public class MarketplacePurchase extends BaseAuditEntity {
     @JoinColumn(name = "item_id", nullable = false)
     private MarketplaceItem item;
 
+    /** Nullable until every legacy row is backfilled; see V7 migration notes. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pack_version_id")
+    private MarketplacePackVersion packVersion;
+
     @Column(name = "price_coins", nullable = false)
     private Integer priceCoins;
 
