@@ -23,8 +23,22 @@ spring:
 
 app:
   payment:
+    # Keep the test catalogue deliberately small while exercising the same fixed
+    # product rule as production: 1 VND = 1 Coin.
+    coin:
+      enabled: true
+      packages:
+        - key: COIN_50
+          coin-amount: 50
+          vnd-amount: 50
+        - key: COIN_100
+          coin-amount: 100
+          vnd-amount: 100
+        - key: COIN_500
+          coin-amount: 500
+          vnd-amount: 500
     # Deterministic SePay settings so the coin top-up webhook can be exercised
-    # end-to-end. Coin packages come from the shared application.yml catalogue.
+    # end-to-end.
     sepay:
       enabled: true
       bank-code: MBBANK

@@ -25,6 +25,15 @@ class CoinPackageCatalogTest {
     }
 
     @Test
+    void fixedRatePackageUsesOneVndForEachCoin() {
+        CoinPackage fixedRatePackage = new CoinPackage("COIN_10000", 10_000, new BigDecimal("10000"));
+
+        assertThat(fixedRatePackage.valid()).isTrue();
+        assertThat(fixedRatePackage.vndAmount())
+                .isEqualByComparingTo(BigDecimal.valueOf(fixedRatePackage.coinAmount()));
+    }
+
+    @Test
     void packageKeyIsMatchedCaseInsensitivelyAndTrimmed() {
         assertThat(catalog(true, List.of(COIN_100)).require("  coin_100 ").key()).isEqualTo("COIN_100");
     }

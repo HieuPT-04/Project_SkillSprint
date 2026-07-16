@@ -78,10 +78,10 @@ class CoinTopUpCreditIntegrationTest {
     void verifiedWebhookCreditsTheExactCoinAmountExactlyOnceForRepeatedDeliveries() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
         assertThat(topUp.getCoinAmount()).isEqualTo(100);
-        assertThat(topUp.getAmount()).isEqualByComparingTo("19000");
+        assertThat(topUp.getAmount()).isEqualByComparingTo("100");
         assertThat(balanceOf(USER_ID)).isZero();
 
-        sepayPaymentService.handleWebhook(webhook(9101L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9101L, topUp, "100"), null, WEBHOOK_KEY);
 
         assertThat(balanceOf(USER_ID)).isEqualTo(100);
         assertThat(paymentOf(topUp).getStatus()).isEqualTo(PaymentStatus.PAID);
@@ -89,8 +89,8 @@ class CoinTopUpCreditIntegrationTest {
         assertThat(paymentOf(topUp).getProviderTransactionId()).isEqualTo("9101");
 
         // Same delivery again, then a redelivery carrying a different provider id.
-        sepayPaymentService.handleWebhook(webhook(9101L, topUp, "19000"), null, WEBHOOK_KEY);
-        sepayPaymentService.handleWebhook(webhook(9102L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9101L, topUp, "100"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9102L, topUp, "100"), null, WEBHOOK_KEY);
 
         assertThat(balanceOf(USER_ID)).isEqualTo(100);
         assertThat(coinTopUpLedger()).hasSize(1);
@@ -139,7 +139,7 @@ class CoinTopUpCreditIntegrationTest {
     @Test
     void manualReconciliationCannotDoubleCreditAWebhookConfirmedTopUp() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
-        sepayPaymentService.handleWebhook(webhook(9801L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9801L, topUp, "100"), null, WEBHOOK_KEY);
         assertThat(balanceOf(USER_ID)).isEqualTo(100);
 
         assertThatThrownBy(() -> adminPaymentService.reconcilePayment(
@@ -160,7 +160,7 @@ class CoinTopUpCreditIntegrationTest {
     @Test
     void creditingAnAlreadyCreditedPaymentIsANoOp() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
-        sepayPaymentService.handleWebhook(webhook(9111L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9111L, topUp, "100"), null, WEBHOOK_KEY);
         assertThat(balanceOf(USER_ID)).isEqualTo(100);
 
         coinTopUpService.creditVerifiedTopUp(paymentOf(topUp));
@@ -172,9 +172,9 @@ class CoinTopUpCreditIntegrationTest {
 
     @Test
     void walletBalanceEqualsTheSumOfItsLedgerEntries() {
-        creditTopUp("COIN_100", 9201L, "19000");
-        creditTopUp("COIN_500", 9202L, "85000");
-        creditTopUp("COIN_50", 9203L, "10000");
+        creditTopUp("COIN_100", 9201L, "100");
+        creditTopUp("COIN_500", 9202L, "500");
+        creditTopUp("COIN_50", 9203L, "50");
 
         List<WalletTransaction> ledger = walletTransactionRepository
                 .findByWalletUserUserIdOrderByCreatedAtDesc(USER_ID);
@@ -192,7 +192,7 @@ class CoinTopUpCreditIntegrationTest {
     @Test
     void transactionHistoryExposesPurposeAndReferenceForTheOwnerOnly() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
-        sepayPaymentService.handleWebhook(webhook(9301L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9301L, topUp, "100"), null, WEBHOOK_KEY);
 
         List<WalletTransactionResponse> history = marketplaceWalletService.getTransactions(USER_ID);
 
@@ -228,7 +228,7 @@ class CoinTopUpCreditIntegrationTest {
     @Test
     void webhookFromTheWrongReceiverAccountDoesNotCreditCoin() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
-        SepayWebhookRequest request = webhook(9501L, topUp, "19000");
+        SepayWebhookRequest request = webhook(9501L, topUp, "100");
         request.setAccountNumber("999999999");
         request.setSubAccount(null);
 
@@ -245,7 +245,7 @@ class CoinTopUpCreditIntegrationTest {
     void webhookWithInvalidAuthenticationDoesNotCreditCoin() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
 
-        assertThatThrownBy(() -> sepayPaymentService.handleWebhook(webhook(9601L, topUp, "19000"), null, "wrong-key"))
+        assertThatThrownBy(() -> sepayPaymentService.handleWebhook(webhook(9601L, topUp, "100"), null, "wrong-key"))
                 .isInstanceOf(AppException.class)
                 .extracting(exception -> ((AppException) exception).getErrorCode())
                 .isEqualTo(ErrorCode.PAYMENT_INVALID_SIGNATURE);
@@ -261,7 +261,7 @@ class CoinTopUpCreditIntegrationTest {
         payment.setExpireAt(Instant.now().minusSeconds(60));
         paymentTransactionRepository.saveAndFlush(payment);
 
-        sepayPaymentService.handleWebhook(webhook(9701L, topUp, "19000"), null, WEBHOOK_KEY);
+        sepayPaymentService.handleWebhook(webhook(9701L, topUp, "100"), null, WEBHOOK_KEY);
 
         assertThat(paymentOf(topUp).getStatus()).isEqualTo(PaymentStatus.EXPIRED);
         assertThat(balanceOf(USER_ID)).isZero();

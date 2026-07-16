@@ -16,24 +16,24 @@ server:
 app:
   payment:
     coin:
-      # Server-owned Coin package catalogue, shared by every profile. A top-up request
-      # may only name a package `key`; the VND price and Coin quantity are always read
-      # from here and never from the request body.
+      # Server-owned Coin package catalogue. The fixed product policy is 1 VND = 1 Coin:
+      # package key, Coin quantity, and VND price use the same denomination. A request
+      # may only name a package key; it can never supply an amount or override this rate.
       enabled: ${COIN_TOP_UP_ENABLED:true}
       packages:
-        - key: COIN_50
-          coin-amount: 50
+        - key: COIN_10000
+          coin-amount: 10000
           vnd-amount: 10000
-        - key: COIN_100
-          coin-amount: 100
-          vnd-amount: 19000
-        - key: COIN_300
-          coin-amount: 300
-          vnd-amount: 54000
-        - key: COIN_500
-          coin-amount: 500
-          vnd-amount: 85000
-        - key: COIN_1000
-          coin-amount: 1000
-          vnd-amount: 160000
+        - key: COIN_50000
+          coin-amount: 50000
+          vnd-amount: 50000
+        - key: COIN_100000
+          coin-amount: 100000
+          vnd-amount: 100000
+        - key: COIN_200000
+          coin-amount: 200000
+          vnd-amount: 200000
+        - key: COIN_500000
+          coin-amount: 500000
+          vnd-amount: 500000
 

@@ -115,7 +115,7 @@ class MarketplaceWalletTopUpApiFlowTest {
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.packageKey").value("COIN_100"))
                 .andExpect(jsonPath("$.data.coinAmount").value(100))
-                .andExpect(jsonPath("$.data.amount").value(19000))
+                .andExpect(jsonPath("$.data.amount").value(100))
                 .andExpect(jsonPath("$.data.currency").value("VND"))
                 .andExpect(jsonPath("$.data.paymentCode").value("DH123"))
                 .andExpect(jsonPath("$.data.qrUrl").value("https://qr.example/DH123"))
@@ -209,7 +209,7 @@ class MarketplaceWalletTopUpApiFlowTest {
         when(coinTopUpService.getAvailablePackages()).thenReturn(List.of(CoinPackageResponse.builder()
                 .packageKey("COIN_100")
                 .coinAmount(100)
-                .vndAmount(new BigDecimal("19000"))
+                .vndAmount(new BigDecimal("100"))
                 .currency("VND")
                 .build()));
 
@@ -217,7 +217,7 @@ class MarketplaceWalletTopUpApiFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].packageKey").value("COIN_100"))
                 .andExpect(jsonPath("$.data[0].coinAmount").value(100))
-                .andExpect(jsonPath("$.data[0].vndAmount").value(19000));
+                .andExpect(jsonPath("$.data[0].vndAmount").value(100));
     }
 
     @Test
@@ -238,7 +238,7 @@ class MarketplaceWalletTopUpApiFlowTest {
                 .status(PaymentStatus.PENDING)
                 .packageKey("COIN_100")
                 .coinAmount(100)
-                .amount(new BigDecimal("19000"))
+                .amount(new BigDecimal("100"))
                 .currency("VND")
                 .paymentCode("DH123")
                 .qrUrl("https://qr.example/DH123")
