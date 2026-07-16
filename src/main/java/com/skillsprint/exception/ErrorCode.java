@@ -103,6 +103,13 @@ public enum ErrorCode {
     MARKETPLACE_CREATOR_CANNOT_PURCHASE("Creator không thể mua Quiz Pack của chính mình", HttpStatus.BAD_REQUEST),
     MARKETPLACE_PACK_VERSION_NOT_FOUND("Không tìm thấy phiên bản Quiz Pack", HttpStatus.NOT_FOUND),
     MARKETPLACE_PACK_SALEABLE_VERSION_CONFLICT("Quiz Pack đã có một phiên bản đang được bán", HttpStatus.CONFLICT),
+    MARKETPLACE_PACK_VERSION_NOT_SALEABLE("Phiên bản Quiz Pack hiện không còn được bán", HttpStatus.CONFLICT),
+    MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS("Bạn đã sở hữu phiên bản Quiz Pack này", HttpStatus.CONFLICT),
+    MARKETPLACE_CHECKOUT_IDEMPOTENCY_CONFLICT("Khóa giao dịch đã được dùng cho một yêu cầu khác", HttpStatus.CONFLICT),
+    MARKETPLACE_PAYOUT_AMOUNT_INVALID("Số tiền yêu cầu rút không hợp lệ", HttpStatus.BAD_REQUEST),
+    MARKETPLACE_CREATOR_EARNINGS_INSUFFICIENT("Số dư thu nhập Creator không đủ để rút", HttpStatus.CONFLICT),
+    MARKETPLACE_PAYOUT_STATE_INVALID("Trạng thái yêu cầu rút tiền không hợp lệ", HttpStatus.CONFLICT),
+    MARKETPLACE_PAYOUT_ACCESS_DENIED("Bạn không có quyền thao tác yêu cầu rút tiền này", HttpStatus.FORBIDDEN),
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     // AI Tutor
