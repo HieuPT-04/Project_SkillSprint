@@ -6,11 +6,18 @@ import com.skillsprint.dto.response.marketplace.CoinPackageResponse;
 import com.skillsprint.dto.response.marketplace.CoinTopUpPaymentResponse;
 import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.User;
+import com.skillsprint.entity.UserWallet;
+import com.skillsprint.entity.WalletTransaction;
+import com.skillsprint.enums.marketplace.WalletTransactionDirection;
+import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
 import com.skillsprint.enums.payment.PaymentPurpose;
+import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.PaymentTransactionRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.repository.UserWalletRepository;
+import com.skillsprint.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import lombok.AccessLevel;
@@ -38,6 +45,8 @@ public class CoinTopUpService {
     SepayPaymentFactory sepayPaymentFactory;
     UserRepository userRepository;
     PaymentTransactionRepository paymentTransactionRepository;
+    UserWalletRepository walletRepository;
+    WalletTransactionRepository walletTransactionRepository;
 
     @Transactional(readOnly = true)
     public List<CoinPackageResponse> getAvailablePackages() {
@@ -74,6 +83,60 @@ public class CoinTopUpService {
         saved.setQrCodeUrl(sepayPaymentFactory.buildQrCodeUrl(saved));
 
         return toResponse(paymentTransactionRepository.save(saved));
+    }
+
+    /**
+     * Credits the buyer's wallet for a top-up whose payment the SePay webhook has already
+     * verified and marked PAID, and writes the single immutable ledger entry for it.
+     *
+     * <p>Runs inside the caller's webhook transaction, so the paid state and the credit
+     * commit together or not at all. Repeated delivery is a no-op: the caller only reaches
+     * this method while the payment is still PENDING, and the ledger is additionally keyed
+     * by payment id here and by a partial unique index in the database.
+     *
+     * @throws AppException if the payment is not a Coin top-up, so a subscription payment
+     *                      can never be used to mint Coin
+     */
+    @Transactional
+    public void creditVerifiedTopUp(PaymentTransaction payment) {
+        if (payment.getPurpose() != PaymentPurpose.COIN_TOP_UP) {
+            throw new AppException(ErrorCode.PAYMENT_PURPOSE_MISMATCH);
+        }
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            throw new AppException(ErrorCode.PAYMENT_PURPOSE_MISMATCH, "Giao dịch nạp Coin chưa được xác nhận");
+        }
+        if (payment.getCoinAmount() == null || payment.getCoinAmount() <= 0) {
+            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, "Lệnh nạp Coin không hợp lệ");
+        }
+        if (walletTransactionRepository.existsByReferenceTypeAndReferenceId(
+                WalletTransactionReferenceType.COIN_TOP_UP, payment.getPaymentId())) {
+            return;
+        }
+
+        String buyerId = payment.getUser().getUserId();
+        UserWallet wallet = walletRepository.findByUserIdForUpdate(buyerId)
+                .orElseGet(() -> createWallet(payment.getUser()));
+
+        int before = wallet.getBalance();
+        int after = before + payment.getCoinAmount();
+        wallet.setBalance(after);
+        walletRepository.save(wallet);
+
+        WalletTransaction ledgerEntry = new WalletTransaction();
+        ledgerEntry.setWallet(wallet);
+        ledgerEntry.setDirection(WalletTransactionDirection.CREDIT);
+        ledgerEntry.setAmount(payment.getCoinAmount());
+        ledgerEntry.setBalanceBefore(before);
+        ledgerEntry.setBalanceAfter(after);
+        ledgerEntry.setReferenceType(WalletTransactionReferenceType.COIN_TOP_UP);
+        ledgerEntry.setReferenceId(payment.getPaymentId());
+        walletTransactionRepository.save(ledgerEntry);
+    }
+
+    private UserWallet createWallet(User user) {
+        UserWallet wallet = new UserWallet();
+        wallet.setUser(user);
+        return walletRepository.saveAndFlush(wallet);
     }
 
     private CoinTopUpPaymentResponse toResponse(PaymentTransaction transaction) {

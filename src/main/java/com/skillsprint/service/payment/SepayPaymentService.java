@@ -48,6 +48,7 @@ public class SepayPaymentService {
     ServicePlanRepository servicePlanRepository;
     PaymentTransactionRepository paymentTransactionRepository;
     SubscriptionService subscriptionService;
+    CoinTopUpService coinTopUpService;
     PaymentMapper paymentMapper;
     ObjectMapper objectMapper;
 
@@ -119,6 +120,14 @@ public class SepayPaymentService {
         transaction.setStatus(PaymentStatus.PAID);
         transaction.setPaidAt(Instant.now());
         paymentTransactionRepository.save(transaction);
+
+        // The payment's purpose decides what a verified transfer buys. A subscription
+        // payment can never credit Coin and a top-up can never activate a plan, because
+        // only one of these branches ever runs for a given payment.
+        if (transaction.getPurpose() == PaymentPurpose.COIN_TOP_UP) {
+            coinTopUpService.creditVerifiedTopUp(transaction);
+            return;
+        }
 
         subscriptionService.activatePaidPlan(
                 transaction.getUser().getUserId(),

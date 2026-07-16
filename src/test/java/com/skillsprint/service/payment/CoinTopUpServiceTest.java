@@ -15,6 +15,10 @@ import com.skillsprint.dto.response.marketplace.CoinPackageResponse;
 import com.skillsprint.dto.response.marketplace.CoinTopUpPaymentResponse;
 import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.User;
+import com.skillsprint.entity.UserWallet;
+import com.skillsprint.entity.WalletTransaction;
+import com.skillsprint.enums.marketplace.WalletTransactionDirection;
+import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
 import com.skillsprint.enums.payment.PaymentProvider;
 import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
@@ -22,6 +26,8 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.PaymentTransactionRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.repository.UserWalletRepository;
+import com.skillsprint.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +47,8 @@ class CoinTopUpServiceTest {
 
     @Mock UserRepository userRepository;
     @Mock PaymentTransactionRepository paymentTransactionRepository;
+    @Mock UserWalletRepository walletRepository;
+    @Mock WalletTransactionRepository walletTransactionRepository;
 
     SepayProperties sepayProperties;
     CoinTopUpService service;
@@ -172,6 +180,150 @@ class CoinTopUpServiceTest {
         assertThat(packages.get(0).getCurrency()).isEqualTo("VND");
     }
 
+    // --- crediting a verified top-up ---------------------------------------------
+
+    @Test
+    void verifiedTopUpCreditsExactlyTheConfiguredCoinAmountOnce() {
+        PaymentTransaction payment = paidTopUp(100);
+        UserWallet wallet = wallet(40);
+        when(walletTransactionRepository.existsByReferenceTypeAndReferenceId(
+                WalletTransactionReferenceType.COIN_TOP_UP, payment.getPaymentId())).thenReturn(false);
+        when(walletRepository.findByUserIdForUpdate("user-1")).thenReturn(Optional.of(wallet));
+
+        service.creditVerifiedTopUp(payment);
+
+        assertThat(wallet.getBalance()).isEqualTo(140);
+        WalletTransaction ledgerEntry = savedLedgerEntry();
+        assertThat(ledgerEntry.getDirection()).isEqualTo(WalletTransactionDirection.CREDIT);
+        assertThat(ledgerEntry.getAmount()).isEqualTo(100);
+        assertThat(ledgerEntry.getBalanceBefore()).isEqualTo(40);
+        assertThat(ledgerEntry.getBalanceAfter()).isEqualTo(140);
+        assertThat(ledgerEntry.getReferenceType()).isEqualTo(WalletTransactionReferenceType.COIN_TOP_UP);
+        assertThat(ledgerEntry.getReferenceId()).isEqualTo(payment.getPaymentId());
+        assertThat(ledgerEntry.getWallet()).isSameAs(wallet);
+    }
+
+    @Test
+    void balanceEqualsTheSumOfLedgerCreditsAcrossSequentialTopUps() {
+        UserWallet wallet = wallet(0);
+        when(walletRepository.findByUserIdForUpdate("user-1")).thenReturn(Optional.of(wallet));
+        when(walletTransactionRepository.existsByReferenceTypeAndReferenceId(any(), any())).thenReturn(false);
+
+        service.creditVerifiedTopUp(paidTopUp(100));
+        service.creditVerifiedTopUp(paidTopUp(500));
+        service.creditVerifiedTopUp(paidTopUp(50));
+
+        ArgumentCaptor<WalletTransaction> captor = ArgumentCaptor.forClass(WalletTransaction.class);
+        verify(walletTransactionRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+        int ledgerSum = captor.getAllValues().stream()
+                .mapToInt(entry -> entry.getDirection() == WalletTransactionDirection.CREDIT
+                        ? entry.getAmount()
+                        : -entry.getAmount())
+                .sum();
+
+        assertThat(wallet.getBalance()).isEqualTo(650).isEqualTo(ledgerSum);
+        // Each entry picks up exactly where the previous one left off.
+        assertThat(captor.getAllValues()).extracting(WalletTransaction::getBalanceAfter)
+                .containsExactly(100, 600, 650);
+    }
+
+    @Test
+    void alreadyCreditedTopUpIsNotCreditedTwice() {
+        PaymentTransaction payment = paidTopUp(100);
+        when(walletTransactionRepository.existsByReferenceTypeAndReferenceId(
+                WalletTransactionReferenceType.COIN_TOP_UP, payment.getPaymentId())).thenReturn(true);
+
+        service.creditVerifiedTopUp(payment);
+
+        verify(walletRepository, never()).findByUserIdForUpdate(any());
+        verify(walletRepository, never()).save(any());
+        verify(walletTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void subscriptionPaymentCanNeverCreditCoin() {
+        PaymentTransaction subscription = paidTopUp(100);
+        subscription.setPurpose(PaymentPurpose.SUBSCRIPTION);
+
+        assertThatThrownBy(() -> service.creditVerifiedTopUp(subscription))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_PURPOSE_MISMATCH);
+
+        verify(walletRepository, never()).save(any());
+        verify(walletTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void unpaidTopUpCannotCreditCoin() {
+        PaymentTransaction pending = paidTopUp(100);
+        pending.setStatus(PaymentStatus.PENDING);
+
+        assertThatThrownBy(() -> service.creditVerifiedTopUp(pending))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_PURPOSE_MISMATCH);
+
+        verify(walletTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void topUpWithoutACoinAmountCannotCreditCoin() {
+        PaymentTransaction broken = paidTopUp(100);
+        broken.setCoinAmount(null);
+
+        assertThatThrownBy(() -> service.creditVerifiedTopUp(broken))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_PROVIDER_ERROR);
+
+        verify(walletTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void firstTopUpCreatesTheBuyerWalletBeforeCrediting() {
+        PaymentTransaction payment = paidTopUp(100);
+        when(walletTransactionRepository.existsByReferenceTypeAndReferenceId(any(), any())).thenReturn(false);
+        when(walletRepository.findByUserIdForUpdate("user-1")).thenReturn(Optional.empty());
+        when(walletRepository.saveAndFlush(any(UserWallet.class))).thenAnswer(invocation -> {
+            UserWallet created = invocation.getArgument(0);
+            created.setWalletId(UUID.randomUUID());
+            return created;
+        });
+
+        service.creditVerifiedTopUp(payment);
+
+        WalletTransaction ledgerEntry = savedLedgerEntry();
+        assertThat(ledgerEntry.getBalanceBefore()).isZero();
+        assertThat(ledgerEntry.getBalanceAfter()).isEqualTo(100);
+        assertThat(ledgerEntry.getWallet().getUser()).isSameAs(user);
+    }
+
+    private PaymentTransaction paidTopUp(int coinAmount) {
+        PaymentTransaction payment = new PaymentTransaction();
+        payment.setPaymentId(UUID.randomUUID());
+        payment.setUser(user);
+        payment.setPurpose(PaymentPurpose.COIN_TOP_UP);
+        payment.setStatus(PaymentStatus.PAID);
+        payment.setCoinAmount(coinAmount);
+        payment.setCoinPackageKey("COIN_" + coinAmount);
+        return payment;
+    }
+
+    private UserWallet wallet(int balance) {
+        UserWallet wallet = new UserWallet();
+        wallet.setWalletId(UUID.randomUUID());
+        wallet.setUser(user);
+        wallet.setBalance(balance);
+        return wallet;
+    }
+
+    private WalletTransaction savedLedgerEntry() {
+        ArgumentCaptor<WalletTransaction> captor = ArgumentCaptor.forClass(WalletTransaction.class);
+        verify(walletTransactionRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
     private void stubUserAndSave() {
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
         when(paymentTransactionRepository.save(any(PaymentTransaction.class))).thenAnswer(invocation -> {
@@ -200,7 +352,9 @@ class CoinTopUpServiceTest {
                 new CoinPackageCatalog(new CoinTopUpProperties(coinEnabled, List.of(COIN_100, COIN_500))),
                 new SepayPaymentFactory(properties),
                 userRepository,
-                paymentTransactionRepository
+                paymentTransactionRepository,
+                walletRepository,
+                walletTransactionRepository
         );
     }
 }

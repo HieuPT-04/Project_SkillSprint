@@ -22,6 +22,17 @@ spring:
           issuer-uri: https://cognito-idp.ap-southeast-1.amazonaws.com/test_pool
 
 app:
+  payment:
+    # Deterministic SePay settings so the coin top-up webhook can be exercised
+    # end-to-end. Coin packages come from the shared application.yml catalogue.
+    sepay:
+      enabled: true
+      bank-code: MBBANK
+      bank-account-number: "123456789"
+      bank-account-name: SKILL SPRINT
+      webhook-api-key: test-webhook-secret
+      qr-base-url: https://qr.example/{bankCode}/{accountNumber}?amount={amount}&content={content}
+      expire-minutes: 15
   session:
     enabled: false
     header-name: X-Session-Id
