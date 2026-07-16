@@ -14,6 +14,7 @@ backups/
 .idea/
 *.iml
 *.md
+docs/
 !HUONG_DAN_CHECK_TEST_BACKEND.md
 
 #test

@@ -66,6 +66,11 @@ public class NotificationService {
     }
 
     @Transactional
+    public int markAllAsRead(String userId) {
+        return notificationRepository.markAllAsReadForUser(userId, Instant.now());
+    }
+
+    @Transactional
     public NotificationResponse createAndDispatch(
             User user,
             StudyWorkspace workspace,

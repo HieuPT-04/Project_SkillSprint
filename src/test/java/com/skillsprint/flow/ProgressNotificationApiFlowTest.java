@@ -166,6 +166,40 @@ class ProgressNotificationApiFlowTest {
     }
 
     @Test
+    void markAllAsReadResolvesUserFromJwtAndReturnsUpdatedCount() throws Exception {
+        when(notificationService.markAllAsRead(USER_ID)).thenReturn(2);
+
+        mockMvc.perform(patch("/api/notifications/read-all")
+                        .with(learnerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Mark all notifications as read successfully"))
+                .andExpect(jsonPath("$.data").value(2));
+
+        verify(notificationService).markAllAsRead(USER_ID);
+    }
+
+    @Test
+    void markAllAsReadIsIdempotentWhenNothingUnread() throws Exception {
+        when(notificationService.markAllAsRead(USER_ID)).thenReturn(0);
+
+        mockMvc.perform(patch("/api/notifications/read-all")
+                        .with(learnerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(0));
+    }
+
+    @Test
+    void anonymousUserCannotMarkAllNotificationsAsRead() throws Exception {
+        mockMvc.perform(patch("/api/notifications/read-all"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(notificationService, never()).markAllAsRead(any());
+    }
+
+    @Test
     void reminderCreateValidationSuccessAndBusinessErrorsAreMapped() throws Exception {
         mockMvc.perform(post("/api/workspaces/{workspaceId}/reminders", workspaceId)
                         .with(learnerJwt())

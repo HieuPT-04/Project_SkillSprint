@@ -56,6 +56,14 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success("Mark notification as read successfully", response));
     }
 
+    @PatchMapping("/notifications/read-all")
+    public ResponseEntity<ApiResponse<Integer>> markAllAsRead(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        int updated = notificationService.markAllAsRead(jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.success("Mark all notifications as read successfully", updated));
+    }
+
     @PostMapping("/workspaces/{workspaceId}/reminders")
     public ResponseEntity<ApiResponse<Void>> createReminder(
             @AuthenticationPrincipal Jwt jwt,

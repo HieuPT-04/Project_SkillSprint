@@ -137,6 +137,25 @@ class NotificationServiceTest {
     }
 
     @Test
+    void markAllAsReadDelegatesToScopedBulkUpdateAndReturnsCount() {
+        when(notificationRepository.markAllAsReadForUser(eq("user-1"), any(Instant.class))).thenReturn(3);
+
+        int updated = notificationService.markAllAsRead("user-1");
+
+        assertEquals(3, updated);
+        verify(notificationRepository).markAllAsReadForUser(eq("user-1"), any(Instant.class));
+    }
+
+    @Test
+    void markAllAsReadReturnsZeroWhenNoUnreadNotifications() {
+        when(notificationRepository.markAllAsReadForUser(eq("user-1"), any(Instant.class))).thenReturn(0);
+
+        int updated = notificationService.markAllAsRead("user-1");
+
+        assertEquals(0, updated);
+    }
+
+    @Test
     void markAsReadRejectsForeignOrMissingNotification() {
         UUID notificationId = UUID.randomUUID();
         when(notificationRepository.findByNotificationIdAndUserUserId(notificationId, "user-1"))
