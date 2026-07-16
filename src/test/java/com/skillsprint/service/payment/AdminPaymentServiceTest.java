@@ -18,6 +18,7 @@ import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.ServicePlan;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
@@ -49,6 +50,9 @@ class AdminPaymentServiceTest {
     SubscriptionService subscriptionService;
 
     @Mock
+    CoinTopUpService coinTopUpService;
+
+    @Mock
     PaymentMapper paymentMapper;
 
     AdminPaymentService adminPaymentService;
@@ -60,6 +64,7 @@ class AdminPaymentServiceTest {
         adminPaymentService = new AdminPaymentService(
                 paymentTransactionRepository,
                 subscriptionService,
+                coinTopUpService,
                 paymentMapper,
                 new ObjectMapper()
         );
@@ -199,6 +204,93 @@ class AdminPaymentServiceTest {
         assertTrue(transaction.getRawCallbackData().contains("\"note\":\"Admin checked bank statement\""));
         verify(paymentTransactionRepository).save(transaction);
         verify(subscriptionService).activatePaidPlan("user-1", builderPlan);
+        verify(coinTopUpService, never()).creditVerifiedTopUp(org.mockito.Mockito.any());
+    }
+
+    @Test
+    void reconcilingACoinTopUpCreditsTheWalletAndNeverActivatesASubscription() {
+        UUID paymentId = UUID.randomUUID();
+        // A Coin top-up deliberately has no plan; the old code passed that null straight
+        // into activatePaidPlan.
+        PaymentTransaction transaction = coinTopUpPayment(PaymentStatus.PENDING, 100);
+        when(paymentTransactionRepository.findWithLockByPaymentId(paymentId)).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.findByProviderTransactionId("BANK-9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.save(transaction)).thenReturn(transaction);
+        when(paymentMapper.toResponse(transaction)).thenReturn(PaymentTransactionResponse.builder().build());
+
+        adminPaymentService.reconcilePayment(paymentId, reconcileRequest("BANK-9001"));
+
+        assertEquals(PaymentStatus.PAID, transaction.getStatus());
+        assertEquals("BANK-9001", transaction.getProviderTransactionId());
+        assertNotNull(transaction.getPaidAt());
+
+        // The credit runs through the same idempotent path the webhook uses, and receives
+        // the payment already marked PAID so its own PAID precondition holds.
+        ArgumentCaptor<PaymentTransaction> credited = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(coinTopUpService).creditVerifiedTopUp(credited.capture());
+        assertSame(transaction, credited.getValue());
+        assertEquals(PaymentStatus.PAID, credited.getValue().getStatus());
+        assertEquals(100, credited.getValue().getCoinAmount());
+        verify(subscriptionService, never()).activatePaidPlan(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.any(ServicePlan.class)
+        );
+    }
+
+    @Test
+    void reconcilingAnAlreadyPaidCoinTopUpIsRejectedAndCannotDoubleCredit() {
+        UUID paymentId = UUID.randomUUID();
+        PaymentTransaction transaction = coinTopUpPayment(PaymentStatus.PAID, 100);
+        when(paymentTransactionRepository.findWithLockByPaymentId(paymentId)).thenReturn(Optional.of(transaction));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> adminPaymentService.reconcilePayment(paymentId, reconcileRequest("BANK-9001"))
+        );
+
+        assertEquals(ErrorCode.PAYMENT_ALREADY_CONFIRMED, exception.getErrorCode());
+        verify(paymentTransactionRepository, never()).save(transaction);
+        verify(coinTopUpService, never()).creditVerifiedTopUp(org.mockito.Mockito.any());
+    }
+
+    @Test
+    void reconcilingACoinTopUpWithADuplicateProviderTransactionIdCannotCredit() {
+        UUID paymentId = UUID.randomUUID();
+        PaymentTransaction transaction = coinTopUpPayment(PaymentStatus.PENDING, 100);
+        when(paymentTransactionRepository.findWithLockByPaymentId(paymentId)).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.findByProviderTransactionId("BANK-9001"))
+                .thenReturn(Optional.of(coinTopUpPayment(PaymentStatus.PAID, 100)));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> adminPaymentService.reconcilePayment(paymentId, reconcileRequest("BANK-9001"))
+        );
+
+        assertEquals(ErrorCode.PAYMENT_ALREADY_CONFIRMED, exception.getErrorCode());
+        verify(paymentTransactionRepository, never()).save(transaction);
+        verify(coinTopUpService, never()).creditVerifiedTopUp(org.mockito.Mockito.any());
+    }
+
+    @Test
+    void aFailedWalletCreditPropagatesSoThePaidStateRollsBack() {
+        UUID paymentId = UUID.randomUUID();
+        PaymentTransaction transaction = coinTopUpPayment(PaymentStatus.PENDING, 100);
+        when(paymentTransactionRepository.findWithLockByPaymentId(paymentId)).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.findByProviderTransactionId("BANK-9001")).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.save(transaction)).thenReturn(transaction);
+        org.mockito.Mockito.doThrow(new AppException(ErrorCode.PAYMENT_PURPOSE_MISMATCH))
+                .when(coinTopUpService)
+                .creditVerifiedTopUp(transaction);
+
+        // The exception must escape reconcilePayment so its transaction rolls back rather
+        // than committing a PAID payment that never credited any Coin.
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> adminPaymentService.reconcilePayment(paymentId, reconcileRequest("BANK-9001"))
+        );
+
+        assertEquals(ErrorCode.PAYMENT_PURPOSE_MISMATCH, exception.getErrorCode());
+        verify(paymentMapper, never()).toResponse(org.mockito.Mockito.any());
     }
 
     @Test
@@ -238,6 +330,17 @@ class AdminPaymentServiceTest {
         transaction.setAmount(new BigDecimal("100000"));
         transaction.setCurrency("VND");
         transaction.setSubscriptionMonths(1);
+        return transaction;
+    }
+
+    private PaymentTransaction coinTopUpPayment(PaymentStatus status, int coinAmount) {
+        PaymentTransaction transaction = payment(status);
+        transaction.setPurpose(PaymentPurpose.COIN_TOP_UP);
+        transaction.setPlan(null);
+        transaction.setSubscriptionMonths(0);
+        transaction.setAmount(new BigDecimal("19000"));
+        transaction.setCoinAmount(coinAmount);
+        transaction.setCoinPackageKey("COIN_" + coinAmount);
         return transaction;
     }
 

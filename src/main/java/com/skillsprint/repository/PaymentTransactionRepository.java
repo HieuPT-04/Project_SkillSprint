@@ -2,6 +2,7 @@ package com.skillsprint.repository;
 
 import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.enums.payment.PaymentProvider;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import java.time.Instant;
 import java.util.List;
@@ -89,20 +90,33 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             Pageable pageable
     );
 
-    @Query("""
-            select coalesce(sum(payment.amount), 0)
-            from PaymentTransaction payment
-            where payment.status = :status
-            """)
-    java.math.BigDecimal sumAmountByStatus(@Param("status") PaymentStatus status);
+    /*
+     * Money sums are always scoped by purpose. payment_transactions holds both
+     * subscription payments and Coin top-ups, and a top-up is a wallet deposit rather
+     * than product revenue, so summing by status alone would report deposits as
+     * revenue. There is deliberately no purpose-agnostic sum.
+     */
 
     @Query("""
             select coalesce(sum(payment.amount), 0)
             from PaymentTransaction payment
-            where payment.status = :status
+            where payment.purpose = :purpose
+              and payment.status = :status
+            """)
+    java.math.BigDecimal sumAmountByPurposeAndStatus(
+            @Param("purpose") PaymentPurpose purpose,
+            @Param("status") PaymentStatus status
+    );
+
+    @Query("""
+            select coalesce(sum(payment.amount), 0)
+            from PaymentTransaction payment
+            where payment.purpose = :purpose
+              and payment.status = :status
               and payment.paidAt >= :from
             """)
-    java.math.BigDecimal sumAmountByStatusAndPaidAtAfter(
+    java.math.BigDecimal sumAmountByPurposeAndStatusAndPaidAtAfter(
+            @Param("purpose") PaymentPurpose purpose,
             @Param("status") PaymentStatus status,
             @Param("from") Instant from
     );
@@ -110,11 +124,13 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     @Query("""
             select coalesce(sum(payment.amount), 0)
             from PaymentTransaction payment
-            where payment.status = :status
+            where payment.purpose = :purpose
+              and payment.status = :status
               and payment.paidAt >= :from
               and payment.paidAt < :to
             """)
-    java.math.BigDecimal sumAmountByStatusAndPaidAtBetween(
+    java.math.BigDecimal sumAmountByPurposeAndStatusAndPaidAtBetween(
+            @Param("purpose") PaymentPurpose purpose,
             @Param("status") PaymentStatus status,
             @Param("from") Instant from,
             @Param("to") Instant to

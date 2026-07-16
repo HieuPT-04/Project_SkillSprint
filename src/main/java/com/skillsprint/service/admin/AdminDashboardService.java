@@ -6,6 +6,7 @@ import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
 import com.skillsprint.enums.material.MaterialProcessingStatus;
+import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.enums.plan.SubscriptionStatus;
@@ -39,6 +40,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminDashboardService {
 
     static ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    /**
+     * Dashboard revenue means subscription revenue. Coin top-ups also live in
+     * payment_transactions, but a top-up is a wallet deposit the buyer can still spend,
+     * not money the product has earned, so it must never be added to these figures.
+     * Coin top-up reporting is a separate metric that does not exist yet.
+     */
+    static PaymentPurpose REVENUE_PURPOSE = PaymentPurpose.SUBSCRIPTION;
 
     UserRepository userRepository;
     StudyWorkspaceRepository workspaceRepository;
@@ -114,6 +123,8 @@ public class AdminDashboardService {
                 .build();
     }
 
+    // Counts stay purpose-agnostic: they are labelled as payment counts and every
+    // payment, whatever its purpose, is one. Revenue is not — see REVENUE_PURPOSE.
     private AdminDashboardResponse.PaymentStats buildPaymentStats(Instant todayStart, Instant monthStart) {
         return AdminDashboardResponse.PaymentStats.builder()
                 .total(paymentTransactionRepository.count())
@@ -122,9 +133,20 @@ public class AdminDashboardService {
                 .failed(paymentTransactionRepository.countByStatus(PaymentStatus.FAILED))
                 .canceled(paymentTransactionRepository.countByStatus(PaymentStatus.CANCELED))
                 .expired(paymentTransactionRepository.countByStatus(PaymentStatus.EXPIRED))
-                .revenueTotal(defaultMoney(paymentTransactionRepository.sumAmountByStatus(PaymentStatus.PAID)))
-                .revenueToday(defaultMoney(paymentTransactionRepository.sumAmountByStatusAndPaidAtAfter(PaymentStatus.PAID, todayStart)))
-                .revenueThisMonth(defaultMoney(paymentTransactionRepository.sumAmountByStatusAndPaidAtAfter(PaymentStatus.PAID, monthStart)))
+                .revenueTotal(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatus(
+                        REVENUE_PURPOSE,
+                        PaymentStatus.PAID
+                )))
+                .revenueToday(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtAfter(
+                        REVENUE_PURPOSE,
+                        PaymentStatus.PAID,
+                        todayStart
+                )))
+                .revenueThisMonth(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtAfter(
+                        REVENUE_PURPOSE,
+                        PaymentStatus.PAID,
+                        monthStart
+                )))
                 .build();
     }
 
@@ -187,7 +209,8 @@ public class AdminDashboardService {
 
             revenueByDay.add(AdminDashboardResponse.RevenuePoint.builder()
                     .date(current)
-                    .amount(defaultMoney(paymentTransactionRepository.sumAmountByStatusAndPaidAtBetween(
+                    .amount(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                            REVENUE_PURPOSE,
                             PaymentStatus.PAID,
                             dayStart,
                             nextDayStart

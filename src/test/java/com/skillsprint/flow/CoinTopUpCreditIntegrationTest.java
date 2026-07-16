@@ -3,6 +3,7 @@ package com.skillsprint.flow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.skillsprint.dto.request.admin.ReconcilePaymentRequest;
 import com.skillsprint.dto.request.marketplace.CreateCoinTopUpRequest;
 import com.skillsprint.dto.request.payment.SepayWebhookRequest;
 import com.skillsprint.dto.response.marketplace.CoinTopUpPaymentResponse;
@@ -22,6 +23,7 @@ import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
 import com.skillsprint.service.marketplace.MarketplaceWalletService;
+import com.skillsprint.service.payment.AdminPaymentService;
 import com.skillsprint.service.payment.CoinTopUpService;
 import com.skillsprint.service.payment.SepayPaymentService;
 import java.math.BigDecimal;
@@ -35,22 +37,24 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Exercises the real create → webhook → credit path against real repositories, so the
- * wallet credit and its ledger entry are asserted through actual persistence rather
- * than mocks.
+ * Exercises the real credit paths against real repositories, so the wallet credit and
+ * its ledger entry are asserted through actual persistence rather than mocks. A top-up
+ * can be confirmed by the SePay webhook or by an admin manual reconciliation, and both
+ * must land the same single credit.
  *
- * <p>Deliberately not {@code @Transactional}: each webhook call must commit on its own,
+ * <p>Deliberately not {@code @Transactional}: each confirmation must commit on its own,
  * the way two separate provider deliveries would.
  */
 @SpringBootTest
 @ActiveProfiles("test")
-class CoinTopUpWebhookCreditIntegrationTest {
+class CoinTopUpCreditIntegrationTest {
 
     private static final String USER_ID = "coin-topup-int-user";
     private static final String OTHER_USER_ID = "coin-topup-int-other";
     private static final String WEBHOOK_KEY = "test-webhook-secret";
 
     @Autowired SepayPaymentService sepayPaymentService;
+    @Autowired AdminPaymentService adminPaymentService;
     @Autowired CoinTopUpService coinTopUpService;
     @Autowired MarketplaceWalletService marketplaceWalletService;
     @Autowired UserRepository userRepository;
@@ -92,6 +96,60 @@ class CoinTopUpWebhookCreditIntegrationTest {
         assertThat(coinTopUpLedger()).hasSize(1);
         assertThat(coinTopUpLedger().get(0).getReferenceId()).isEqualTo(topUp.getPaymentId());
         assertThat(coinTopUpLedger().get(0).getAmount()).isEqualTo(100);
+    }
+
+    /**
+     * A Coin top-up has no service plan. Manual reconciliation used to hand that null
+     * plan to the subscription activation, so a top-up an admin confirmed by hand never
+     * credited any Coin. It must now reach the same end state as the webhook.
+     */
+    @Test
+    void manuallyReconciledTopUpCreditsTheWalletExactlyOnceAndActivatesNoSubscription() {
+        CoinTopUpPaymentResponse topUp = createTopUp("COIN_500");
+        assertThat(paymentOf(topUp).getPlan()).isNull();
+        assertThat(balanceOf(USER_ID)).isZero();
+
+        adminPaymentService.reconcilePayment(topUp.getPaymentId(), reconcileRequest("BANK-MANUAL-1"));
+
+        assertThat(balanceOf(USER_ID)).isEqualTo(500);
+        assertThat(paymentOf(topUp).getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(paymentOf(topUp).getProviderTransactionId()).isEqualTo("BANK-MANUAL-1");
+        assertThat(paymentOf(topUp).getPlan()).isNull();
+
+        List<WalletTransaction> ledger = coinTopUpLedger();
+        assertThat(ledger).hasSize(1);
+        assertThat(ledger.get(0).getAmount()).isEqualTo(500);
+        assertThat(ledger.get(0).getReferenceId()).isEqualTo(topUp.getPaymentId());
+
+        // Reconciling again is refused, so an admin cannot double-credit by retrying.
+        assertThatThrownBy(() -> adminPaymentService.reconcilePayment(
+                topUp.getPaymentId(), reconcileRequest("BANK-MANUAL-2")))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_ALREADY_CONFIRMED);
+
+        assertThat(balanceOf(USER_ID)).isEqualTo(500);
+        assertThat(coinTopUpLedger()).hasSize(1);
+    }
+
+    /**
+     * A top-up already credited by the webhook cannot be credited again by a manual
+     * reconciliation, because the payment has already left PENDING.
+     */
+    @Test
+    void manualReconciliationCannotDoubleCreditAWebhookConfirmedTopUp() {
+        CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
+        sepayPaymentService.handleWebhook(webhook(9801L, topUp, "19000"), null, WEBHOOK_KEY);
+        assertThat(balanceOf(USER_ID)).isEqualTo(100);
+
+        assertThatThrownBy(() -> adminPaymentService.reconcilePayment(
+                topUp.getPaymentId(), reconcileRequest("BANK-MANUAL-3")))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_ALREADY_CONFIRMED);
+
+        assertThat(balanceOf(USER_ID)).isEqualTo(100);
+        assertThat(coinTopUpLedger()).hasSize(1);
     }
 
     /**
@@ -229,6 +287,13 @@ class CoinTopUpWebhookCreditIntegrationTest {
     private void creditTopUp(String packageKey, long providerId, String amount) {
         CoinTopUpPaymentResponse topUp = createTopUp(packageKey);
         sepayPaymentService.handleWebhook(webhook(providerId, topUp, amount), null, WEBHOOK_KEY);
+    }
+
+    private ReconcilePaymentRequest reconcileRequest(String providerTransactionId) {
+        ReconcilePaymentRequest request = new ReconcilePaymentRequest();
+        request.setProviderTransactionId(providerTransactionId);
+        request.setNote("Admin checked bank statement");
+        return request;
     }
 
     private CoinTopUpPaymentResponse createTopUp(String packageKey) {

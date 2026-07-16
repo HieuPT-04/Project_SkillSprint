@@ -35,6 +35,7 @@ public class AdminPaymentService {
 
     PaymentTransactionRepository paymentTransactionRepository;
     SubscriptionService subscriptionService;
+    CoinTopUpService coinTopUpService;
     PaymentMapper paymentMapper;
     ObjectMapper objectMapper;
 
@@ -81,12 +82,34 @@ public class AdminPaymentService {
 
         PaymentTransaction savedTransaction = paymentTransactionRepository.save(transaction);
 
-        subscriptionService.activatePaidPlan(
-                savedTransaction.getUser().getUserId(),
-                savedTransaction.getPlan()
-        );
+        fulfil(savedTransaction);
 
         return paymentMapper.toResponse(savedTransaction);
+    }
+
+    /**
+     * Applies what the payment actually bought, once it is safely marked PAID.
+     *
+     * <p>A manual reconciliation must reach the same end state as the webhook, so the
+     * purpose decides the branch here exactly as it does in {@link SepayPaymentService}:
+     * a subscription activates its plan, a Coin top-up credits the wallet through the
+     * same idempotent path. Only one branch ever runs for a payment, and a top-up has no
+     * plan to activate.
+     *
+     * <p>Runs inside the caller's transaction, so a failure here rolls back the PAID
+     * state and the provider transaction id with it.
+     */
+    private void fulfil(PaymentTransaction payment) {
+        switch (payment.getPurpose()) {
+            case SUBSCRIPTION -> subscriptionService.activatePaidPlan(
+                    payment.getUser().getUserId(),
+                    payment.getPlan()
+            );
+            case COIN_TOP_UP -> coinTopUpService.creditVerifiedTopUp(payment);
+            // A purpose nobody taught this method to fulfil must fail loudly rather than
+            // leave the buyer paid but empty-handed.
+            default -> throw new AppException(ErrorCode.PAYMENT_PURPOSE_MISMATCH);
+        }
     }
 
     private int normalizeSize(int size) {
