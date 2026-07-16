@@ -101,6 +101,8 @@ public enum ErrorCode {
     MARKETPLACE_CREATOR_VALIDATION_REQUIRED("Creator cần đạt ít nhất 90 điểm ở Full Pack Challenge trước khi gửi duyệt", HttpStatus.BAD_REQUEST),
     MARKETPLACE_ALREADY_PURCHASED("Bạn đã mua Quiz Pack này", HttpStatus.CONFLICT),
     MARKETPLACE_CREATOR_CANNOT_PURCHASE("Creator không thể mua Quiz Pack của chính mình", HttpStatus.BAD_REQUEST),
+    MARKETPLACE_PACK_VERSION_NOT_FOUND("Không tìm thấy phiên bản Quiz Pack", HttpStatus.NOT_FOUND),
+    MARKETPLACE_PACK_SALEABLE_VERSION_CONFLICT("Quiz Pack đã có một phiên bản đang được bán", HttpStatus.CONFLICT),
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     // AI Tutor
