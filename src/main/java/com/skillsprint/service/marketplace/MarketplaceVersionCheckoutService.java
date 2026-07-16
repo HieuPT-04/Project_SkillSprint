@@ -58,6 +58,7 @@ public class MarketplaceVersionCheckoutService {
     UserWalletRepository walletRepository;
     WalletTransactionRepository walletTransactionRepository;
     MarketplaceCheckoutMapper checkoutMapper;
+    MarketplaceCheckoutAuditService checkoutAuditService;
 
     @Transactional
     public MarketplaceVersionPurchaseResponse purchaseWithCoins(
@@ -199,6 +200,8 @@ public class MarketplaceVersionCheckoutService {
             transaction.setReferenceId(sale.getSaleId());
             walletTransactionRepository.save(transaction);
         }
+
+        checkoutAuditService.recordCompletedCheckout(sale, settlement);
 
         return checkoutMapper.toResponse(sale, entitlement, settlement, balanceAfter);
     }
