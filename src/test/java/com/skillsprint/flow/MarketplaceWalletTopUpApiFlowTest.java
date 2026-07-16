@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -221,6 +222,32 @@ class MarketplaceWalletTopUpApiFlowTest {
     }
 
     @Test
+    void authenticatedUserCanCancelTheirPendingTopUp() throws Exception {
+        CoinTopUpPaymentResponse cancelled = topUpResponse(PaymentStatus.CANCELED);
+        when(coinTopUpService.cancelPendingTopUp(USER_ID, paymentId)).thenReturn(cancelled);
+
+        mockMvc.perform(patch("/api/marketplace/wallet/top-ups/{paymentId}/cancel", paymentId)
+                        .with(jwtFor(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Đã hủy giao dịch nạp Coin"))
+                .andExpect(jsonPath("$.data.paymentId").value(paymentId.toString()))
+                .andExpect(jsonPath("$.data.status").value("CANCELED"));
+
+        verify(coinTopUpService).cancelPendingTopUp(USER_ID, paymentId);
+        verify(coinTopUpService, never()).cancelPendingTopUp(OTHER_USER_ID, paymentId);
+    }
+
+    @Test
+    void anonymousUserCannotCancelCoinTopUp() throws Exception {
+        mockMvc.perform(patch("/api/marketplace/wallet/top-ups/{paymentId}/cancel", paymentId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(coinTopUpService, never()).cancelPendingTopUp(any(), any());
+    }
+
+    @Test
     void walletReadsAreScopedToTheCallingUser() throws Exception {
         when(marketplaceWalletService.getTransactions(OTHER_USER_ID)).thenReturn(List.of());
 
@@ -232,10 +259,14 @@ class MarketplaceWalletTopUpApiFlowTest {
     }
 
     private CoinTopUpPaymentResponse topUpResponse() {
+        return topUpResponse(PaymentStatus.PENDING);
+    }
+
+    private CoinTopUpPaymentResponse topUpResponse(PaymentStatus status) {
         return CoinTopUpPaymentResponse.builder()
                 .paymentId(paymentId)
                 .purpose(PaymentPurpose.COIN_TOP_UP)
-                .status(PaymentStatus.PENDING)
+                .status(status)
                 .packageKey("COIN_100")
                 .coinAmount(100)
                 .amount(new BigDecimal("100"))

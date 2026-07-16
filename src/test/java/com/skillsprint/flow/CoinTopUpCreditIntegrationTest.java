@@ -269,6 +269,20 @@ class CoinTopUpCreditIntegrationTest {
     }
 
     @Test
+    void webhookCannotCreditATopUpCancelledByTheBuyer() {
+        CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
+
+        CoinTopUpPaymentResponse cancelled = coinTopUpService.cancelPendingTopUp(USER_ID, topUp.getPaymentId());
+        assertThat(cancelled.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+
+        sepayPaymentService.handleWebhook(webhook(9751L, topUp, "100"), null, WEBHOOK_KEY);
+
+        assertThat(paymentOf(topUp).getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(balanceOf(USER_ID)).isZero();
+        assertThat(coinTopUpLedger()).isEmpty();
+    }
+
+    @Test
     void aSubscriptionPaymentCannotBeCreditedAsCoin() {
         CoinTopUpPaymentResponse topUp = createTopUp("COIN_100");
         PaymentTransaction payment = paymentOf(topUp);

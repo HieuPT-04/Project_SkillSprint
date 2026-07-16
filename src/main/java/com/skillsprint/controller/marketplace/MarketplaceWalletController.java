@@ -53,4 +53,14 @@ public class MarketplaceWalletController {
         CoinTopUpPaymentResponse response = coinTopUpService.createTopUpPayment(jwt.getSubject(), request);
         return ResponseEntity.ok(ApiResponse.success("Tạo lệnh nạp Coin thành công", response));
     }
+
+    /** The payment can only be cancelled by its authenticated buyer. */
+    @PatchMapping("/top-ups/{paymentId}/cancel")
+    public ResponseEntity<ApiResponse<CoinTopUpPaymentResponse>> cancelTopUp(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID paymentId
+    ) {
+        CoinTopUpPaymentResponse response = coinTopUpService.cancelPendingTopUp(jwt.getSubject(), paymentId);
+        return ResponseEntity.ok(ApiResponse.success("Đã hủy giao dịch nạp Coin", response));
+    }
 }

@@ -20,6 +20,7 @@ import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -83,6 +84,29 @@ public class CoinTopUpService {
         saved.setQrCodeUrl(sepayPaymentFactory.buildQrCodeUrl(saved));
 
         return toResponse(paymentTransactionRepository.save(saved));
+    }
+
+    /**
+     * Cancels a pending Coin top-up owned by the authenticated buyer. The pessimistic
+     * payment lock is shared with the SePay webhook lookup, so a webhook and a cancel
+     * request cannot both transition the same payment from PENDING.
+     */
+    @Transactional
+    public CoinTopUpPaymentResponse cancelPendingTopUp(String userId, UUID paymentId) {
+        PaymentTransaction transaction = paymentTransactionRepository.findWithLockByPaymentId(paymentId)
+                .filter(payment -> payment.getUser().getUserId().equals(userId))
+                .filter(payment -> payment.getPurpose() == PaymentPurpose.COIN_TOP_UP)
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND));
+
+        if (transaction.getStatus() == PaymentStatus.CANCELED) {
+            return toResponse(transaction);
+        }
+        if (transaction.getStatus() != PaymentStatus.PENDING) {
+            throw new AppException(ErrorCode.PAYMENT_NOT_CANCELABLE);
+        }
+
+        transaction.setStatus(PaymentStatus.CANCELED);
+        return toResponse(paymentTransactionRepository.save(transaction));
     }
 
     /**

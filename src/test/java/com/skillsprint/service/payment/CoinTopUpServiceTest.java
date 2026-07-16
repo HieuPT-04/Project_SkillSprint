@@ -180,6 +180,60 @@ class CoinTopUpServiceTest {
         assertThat(packages.get(0).getCurrency()).isEqualTo("VND");
     }
 
+    @Test
+    void buyerCanCancelTheirPendingTopUp() {
+        PaymentTransaction payment = pendingTopUp();
+        when(paymentTransactionRepository.findWithLockByPaymentId(payment.getPaymentId())).thenReturn(Optional.of(payment));
+        when(paymentTransactionRepository.save(payment)).thenReturn(payment);
+
+        CoinTopUpPaymentResponse response = service.cancelPendingTopUp("user-1", payment.getPaymentId());
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        verify(paymentTransactionRepository).save(payment);
+    }
+
+    @Test
+    void cancelledTopUpCanBeCancelledAgainWithoutChangingItsState() {
+        PaymentTransaction payment = pendingTopUp();
+        payment.setStatus(PaymentStatus.CANCELED);
+        when(paymentTransactionRepository.findWithLockByPaymentId(payment.getPaymentId())).thenReturn(Optional.of(payment));
+
+        CoinTopUpPaymentResponse response = service.cancelPendingTopUp("user-1", payment.getPaymentId());
+
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void buyerCannotCancelAnotherUsersTopUp() {
+        PaymentTransaction payment = pendingTopUp();
+        User otherUser = new User();
+        otherUser.setUserId("other-user");
+        payment.setUser(otherUser);
+        when(paymentTransactionRepository.findWithLockByPaymentId(payment.getPaymentId())).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.cancelPendingTopUp("user-1", payment.getPaymentId()))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_TRANSACTION_NOT_FOUND);
+
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void paidTopUpCannotBeCancelled() {
+        PaymentTransaction payment = paidTopUp(100);
+        when(paymentTransactionRepository.findWithLockByPaymentId(payment.getPaymentId())).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.cancelPendingTopUp("user-1", payment.getPaymentId()))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_NOT_CANCELABLE);
+
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
     // --- crediting a verified top-up ---------------------------------------------
 
     @Test
@@ -307,6 +361,12 @@ class CoinTopUpServiceTest {
         payment.setStatus(PaymentStatus.PAID);
         payment.setCoinAmount(coinAmount);
         payment.setCoinPackageKey("COIN_" + coinAmount);
+        return payment;
+    }
+
+    private PaymentTransaction pendingTopUp() {
+        PaymentTransaction payment = paidTopUp(100);
+        payment.setStatus(PaymentStatus.PENDING);
         return payment;
     }
 
