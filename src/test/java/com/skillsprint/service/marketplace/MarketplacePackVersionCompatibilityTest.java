@@ -2,6 +2,7 @@ package com.skillsprint.service.marketplace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -193,6 +194,27 @@ class MarketplacePackVersionCompatibilityTest {
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+    }
+
+    @Test
+    void entitlementOwnerContentDoesNotExposeCorrectAnswerFlags() throws Exception {
+        com.fasterxml.jackson.databind.node.ObjectNode content = new ObjectMapper().createObjectNode();
+        com.fasterxml.jackson.databind.node.ArrayNode options = content.putArray("options");
+        options.addObject().put("correct", true);
+        options.addObject().put("correct", false);
+        version.setContent(content);
+        when(marketplaceOwnershipService.requireActiveOwnership(
+                eq("buyer"), eq(item.getItemId()), anyString()))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.ENTITLEMENT, version));
+
+        MarketplaceLibraryService service = new MarketplaceLibraryService(
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+
+        PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
+
+        assertThat(new ObjectMapper().writeValueAsString(response.getContent())).doesNotContain("correct");
+        assertThat(version.getContent().at("/options/0/correct").asBoolean()).isTrue();
     }
 
     @Test
