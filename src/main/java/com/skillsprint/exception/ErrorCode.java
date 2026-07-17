@@ -111,6 +111,11 @@ public enum ErrorCode {
     MARKETPLACE_CREATOR_EARNINGS_INSUFFICIENT("Số dư thu nhập Creator không đủ để rút", HttpStatus.CONFLICT),
     MARKETPLACE_PAYOUT_STATE_INVALID("Trạng thái yêu cầu rút tiền không hợp lệ", HttpStatus.CONFLICT),
     MARKETPLACE_PAYOUT_ACCESS_DENIED("Bạn không có quyền thao tác yêu cầu rút tiền này", HttpStatus.FORBIDDEN),
+    MARKETPLACE_PAYOUT_NOT_FOUND("Không tìm thấy yêu cầu rút tiền", HttpStatus.NOT_FOUND),
+    MARKETPLACE_PAYOUT_DESTINATION_NOT_FOUND("Chưa có thông tin nhận tiền Creator", HttpStatus.BAD_REQUEST),
+    INVALID_CREATOR_PAYOUT_QR_CONTENT_TYPE("Định dạng QR nhận tiền không hợp lệ", HttpStatus.BAD_REQUEST),
+    INVALID_CREATOR_PAYOUT_QR_OBJECT_KEY("QR nhận tiền không thuộc Creator", HttpStatus.FORBIDDEN),
+    CREATOR_PAYOUT_QR_NOT_UPLOADED("QR nhận tiền chưa tải lên hoặc không hợp lệ", HttpStatus.BAD_REQUEST),
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     // AI Tutor
