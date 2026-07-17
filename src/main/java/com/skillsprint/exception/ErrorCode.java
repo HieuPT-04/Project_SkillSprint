@@ -120,6 +120,8 @@ public enum ErrorCode {
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
     MARKETPLACE_RANKED_DEFINITION_UNAVAILABLE("Quiz xếp hạng chưa sẵn sàng cho phiên bản gói học liệu này", HttpStatus.CONFLICT),
+    MARKETPLACE_RANKED_ATTEMPT_NOT_FOUND("Không có lượt làm Quiz xếp hạng đang diễn ra", HttpStatus.NOT_FOUND),
+    MARKETPLACE_RANKED_ATTEMPT_LIMIT_REACHED("Bạn đã dùng hết lượt làm Quiz xếp hạng hôm nay", HttpStatus.CONFLICT),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
