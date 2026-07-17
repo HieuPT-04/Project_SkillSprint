@@ -48,4 +48,29 @@ public class MarketplaceRankedQuizAccessService {
 
         throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa sở hữu phiên bản Quiz Pack này");
     }
+
+    /**
+     * Locks the access record that authorizes this buyer. Start/resume uses this
+     * lock to prevent concurrent requests from creating separate active attempts.
+     */
+    @Transactional
+    public MarketplacePackVersion requireAndLockRankedAccess(String buyerId, UUID versionId) {
+        MarketplacePackVersion version = versionRepository.findById(versionId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+
+        if (entitlementRepository.findByBuyerAndVersionAndStatusForUpdate(
+                buyerId, versionId, MarketplaceEntitlementStatus.ACTIVE).isPresent()) {
+            return version;
+        }
+
+        UUID legacyItemId = version.getLegacyItemId();
+        if (Integer.valueOf(1).equals(version.getVersionNo())
+                && legacyItemId != null
+                && purchaseRepository.findByBuyerAndItemAndStatusForUpdate(
+                buyerId, legacyItemId, MarketplacePurchaseStatus.ACTIVE).isPresent()) {
+            return version;
+        }
+
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa sở hữu phiên bản Quiz Pack này");
+    }
 }

@@ -5,6 +5,10 @@ import com.skillsprint.enums.marketplace.MarketplaceEntitlementStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MarketplaceEntitlementRepository extends JpaRepository<MarketplaceEntitlement, UUID> {
@@ -19,6 +23,20 @@ public interface MarketplaceEntitlementRepository extends JpaRepository<Marketpl
             String buyerId,
             UUID packVersionId,
             MarketplaceEntitlementStatus status
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select entitlement
+            from MarketplaceEntitlement entitlement
+            where entitlement.buyer.userId = :buyerId
+              and entitlement.packVersion.versionId = :versionId
+              and entitlement.status = :status
+            """)
+    Optional<MarketplaceEntitlement> findByBuyerAndVersionAndStatusForUpdate(
+            @Param("buyerId") String buyerId,
+            @Param("versionId") UUID versionId,
+            @Param("status") MarketplaceEntitlementStatus status
     );
 
     Optional<MarketplaceEntitlement> findBySourceSaleSaleId(UUID saleId);
