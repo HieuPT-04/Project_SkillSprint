@@ -119,6 +119,8 @@ public enum ErrorCode {
     CREATOR_PAYOUT_QR_NOT_UPLOADED("QR nhận tiền chưa tải lên hoặc không hợp lệ", HttpStatus.BAD_REQUEST),
     WALLET_INSUFFICIENT_BALANCE("Số coin trong ví không đủ", HttpStatus.PAYMENT_REQUIRED),
 
+    MARKETPLACE_RANKED_DEFINITION_UNAVAILABLE("Quiz xếp hạng chưa sẵn sàng cho phiên bản gói học liệu này", HttpStatus.CONFLICT),
+
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
     TUTOR_QUESTION_TOO_LONG("Câu hỏi quá dài", HttpStatus.BAD_REQUEST),
