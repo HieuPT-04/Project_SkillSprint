@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.skillsprint.entity.MarketplacePackVersion;
+import com.skillsprint.entity.MarketplaceEntitlement;
 import com.skillsprint.enums.marketplace.MarketplaceEntitlementStatus;
 import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
 import com.skillsprint.exception.AppException;
@@ -71,6 +72,20 @@ class MarketplaceRankedQuizAccessServiceTest {
 
         verify(purchaseRepository, never()).existsByUserUserIdAndItemItemIdAndStatus(
                 "buyer", legacyItemId, MarketplacePurchaseStatus.ACTIVE);
+    }
+
+    @Test
+    void locksActiveEntitlementBeforeStartingRankedAttempt() {
+        MarketplacePackVersion version = version(2, null);
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
+        when(entitlementRepository.findByBuyerAndVersionAndStatusForUpdate(
+                "buyer", version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE))
+                .thenReturn(Optional.of(new MarketplaceEntitlement()));
+
+        assertThat(service.requireAndLockRankedAccess("buyer", version.getVersionId())).isSameAs(version);
+
+        verify(purchaseRepository, never()).findByBuyerAndItemAndStatusForUpdate(
+                "buyer", version.getVersionId(), MarketplacePurchaseStatus.ACTIVE);
     }
 
     private MarketplacePackVersion version(int versionNo, UUID legacyItemId) {
