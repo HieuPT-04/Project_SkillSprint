@@ -15,6 +15,8 @@ import com.skillsprint.enums.marketplace.CreatorEarningState;
 import com.skillsprint.enums.marketplace.MarketplaceEntitlementStatus;
 import com.skillsprint.enums.marketplace.MarketplaceSaleStatus;
 import com.skillsprint.enums.marketplace.MarketplaceSettlementStatus;
+import com.skillsprint.enums.marketplace.MarketplacePackVersionStatus;
+import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
 import com.skillsprint.enums.marketplace.WalletTransactionDirection;
 import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
 import com.skillsprint.exception.AppException;
@@ -23,6 +25,7 @@ import com.skillsprint.mapper.MarketplaceCheckoutMapper;
 import com.skillsprint.repository.CreatorEarningEntryRepository;
 import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
+import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceSaleRepository;
 import com.skillsprint.repository.MarketplaceSaleSettlementRepository;
 import com.skillsprint.repository.PlatformRevenueEntryRepository;
@@ -49,6 +52,7 @@ public class MarketplaceVersionCheckoutService {
     static final BigDecimal COIN_TO_VND_RATE = BigDecimal.ONE.setScale(4);
 
     MarketplacePackVersionRepository versionRepository;
+    MarketplacePurchaseRepository purchaseRepository;
     MarketplaceSaleRepository saleRepository;
     MarketplaceEntitlementRepository entitlementRepository;
     MarketplaceSaleSettlementRepository settlementRepository;
@@ -96,7 +100,7 @@ public class MarketplaceVersionCheckoutService {
         User buyer = userRepository.findById(buyerId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
 
-        if (!version.isSaleable()) {
+        if (version.getStatus() != MarketplacePackVersionStatus.PUBLISHED || !version.isSaleable()) {
             throw new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_SALEABLE);
         }
         if (version.getPack().getCreator().getUserId().equals(buyerId)) {
@@ -114,8 +118,12 @@ public class MarketplaceVersionCheckoutService {
         if (existingSale != null) {
             return replay(existingSale, versionId, buyerId, upgrade);
         }
-        if (entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                buyerId, versionId, MarketplaceEntitlementStatus.ACTIVE)) {
+        boolean ownsThroughLegacyPurchase = version.getLegacyItemId() != null
+                && purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
+                        buyerId, version.getLegacyItemId(), MarketplacePurchaseStatus.ACTIVE);
+        boolean ownsThroughVersionEntitlement = entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
+                buyerId, versionId, MarketplaceEntitlementStatus.ACTIVE);
+        if (ownsThroughLegacyPurchase || ownsThroughVersionEntitlement) {
             throw new AppException(ErrorCode.MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS);
         }
 

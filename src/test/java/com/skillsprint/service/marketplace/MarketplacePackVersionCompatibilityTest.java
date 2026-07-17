@@ -2,7 +2,10 @@ package com.skillsprint.service.marketplace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +14,7 @@ import com.skillsprint.dto.response.marketplace.MarketplaceCatalogItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemDetailResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplacePurchaseResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceVersionPurchaseResponse;
 import com.skillsprint.dto.response.marketplace.PurchasedQuizPackResponse;
 import com.skillsprint.entity.MarketplaceItem;
 import com.skillsprint.entity.MarketplacePack;
@@ -58,6 +62,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceVersionCheckoutService versionCheckoutService;
     @Mock MarketplaceOwnershipService marketplaceOwnershipService;
 
     MarketplaceItem item;
@@ -192,27 +197,23 @@ class MarketplacePackVersionCompatibilityTest {
 
     @Test
     void coinPurchaseExposesItemIdAndVersionOneIdentityAndLinksTheVersion() {
-        MarketplacePurchaseService service = new MarketplacePurchaseService(
-                itemRepository, purchaseRepository, userRepository, walletRepository,
-                walletTransactionRepository, packVersionService);
-        User buyer = new User();
-        buyer.setUserId("buyer");
-        UserWallet wallet = new UserWallet();
-        wallet.setUser(buyer);
-        wallet.setBalance(500);
-        when(itemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
-        when(purchaseRepository.existsByUserUserIdAndItemItemId("buyer", item.getItemId())).thenReturn(false);
-        when(userRepository.findById("buyer")).thenReturn(Optional.of(buyer));
-        when(walletRepository.findByUserIdForUpdate("buyer")).thenReturn(Optional.of(wallet));
-        when(purchaseRepository.save(any(MarketplacePurchase.class))).thenAnswer(invocation -> {
-            MarketplacePurchase saved = invocation.getArgument(0);
-            saved.setPurchaseId(UUID.randomUUID());
-            return saved;
-        });
+        MarketplacePurchaseService service = new MarketplacePurchaseService(packVersionService, versionCheckoutService);
+        when(versionCheckoutService.purchaseWithCoins(eq("buyer"), eq(version.getVersionId()), any()))
+                .thenReturn(MarketplaceVersionPurchaseResponse.builder()
+                        .saleId(UUID.randomUUID())
+                        .packId(version.getPack().getPackId())
+                        .packVersionId(version.getVersionId())
+                        .versionNo(1)
+                        .grossCoinAmount(100)
+                        .remainingCoinBalance(400)
+                        .purchasedAt(Instant.now())
+                        .build());
 
         MarketplacePurchaseResponse response = service.purchaseWithCoins("buyer", item.getItemId());
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+        verify(versionCheckoutService).purchaseWithCoins(eq("buyer"), eq(version.getVersionId()),
+                argThat(request -> request.getIdempotencyKey().startsWith("legacy-item-checkout:")));
     }
 
     private void assertIdentity(UUID itemId, UUID packId, UUID versionId, Integer versionNo) {

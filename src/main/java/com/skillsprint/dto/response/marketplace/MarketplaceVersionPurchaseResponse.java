@@ -1,5 +1,6 @@
 package com.skillsprint.dto.response.marketplace;
 
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -24,4 +25,5 @@ public class MarketplaceVersionPurchaseResponse {
     Integer creatorAmount;
     Integer platformAmount;
     Integer remainingCoinBalance;
+    Instant purchasedAt;
 }

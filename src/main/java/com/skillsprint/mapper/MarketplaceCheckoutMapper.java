@@ -28,6 +28,7 @@ public class MarketplaceCheckoutMapper {
                 .creatorAmount(settlement.getCreatorAmount())
                 .platformAmount(settlement.getPlatformAmount())
                 .remainingCoinBalance(remainingCoinBalance)
+                .purchasedAt(sale.getCreatedAt())
                 .build();
     }
 }

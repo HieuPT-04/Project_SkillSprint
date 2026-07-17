@@ -1,54 +1,55 @@
 package com.skillsprint.service.marketplace;
 
+import com.skillsprint.dto.request.marketplace.PurchaseMarketplacePackVersionRequest;
 import com.skillsprint.dto.response.marketplace.MarketplacePurchaseResponse;
-import com.skillsprint.entity.*;
-import com.skillsprint.enums.marketplace.*;
-import com.skillsprint.exception.*;
-import com.skillsprint.repository.*;
-import java.time.Instant;
+import com.skillsprint.dto.response.marketplace.MarketplaceVersionPurchaseResponse;
+import com.skillsprint.entity.MarketplacePackVersion;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service @RequiredArgsConstructor @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+/**
+ * Compatibility adapter for the legacy item checkout route.
+ *
+ * <p>Every new purchase must run through the version-aware checkout transaction so it records
+ * the entitlement and 80/20 settlement. The stable key makes a client retry of the old
+ * no-body route replay-safe until the frontend has migrated.
+ */
+@Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MarketplacePurchaseService {
-    MarketplaceItemRepository itemRepository;
-    MarketplacePurchaseRepository purchaseRepository;
-    UserRepository userRepository;
-    UserWalletRepository walletRepository;
-    WalletTransactionRepository walletTransactionRepository;
-    MarketplacePackVersionService packVersionService;
 
-    @Transactional
+    static final String LEGACY_ITEM_CHECKOUT_KEY_PREFIX = "legacy-item-checkout:";
+
+    MarketplacePackVersionService packVersionService;
+    MarketplaceVersionCheckoutService versionCheckoutService;
+
     public MarketplacePurchaseResponse purchaseWithCoins(String userId, UUID itemId) {
-        MarketplaceItem item = itemRepository.findById(itemId).filter(value -> value.getStatus() == MarketplaceItemStatus.PUBLISHED)
-                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
-        if (item.getCreator().getUserId().equals(userId)) throw new AppException(ErrorCode.MARKETPLACE_CREATOR_CANNOT_PURCHASE);
-        if (purchaseRepository.existsByUserUserIdAndItemItemId(userId, itemId)) throw new AppException(ErrorCode.MARKETPLACE_ALREADY_PURCHASED);
-        User buyer = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
-        UserWallet wallet = walletRepository.findByUserIdForUpdate(userId).orElseGet(() -> {
-            UserWallet created = new UserWallet(); created.setUser(buyer); return walletRepository.saveAndFlush(created);
-        });
-        int price = item.getPriceCoins();
-        if (wallet.getBalance() < price) throw new AppException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
-        int before = wallet.getBalance(); wallet.setBalance(before - price); walletRepository.save(wallet);
-        MarketplacePackVersion version = packVersionService.findByItemId(itemId).orElse(null);
-        MarketplacePurchase purchase = new MarketplacePurchase();
-        purchase.setUser(buyer); purchase.setItem(item); purchase.setPackVersion(version);
-        purchase.setPriceCoins(price); purchase.setPaymentMethod(MarketplacePaymentMethod.COIN);
-        purchase.setStatus(MarketplacePurchaseStatus.ACTIVE); purchase.setPurchasedAt(Instant.now()); purchase = purchaseRepository.save(purchase);
-        if (price > 0) {
-            WalletTransaction transaction = new WalletTransaction(); transaction.setWallet(wallet); transaction.setDirection(WalletTransactionDirection.DEBIT);
-            transaction.setAmount(price); transaction.setBalanceBefore(before); transaction.setBalanceAfter(wallet.getBalance());
-            transaction.setReferenceType(WalletTransactionReferenceType.MARKETPLACE_PURCHASE); transaction.setReferenceId(purchase.getPurchaseId());
-            walletTransactionRepository.save(transaction);
-        }
-        MarketplacePackVersionIdentity identity = MarketplacePackVersionIdentity.ofNullable(version);
-        return MarketplacePurchaseResponse.builder().purchaseId(purchase.getPurchaseId()).itemId(itemId)
-                .packId(identity.packId()).versionId(identity.versionId()).versionNo(identity.versionNo())
-                .priceCoins(price)
-                .remainingCoins(wallet.getBalance()).purchasedAt(purchase.getPurchasedAt()).build();
+        MarketplacePackVersion version = packVersionService.requireByItemId(itemId);
+        PurchaseMarketplacePackVersionRequest request = new PurchaseMarketplacePackVersionRequest();
+        request.setIdempotencyKey(legacyIdempotencyKey(userId, itemId));
+        MarketplaceVersionPurchaseResponse receipt = versionCheckoutService.purchaseWithCoins(
+                userId, version.getVersionId(), request);
+
+        return MarketplacePurchaseResponse.builder()
+                .purchaseId(receipt.getSaleId())
+                .itemId(itemId)
+                .packId(receipt.getPackId())
+                .versionId(receipt.getPackVersionId())
+                .versionNo(receipt.getVersionNo())
+                .priceCoins(receipt.getGrossCoinAmount())
+                .remainingCoins(receipt.getRemainingCoinBalance())
+                .purchasedAt(receipt.getPurchasedAt())
+                .build();
+    }
+
+    private String legacyIdempotencyKey(String userId, UUID itemId) {
+        UUID stableRequestId = UUID.nameUUIDFromBytes(
+                (userId + '\u0000' + itemId).getBytes(StandardCharsets.UTF_8));
+        return LEGACY_ITEM_CHECKOUT_KEY_PREFIX + stableRequestId;
     }
 }

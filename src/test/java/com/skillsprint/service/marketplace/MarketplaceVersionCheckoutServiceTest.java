@@ -34,6 +34,7 @@ import com.skillsprint.mapper.MarketplaceCheckoutMapper;
 import com.skillsprint.repository.CreatorEarningEntryRepository;
 import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
+import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceSaleRepository;
 import com.skillsprint.repository.MarketplaceSaleSettlementRepository;
 import com.skillsprint.repository.PlatformRevenueEntryRepository;
@@ -54,6 +55,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MarketplaceVersionCheckoutServiceTest {
 
     @Mock MarketplacePackVersionRepository versionRepository;
+    @Mock MarketplacePurchaseRepository purchaseRepository;
     @Mock MarketplaceSaleRepository saleRepository;
     @Mock MarketplaceEntitlementRepository entitlementRepository;
     @Mock MarketplaceSaleSettlementRepository settlementRepository;
@@ -74,6 +76,7 @@ class MarketplaceVersionCheckoutServiceTest {
     void setUp() {
         service = new MarketplaceVersionCheckoutService(
                 versionRepository,
+                purchaseRepository,
                 saleRepository,
                 entitlementRepository,
                 settlementRepository,
@@ -94,6 +97,7 @@ class MarketplaceVersionCheckoutServiceTest {
         version.setVersionId(versionId);
         version.setPack(pack);
         version.setVersionNo(1);
+        version.setLegacyItemId(UUID.randomUUID());
         version.setStatus(MarketplacePackVersionStatus.PUBLISHED);
         version.setUpdateType(MarketplacePackUpdateType.MAJOR);
         version.setTitle("Java Pack");
@@ -227,6 +231,7 @@ class MarketplaceVersionCheckoutServiceTest {
         targetVersion.setVersionId(targetVersionId);
         targetVersion.setPack(version.getPack());
         targetVersion.setVersionNo(2);
+        targetVersion.setStatus(MarketplacePackVersionStatus.PUBLISHED);
         targetVersion.setPriceCoins(200);
         targetVersion.setSaleable(true);
         MarketplaceEntitlement sourceEntitlement = new MarketplaceEntitlement();
@@ -267,6 +272,7 @@ class MarketplaceVersionCheckoutServiceTest {
         targetVersion.setVersionId(targetVersionId);
         targetVersion.setPack(version.getPack());
         targetVersion.setVersionNo(2);
+        targetVersion.setStatus(MarketplacePackVersionStatus.PUBLISHED);
         targetVersion.setPriceCoins(200);
         targetVersion.setSaleable(true);
         when(versionRepository.findByVersionIdForUpdate(targetVersionId)).thenReturn(Optional.of(targetVersion));
@@ -327,6 +333,34 @@ class MarketplaceVersionCheckoutServiceTest {
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS);
+    }
+
+    @Test
+    void rejectsAnActiveLegacyPurchaseBeforeDebitingAgain() {
+        when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
+                buyer.getUserId(), version.getLegacyItemId(), com.skillsprint.enums.marketplace.MarketplacePurchaseStatus.ACTIVE))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.purchaseWithCoins(buyer.getUserId(), versionId, request("legacy-owned")))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS);
+
+        verify(walletRepository, never()).save(any());
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsAVisibleButNonPublishedVersion() {
+        version.setStatus(MarketplacePackVersionStatus.DRAFT);
+        version.setSaleable(true);
+
+        assertThatThrownBy(() -> service.purchaseWithCoins(buyer.getUserId(), versionId, request("draft-version")))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_SALEABLE);
+
+        verify(walletRepository, never()).save(any());
     }
 
     private MarketplaceSale sale(String idempotencyKey) {
