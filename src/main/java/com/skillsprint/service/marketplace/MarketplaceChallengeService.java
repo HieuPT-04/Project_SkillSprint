@@ -20,18 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MarketplaceChallengeService {
     static final long SUSPICIOUS_DURATION_SECONDS = 5;
-    MarketplacePurchaseRepository purchaseRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     MarketplaceQuizAttemptRepository attemptRepository;
     UserRepository userRepository;
     MarketplaceChallengeSessionRepository sessionRepository;
     MarketplacePackVersionService packVersionService;
+    MarketplaceOwnershipService marketplaceOwnershipService;
 
     @Transactional
     public MarketplaceChallengeSessionResponse start(String userId, UUID itemId) {
-        if (!purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(userId, itemId,
-                MarketplacePurchaseStatus.ACTIVE))
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa mua Quiz Pack này");
+        marketplaceOwnershipService.requireActiveOwnership(userId, itemId, "Bạn chưa mua Quiz Pack này");
         MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
         Instant now = Instant.now();
@@ -53,9 +51,7 @@ public class MarketplaceChallengeService {
     @Transactional
     public MarketplaceQuizAttemptResponse submit(String userId, UUID itemId,
             SubmitMarketplaceChallengeRequest request) {
-        if (!purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(userId, itemId,
-                MarketplacePurchaseStatus.ACTIVE))
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn chưa mua Quiz Pack này");
+        marketplaceOwnershipService.requireActiveOwnership(userId, itemId, "Bạn chưa mua Quiz Pack này");
         MarketplaceChallengeSession session = sessionRepository
                 .findBySessionIdAndUserUserId(request.getSessionId(), userId)
                 .filter(value -> value.getItem().getItemId().equals(itemId) && value.getCompletedAt() == null

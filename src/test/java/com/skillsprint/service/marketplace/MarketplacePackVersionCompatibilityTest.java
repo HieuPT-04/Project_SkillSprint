@@ -2,7 +2,10 @@ package com.skillsprint.service.marketplace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +14,7 @@ import com.skillsprint.dto.response.marketplace.MarketplaceCatalogItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemDetailResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.dto.response.marketplace.MarketplacePurchaseResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceVersionPurchaseResponse;
 import com.skillsprint.dto.response.marketplace.PurchasedQuizPackResponse;
 import com.skillsprint.entity.MarketplaceItem;
 import com.skillsprint.entity.MarketplacePack;
@@ -23,6 +27,7 @@ import com.skillsprint.entity.UserWallet;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
 import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
 import com.skillsprint.repository.MarketplaceItemRepository;
+import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
@@ -52,10 +57,13 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
     @Mock MarketplaceReviewRepository reviewRepository;
     @Mock MarketplacePurchaseRepository purchaseRepository;
+    @Mock MarketplaceEntitlementRepository entitlementRepository;
     @Mock UserRepository userRepository;
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceVersionCheckoutService versionCheckoutService;
+    @Mock MarketplaceOwnershipService marketplaceOwnershipService;
 
     MarketplaceItem item;
     MarketplaceQuizPackSnapshot snapshot;
@@ -73,7 +81,18 @@ class MarketplacePackVersionCompatibilityTest {
         lenient().when(packVersionService.identitiesOf(any()))
                 .thenReturn(Map.of(item.getItemId(), identity));
         lenient().when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
+        lenient().when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
+        lenient().when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
+        lenient().when(entitlementRepository.findByBuyerUserIdAndStatusOrderByGrantedAtDesc(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
         lenient().when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot));
+        lenient().when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", item.getItemId(), "Bạn chưa mua Quiz Pack này"))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.LEGACY_PURCHASE, null));
     }
 
     @Test
@@ -127,7 +146,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedLibraryListExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, snapshotRepository, packVersionService);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
         when(purchaseRepository.findByUserUserIdAndStatusOrderByPurchasedAtDesc(
                 "buyer", MarketplacePurchaseStatus.ACTIVE)).thenReturn(List.of(purchase()));
 
@@ -139,9 +158,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedPackDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, snapshotRepository, packVersionService);
-        when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                "buyer", item.getItemId(), MarketplacePurchaseStatus.ACTIVE)).thenReturn(true);
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
 
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
@@ -149,28 +166,54 @@ class MarketplacePackVersionCompatibilityTest {
     }
 
     @Test
+    void legacyPurchasedPackStillOpensWhenVersionMappingIsMissing() {
+        MarketplaceLibraryService service = new MarketplaceLibraryService(
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+        when(packVersionService.identityOf(item.getItemId())).thenReturn(MarketplacePackVersionIdentity.EMPTY);
+
+        PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
+
+        assertThat(response.getItemId()).isEqualTo(item.getItemId());
+        assertThat(response.getVersionId()).isNull();
+    }
+
+    @Test
+    void entitlementOwnerCanOpenVersionContentWithoutLegacyPurchase() {
+        version.setTitle("Version content");
+        version.setSubject("Toan");
+        version.setQuestionCount(1);
+        version.setContent(new ObjectMapper().createObjectNode());
+        when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", item.getItemId(), "Bạn chưa mua Quiz Pack này"))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.ENTITLEMENT, version));
+
+        MarketplaceLibraryService service = new MarketplaceLibraryService(
+                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+        PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
+
+        assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+    }
+
+    @Test
     void coinPurchaseExposesItemIdAndVersionOneIdentityAndLinksTheVersion() {
-        MarketplacePurchaseService service = new MarketplacePurchaseService(
-                itemRepository, purchaseRepository, userRepository, walletRepository,
-                walletTransactionRepository, packVersionService);
-        User buyer = new User();
-        buyer.setUserId("buyer");
-        UserWallet wallet = new UserWallet();
-        wallet.setUser(buyer);
-        wallet.setBalance(500);
-        when(itemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
-        when(purchaseRepository.existsByUserUserIdAndItemItemId("buyer", item.getItemId())).thenReturn(false);
-        when(userRepository.findById("buyer")).thenReturn(Optional.of(buyer));
-        when(walletRepository.findByUserIdForUpdate("buyer")).thenReturn(Optional.of(wallet));
-        when(purchaseRepository.save(any(MarketplacePurchase.class))).thenAnswer(invocation -> {
-            MarketplacePurchase saved = invocation.getArgument(0);
-            saved.setPurchaseId(UUID.randomUUID());
-            return saved;
-        });
+        MarketplacePurchaseService service = new MarketplacePurchaseService(packVersionService, versionCheckoutService);
+        when(versionCheckoutService.purchaseWithCoins(eq("buyer"), eq(version.getVersionId()), any()))
+                .thenReturn(MarketplaceVersionPurchaseResponse.builder()
+                        .saleId(UUID.randomUUID())
+                        .packId(version.getPack().getPackId())
+                        .packVersionId(version.getVersionId())
+                        .versionNo(1)
+                        .grossCoinAmount(100)
+                        .remainingCoinBalance(400)
+                        .purchasedAt(Instant.now())
+                        .build());
 
         MarketplacePurchaseResponse response = service.purchaseWithCoins("buyer", item.getItemId());
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+        verify(versionCheckoutService).purchaseWithCoins(eq("buyer"), eq(version.getVersionId()),
+                argThat(request -> request.getIdempotencyKey().startsWith("legacy-item-checkout:")));
     }
 
     private void assertIdentity(UUID itemId, UUID packId, UUID versionId, Integer versionNo) {

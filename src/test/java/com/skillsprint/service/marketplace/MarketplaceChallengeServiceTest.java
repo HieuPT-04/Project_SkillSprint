@@ -6,10 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.skillsprint.entity.MarketplaceQuizAttempt;
 import com.skillsprint.entity.User;
-import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
 import com.skillsprint.enums.marketplace.MarketplaceQuizAttemptType;
 import com.skillsprint.exception.AppException;
-import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceQuizAttemptRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.UserRepository;
@@ -25,18 +23,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class MarketplaceChallengeServiceTest {
 
-    @Mock MarketplacePurchaseRepository purchaseRepository;
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
     @Mock MarketplaceQuizAttemptRepository attemptRepository;
     @Mock UserRepository userRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceOwnershipService marketplaceOwnershipService;
     @InjectMocks MarketplaceChallengeService service;
 
     @Test
-    void submitRejectsBuyerWithoutActivePurchase() {
+    void submitRejectsBuyerWithoutMarketplaceOwnership() {
         UUID itemId = UUID.randomUUID();
-        when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                "buyer", itemId, MarketplacePurchaseStatus.ACTIVE)).thenReturn(false);
+        when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", itemId, "Bạn chưa mua Quiz Pack này"))
+                .thenThrow(new AppException(com.skillsprint.exception.ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> service.submit("buyer", itemId, new com.skillsprint.dto.request.marketplace.SubmitMarketplaceChallengeRequest()))
                 .isInstanceOf(AppException.class);

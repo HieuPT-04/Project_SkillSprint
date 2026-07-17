@@ -12,9 +12,11 @@ import static org.mockito.Mockito.when;
 
 import com.skillsprint.configuration.s3.S3Properties;
 import com.skillsprint.dto.request.feedback.CreateFeedbackUploadUrlRequest;
+import com.skillsprint.dto.request.marketplace.CreateCreatorPayoutQrUploadUrlRequest;
 import com.skillsprint.dto.request.user.ConfirmAvatarUploadRequest;
 import com.skillsprint.dto.request.user.CreateAvatarUploadUrlRequest;
 import com.skillsprint.dto.response.feedback.FeedbackUploadUrlResponse;
+import com.skillsprint.dto.response.marketplace.CreatorPayoutQrUploadUrlResponse;
 import com.skillsprint.dto.response.user.AvatarUploadUrlResponse;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -112,6 +114,47 @@ class S3PresignedUrlServiceTest {
     }
 
     @Test
+    void createCreatorPayoutQrUploadUrlUsesPrivateCreatorPrefixWithoutAViewUrl() {
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class)))
+                .thenReturn(presignedPut("https://s3.example.com/payout-qr-put"));
+
+        CreatorPayoutQrUploadUrlResponse response = s3PresignedUrlService.createCreatorPayoutQrUploadUrl(
+                "creator-1",
+                payoutQrRequest("bank-qr.webp", "image/webp")
+        );
+
+        assertEquals("https://s3.example.com/payout-qr-put", response.getUploadUrl());
+        assertTrue(response.getObjectKey().startsWith("creator-payouts/creator-1/qr/"));
+        assertTrue(response.getObjectKey().endsWith(".webp"));
+        verify(s3Presigner, never()).presignGetObject(any(GetObjectPresignRequest.class));
+    }
+
+    @Test
+    void confirmCreatorPayoutQrRejectsForeignKeyBeforeCallingS3() {
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> s3PresignedUrlService.confirmCreatorPayoutQrUpload(
+                        "creator-1", "creator-payouts/creator-2/qr/other.png")
+        );
+
+        assertEquals(ErrorCode.INVALID_CREATOR_PAYOUT_QR_OBJECT_KEY, exception.getErrorCode());
+        verify(s3Client, never()).headObject(any(HeadObjectRequest.class));
+    }
+
+    @Test
+    void confirmCreatorPayoutQrRequiresAllowedImageMetadataAndSize() {
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/png")
+                .contentLength(5L * 1024 * 1024)
+                .build());
+
+        String key = s3PresignedUrlService.confirmCreatorPayoutQrUpload(
+                "creator-1", "creator-payouts/creator-1/qr/bank.png");
+
+        assertEquals("creator-payouts/creator-1/qr/bank.png", key);
+    }
+
+    @Test
     void confirmAvatarUploadChecksOwnedKeyBeforeHeadObject() {
         ConfirmAvatarUploadRequest request = confirmAvatar("  users/user-1/avatar/picture.png  ");
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
@@ -170,6 +213,13 @@ class S3PresignedUrlServiceTest {
 
     private CreateFeedbackUploadUrlRequest feedbackRequest(String fileName, String contentType) {
         CreateFeedbackUploadUrlRequest request = new CreateFeedbackUploadUrlRequest();
+        request.setFileName(fileName);
+        request.setContentType(contentType);
+        return request;
+    }
+
+    private CreateCreatorPayoutQrUploadUrlRequest payoutQrRequest(String fileName, String contentType) {
+        CreateCreatorPayoutQrUploadUrlRequest request = new CreateCreatorPayoutQrUploadUrlRequest();
         request.setFileName(fileName);
         request.setContentType(contentType);
         return request;
