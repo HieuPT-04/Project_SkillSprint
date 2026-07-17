@@ -4,9 +4,13 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.SubmitMarketplaceRankedAttemptRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceRankedAttemptResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceRankedAttemptSubmissionResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceLeaderboardEntryResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceRankedAttemptHistoryResponse;
 import com.skillsprint.service.marketplace.MarketplaceRankedAttemptService;
+import com.skillsprint.service.marketplace.MarketplaceRankedAttemptHistoryService;
 import com.skillsprint.service.marketplace.MarketplaceRankedAttemptSubmissionService;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +33,27 @@ public class MarketplaceRankedAttemptController {
 
     MarketplaceRankedAttemptService rankedAttemptService;
     MarketplaceRankedAttemptSubmissionService rankedAttemptSubmissionService;
+    MarketplaceRankedAttemptHistoryService rankedAttemptHistoryService;
+
+    @GetMapping("/{versionId}/leaderboard")
+    public ResponseEntity<ApiResponse<List<MarketplaceLeaderboardEntryResponse>>> leaderboard(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID versionId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                rankedAttemptHistoryService.leaderboard(jwt.getSubject(), versionId)
+        ));
+    }
+
+    @GetMapping("/{versionId}/ranked-attempts/me")
+    public ResponseEntity<ApiResponse<List<MarketplaceRankedAttemptHistoryResponse>>> history(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID versionId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                rankedAttemptHistoryService.history(jwt.getSubject(), versionId)
+        ));
+    }
 
     @PostMapping("/{versionId}/ranked-attempts")
     public ResponseEntity<ApiResponse<MarketplaceRankedAttemptResponse>> startOrResume(

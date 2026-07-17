@@ -30,6 +30,17 @@ public interface MarketplaceRankedAttemptRepository extends JpaRepository<Market
             UUID packVersionId
     );
 
+    List<MarketplaceRankedAttempt>
+    findTop10ByPackVersionVersionIdAndStatusAndSuspiciousFalseAndLeaderboardEligibleTrueOrderByScoreDescDurationSecondsAscCompletedAtAsc(
+            UUID packVersionId,
+            MarketplaceRankedAttemptStatus status
+    );
+
+    List<MarketplaceRankedAttempt> findTop50ByBuyerUserIdAndPackVersionVersionIdOrderByStartedAtDesc(
+            String buyerId,
+            UUID packVersionId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select attempt from MarketplaceRankedAttempt attempt where attempt.attemptId = :attemptId")
     java.util.Optional<MarketplaceRankedAttempt> findByAttemptIdForUpdate(@Param("attemptId") UUID attemptId);
