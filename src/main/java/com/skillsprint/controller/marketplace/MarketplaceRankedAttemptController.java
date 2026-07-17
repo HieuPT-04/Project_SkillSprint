@@ -1,8 +1,12 @@
 package com.skillsprint.controller.marketplace;
 
 import com.skillsprint.common.ApiResponse;
+import com.skillsprint.dto.request.marketplace.SubmitMarketplaceRankedAttemptRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceRankedAttemptResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceRankedAttemptSubmissionResponse;
 import com.skillsprint.service.marketplace.MarketplaceRankedAttemptService;
+import com.skillsprint.service.marketplace.MarketplaceRankedAttemptSubmissionService;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketplaceRankedAttemptController {
 
     MarketplaceRankedAttemptService rankedAttemptService;
+    MarketplaceRankedAttemptSubmissionService rankedAttemptSubmissionService;
 
     @PostMapping("/{versionId}/ranked-attempts")
     public ResponseEntity<ApiResponse<MarketplaceRankedAttemptResponse>> startOrResume(
@@ -42,6 +48,19 @@ public class MarketplaceRankedAttemptController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 rankedAttemptService.getInProgress(jwt.getSubject(), versionId)
+        ));
+    }
+
+    @PostMapping("/{versionId}/ranked-attempts/{attemptId}/submit")
+    public ResponseEntity<ApiResponse<MarketplaceRankedAttemptSubmissionResponse>> submit(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID versionId,
+            @PathVariable UUID attemptId,
+            @Valid @RequestBody SubmitMarketplaceRankedAttemptRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Nộp Quiz xếp hạng thành công",
+                rankedAttemptSubmissionService.submit(jwt.getSubject(), versionId, attemptId, request)
         ));
     }
 }
