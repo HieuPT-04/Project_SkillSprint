@@ -298,6 +298,9 @@ public class CreatorPayoutService {
         }
         Map<UUID, AllocationAmounts> amounts = allocationAmountsFor(entries.values());
         for (CreatorEarningEntry entry : entries.values()) {
+            if (entry.getState() == CreatorEarningState.REVERSED) {
+                continue;
+            }
             AllocationAmounts allocation = amounts.getOrDefault(entry.getEarningEntryId(), AllocationAmounts.EMPTY);
             if (allocation.paid() >= entry.getAmount()) {
                 entry.setState(CreatorEarningState.PAID);
@@ -357,6 +360,9 @@ public class CreatorPayoutService {
     }
 
     private int availableAmount(CreatorEarningEntry earning, AllocationAmounts amounts) {
+        if (earning.getState() == CreatorEarningState.REVERSED) {
+            return 0;
+        }
         return Math.max(0, earning.getAmount() - amounts.reserved() - amounts.paid());
     }
 

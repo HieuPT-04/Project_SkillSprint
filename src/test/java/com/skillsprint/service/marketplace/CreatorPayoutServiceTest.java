@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 
 import com.skillsprint.dto.request.marketplace.CompleteCreatorPayoutRequest;
 import com.skillsprint.dto.request.marketplace.CreateCreatorPayoutRequest;
@@ -15,8 +16,11 @@ import com.skillsprint.entity.CreatorEarningEntry;
 import com.skillsprint.entity.CreatorPayout;
 import com.skillsprint.entity.CreatorPayoutAllocation;
 import com.skillsprint.entity.CreatorPayoutDestination;
+import com.skillsprint.entity.MarketplaceSale;
+import com.skillsprint.entity.MarketplaceSaleSettlement;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.marketplace.CreatorPayoutAllocationState;
+import com.skillsprint.enums.marketplace.CreatorEarningState;
 import com.skillsprint.enums.marketplace.CreatorPayoutStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -66,7 +70,7 @@ class CreatorPayoutServiceTest {
         admin = user("admin", "admin@example.com");
         lenient().when(userRepository.findById("creator")).thenReturn(Optional.of(creator));
         lenient().when(userRepository.findById("admin")).thenReturn(Optional.of(admin));
-        when(payoutRepository.save(any(CreatorPayout.class))).thenAnswer(invocation -> {
+        lenient().when(payoutRepository.save(any(CreatorPayout.class))).thenAnswer(invocation -> {
             CreatorPayout payout = invocation.getArgument(0);
             if (payout.getPayoutId() == null) {
                 payout.setPayoutId(UUID.randomUUID());
@@ -161,6 +165,28 @@ class CreatorPayoutServiceTest {
         verify(payoutRepository).save(argThat(saved ->
                 destination.getQrObjectKey().equals(saved.getDestinationQrObjectKey())
                         && saved.getDestinationAccountNumberEncrypted() == null));
+    }
+
+    @Test
+    void reversedEarningsAreNeverAvailableForDisplayOrPayout() {
+        CreatorEarningEntry reversed = earning(100);
+        reversed.setState(CreatorEarningState.REVERSED);
+        MarketplaceSale sale = new MarketplaceSale();
+        sale.setSaleId(UUID.randomUUID());
+        MarketplaceSaleSettlement settlement = new MarketplaceSaleSettlement();
+        settlement.setSettlementId(UUID.randomUUID());
+        settlement.setSale(sale);
+        reversed.setSettlement(settlement);
+        when(earningEntryRepository.findByCreatorUserIdOrderByCreatedAtDesc("creator")).thenReturn(List.of(reversed));
+        when(allocationRepository.findByPayoutCreatorUserIdOrderByCreatedAtDesc("creator")).thenReturn(List.of());
+        when(destinationRepository.findByCreatorUserIdAndActiveTrue("creator")).thenReturn(Optional.of(destination()));
+
+        assertThat(service.getEarnings("creator").getAvailableAmount()).isZero();
+        assertThatThrownBy(() -> service.requestPayout("creator", request(1)))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_CREATOR_EARNINGS_INSUFFICIENT);
+        verify(payoutRepository, never()).save(any(CreatorPayout.class));
     }
 
     private CreatorPayout payout(CreatorPayoutStatus status, int amount) {
