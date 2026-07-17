@@ -33,8 +33,10 @@ import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Function;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -146,7 +148,7 @@ public class MarketplaceVersionCheckoutService {
         int balanceAfter = balanceBefore - price;
         if (wallet != null && price > 0) {
             wallet.setBalance(balanceAfter);
-            walletRepository.save(wallet);
+            persist(CheckoutPersistencePhase.WALLET, wallet, walletRepository::saveAndFlush);
         }
 
         MarketplaceSale sale = new MarketplaceSale();
@@ -161,7 +163,7 @@ public class MarketplaceVersionCheckoutService {
         sale.setCoinToVndRate(COIN_TO_VND_RATE);
         sale.setStatus(MarketplaceSaleStatus.COMPLETED);
         sale.setIdempotencyKey(request.getIdempotencyKey());
-        sale = saleRepository.save(sale);
+        sale = persist(CheckoutPersistencePhase.SALE, sale, saleRepository::saveAndFlush);
 
         MarketplaceEntitlement entitlement = new MarketplaceEntitlement();
         entitlement.setBuyer(buyer);
@@ -169,7 +171,7 @@ public class MarketplaceVersionCheckoutService {
         entitlement.setSourceSale(sale);
         entitlement.setStatus(MarketplaceEntitlementStatus.ACTIVE);
         entitlement.setGrantedAt(Instant.now());
-        entitlement = entitlementRepository.save(entitlement);
+        entitlement = persist(CheckoutPersistencePhase.ENTITLEMENT, entitlement, entitlementRepository::saveAndFlush);
 
         int creatorAmount = Math.toIntExact((long) price * CREATOR_SHARE_BPS / 10_000);
         int platformAmount = price - creatorAmount;
@@ -182,20 +184,20 @@ public class MarketplaceVersionCheckoutService {
         settlement.setPlatformAmount(platformAmount);
         settlement.setCoinToVndRate(COIN_TO_VND_RATE);
         settlement.setStatus(MarketplaceSettlementStatus.RECORDED);
-        settlement = settlementRepository.save(settlement);
+        settlement = persist(CheckoutPersistencePhase.SETTLEMENT, settlement, settlementRepository::saveAndFlush);
 
         CreatorEarningEntry earning = new CreatorEarningEntry();
         earning.setCreator(version.getPack().getCreator());
         earning.setSettlement(settlement);
         earning.setAmount(creatorAmount);
         earning.setState(CreatorEarningState.PENDING);
-        earningEntryRepository.save(earning);
+        persist(CheckoutPersistencePhase.CREATOR_EARNING, earning, earningEntryRepository::saveAndFlush);
 
         PlatformRevenueEntry revenue = new PlatformRevenueEntry();
         revenue.setSettlement(settlement);
         revenue.setSale(sale);
         revenue.setAmount(platformAmount);
-        platformRevenueEntryRepository.save(revenue);
+        persist(CheckoutPersistencePhase.PLATFORM_REVENUE, revenue, platformRevenueEntryRepository::saveAndFlush);
 
         if (wallet != null && price > 0) {
             WalletTransaction transaction = new WalletTransaction();
@@ -206,10 +208,12 @@ public class MarketplaceVersionCheckoutService {
             transaction.setBalanceAfter(balanceAfter);
             transaction.setReferenceType(WalletTransactionReferenceType.MARKETPLACE_SALE);
             transaction.setReferenceId(sale.getSaleId());
-            walletTransactionRepository.save(transaction);
+            persist(CheckoutPersistencePhase.WALLET_TRANSACTION, transaction, walletTransactionRepository::saveAndFlush);
         }
 
-        checkoutAuditService.recordCompletedCheckout(sale, settlement);
+        MarketplaceSale persistedSale = sale;
+        MarketplaceSaleSettlement persistedSettlement = settlement;
+        persist(CheckoutPersistencePhase.AUDIT, () -> checkoutAuditService.recordCompletedCheckout(persistedSale, persistedSettlement));
 
         return checkoutMapper.toResponse(sale, entitlement, settlement, balanceAfter);
     }
@@ -249,5 +253,57 @@ public class MarketplaceVersionCheckoutService {
                 .map(WalletTransaction::getBalanceAfter)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_CHECKOUT_IDEMPOTENCY_CONFLICT));
         return checkoutMapper.toResponse(sale, entitlement, settlement, balanceAfter);
+    }
+
+    private <T> T persist(CheckoutPersistencePhase phase, T value, Function<T, T> write) {
+        try {
+            return write.apply(value);
+        } catch (AppException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw checkoutPersistenceFailure(phase, exception);
+        }
+    }
+
+    private void persist(CheckoutPersistencePhase phase, Runnable write) {
+        try {
+            write.run();
+        } catch (AppException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw checkoutPersistenceFailure(phase, exception);
+        }
+    }
+
+    private AppException checkoutPersistenceFailure(CheckoutPersistencePhase phase, RuntimeException exception) {
+        return new AppException(
+                ErrorCode.MARKETPLACE_CHECKOUT_PERSISTENCE_FAILED,
+                "Không thể hoàn tất giao dịch Marketplace. Mã chẩn đoán: MKT-CHK-"
+                        + phase
+                        + "-"
+                        + findSqlState(exception)
+        );
+    }
+
+    private String findSqlState(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof SQLException sqlException && sqlException.getSQLState() != null) {
+                return sqlException.getSQLState();
+            }
+            current = current.getCause();
+        }
+        return "UNKNOWN";
+    }
+
+    private enum CheckoutPersistencePhase {
+        WALLET,
+        SALE,
+        ENTITLEMENT,
+        SETTLEMENT,
+        CREATOR_EARNING,
+        PLATFORM_REVENUE,
+        WALLET_TRANSACTION,
+        AUDIT
     }
 }

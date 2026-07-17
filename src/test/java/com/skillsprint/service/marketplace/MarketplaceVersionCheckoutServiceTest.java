@@ -42,6 +42,7 @@ import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +51,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class MarketplaceVersionCheckoutServiceTest {
@@ -120,17 +122,17 @@ class MarketplaceVersionCheckoutServiceTest {
                 .thenReturn(Optional.empty());
         lenient().when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
                 buyer.getUserId(), versionId, MarketplaceEntitlementStatus.ACTIVE)).thenReturn(false);
-        lenient().when(saleRepository.save(any(MarketplaceSale.class))).thenAnswer(invocation -> {
+        lenient().when(saleRepository.saveAndFlush(any(MarketplaceSale.class))).thenAnswer(invocation -> {
             MarketplaceSale sale = invocation.getArgument(0);
             sale.setSaleId(UUID.randomUUID());
             return sale;
         });
-        lenient().when(entitlementRepository.save(any(MarketplaceEntitlement.class))).thenAnswer(invocation -> {
+        lenient().when(entitlementRepository.saveAndFlush(any(MarketplaceEntitlement.class))).thenAnswer(invocation -> {
             MarketplaceEntitlement entitlement = invocation.getArgument(0);
             entitlement.setEntitlementId(UUID.randomUUID());
             return entitlement;
         });
-        lenient().when(settlementRepository.save(any(MarketplaceSaleSettlement.class))).thenAnswer(invocation -> {
+        lenient().when(settlementRepository.saveAndFlush(any(MarketplaceSaleSettlement.class))).thenAnswer(invocation -> {
             MarketplaceSaleSettlement settlement = invocation.getArgument(0);
             settlement.setSettlementId(UUID.randomUUID());
             return settlement;
@@ -150,35 +152,58 @@ class MarketplaceVersionCheckoutServiceTest {
         assertThat(response.getRemainingCoinBalance()).isEqualTo(400);
 
         ArgumentCaptor<MarketplaceSale> saleCaptor = ArgumentCaptor.forClass(MarketplaceSale.class);
-        verify(saleRepository).save(saleCaptor.capture());
+        verify(saleRepository).saveAndFlush(saleCaptor.capture());
         assertThat(saleCaptor.getValue().getStatus()).isEqualTo(MarketplaceSaleStatus.COMPLETED);
         assertThat(saleCaptor.getValue().getGrossVndAmount()).isEqualTo(100L);
         assertThat(saleCaptor.getValue().getCoinToVndRate()).isEqualByComparingTo(new BigDecimal("1.0000"));
 
         ArgumentCaptor<MarketplaceEntitlement> entitlementCaptor = ArgumentCaptor.forClass(MarketplaceEntitlement.class);
-        verify(entitlementRepository).save(entitlementCaptor.capture());
+        verify(entitlementRepository).saveAndFlush(entitlementCaptor.capture());
         assertThat(entitlementCaptor.getValue().getStatus()).isEqualTo(MarketplaceEntitlementStatus.ACTIVE);
 
         ArgumentCaptor<MarketplaceSaleSettlement> settlementCaptor = ArgumentCaptor.forClass(MarketplaceSaleSettlement.class);
-        verify(settlementRepository).save(settlementCaptor.capture());
+        verify(settlementRepository).saveAndFlush(settlementCaptor.capture());
         assertThat(settlementCaptor.getValue().getCreatorShareBps()).isEqualTo(8_000);
         assertThat(settlementCaptor.getValue().getPlatformShareBps()).isEqualTo(2_000);
         assertThat(settlementCaptor.getValue().getStatus()).isEqualTo(MarketplaceSettlementStatus.RECORDED);
 
         ArgumentCaptor<CreatorEarningEntry> earningCaptor = ArgumentCaptor.forClass(CreatorEarningEntry.class);
-        verify(earningEntryRepository).save(earningCaptor.capture());
+        verify(earningEntryRepository).saveAndFlush(earningCaptor.capture());
         assertThat(earningCaptor.getValue().getAmount()).isEqualTo(80);
         assertThat(earningCaptor.getValue().getState()).isEqualTo(CreatorEarningState.PENDING);
 
         ArgumentCaptor<PlatformRevenueEntry> revenueCaptor = ArgumentCaptor.forClass(PlatformRevenueEntry.class);
-        verify(platformRevenueEntryRepository).save(revenueCaptor.capture());
+        verify(platformRevenueEntryRepository).saveAndFlush(revenueCaptor.capture());
         assertThat(revenueCaptor.getValue().getAmount()).isEqualTo(20);
 
         ArgumentCaptor<WalletTransaction> transactionCaptor = ArgumentCaptor.forClass(WalletTransaction.class);
-        verify(walletTransactionRepository).save(transactionCaptor.capture());
+        verify(walletTransactionRepository).saveAndFlush(transactionCaptor.capture());
         assertThat(transactionCaptor.getValue().getReferenceType()).isEqualTo(WalletTransactionReferenceType.MARKETPLACE_SALE);
         assertThat(transactionCaptor.getValue().getBalanceAfter()).isEqualTo(400);
         verify(checkoutAuditService).recordCompletedCheckout(saleCaptor.getValue(), settlementCaptor.getValue());
+    }
+
+    @Test
+    void returnsASafeSalePersistenceDiagnosticAndStopsRemainingWrites() {
+        when(saleRepository.saveAndFlush(any(MarketplaceSale.class))).thenThrow(
+                new DataIntegrityViolationException("database failure", new SQLException("hidden", "23505")));
+
+        assertThatThrownBy(() -> service.purchaseWithCoins(buyer.getUserId(), versionId, request("checkout-write-failure")))
+                .isInstanceOf(AppException.class)
+                .satisfies(exception -> {
+                    AppException appException = (AppException) exception;
+                    assertThat(appException.getErrorCode())
+                            .isEqualTo(ErrorCode.MARKETPLACE_CHECKOUT_PERSISTENCE_FAILED);
+                    assertThat(appException.getMessage()).isEqualTo(
+                            "Không thể hoàn tất giao dịch Marketplace. Mã chẩn đoán: MKT-CHK-SALE-23505");
+                });
+
+        verify(entitlementRepository, never()).saveAndFlush(any());
+        verify(settlementRepository, never()).saveAndFlush(any());
+        verify(earningEntryRepository, never()).saveAndFlush(any());
+        verify(platformRevenueEntryRepository, never()).saveAndFlush(any());
+        verify(walletTransactionRepository, never()).saveAndFlush(any());
+        verify(checkoutAuditService, never()).recordCompletedCheckout(any(), any());
     }
 
     @Test
@@ -203,9 +228,9 @@ class MarketplaceVersionCheckoutServiceTest {
 
         assertThat(response.getSaleId()).isEqualTo(sale.getSaleId());
         assertThat(wallet.getBalance()).isEqualTo(500);
-        verify(walletRepository, never()).save(any());
-        verify(earningEntryRepository, never()).save(any());
-        verify(platformRevenueEntryRepository, never()).save(any());
+        verify(walletRepository, never()).saveAndFlush(any());
+        verify(earningEntryRepository, never()).saveAndFlush(any());
+        verify(platformRevenueEntryRepository, never()).saveAndFlush(any());
         verify(checkoutAuditService, never()).recordCompletedCheckout(any(), any());
     }
 
@@ -221,7 +246,7 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_CHECKOUT_IDEMPOTENCY_CONFLICT);
 
-        verify(walletRepository, never()).save(any());
+        verify(walletRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -259,7 +284,7 @@ class MarketplaceVersionCheckoutServiceTest {
         assertThat(response.getGrossCoinAmount()).isEqualTo(200);
 
         ArgumentCaptor<MarketplaceSale> saleCaptor = ArgumentCaptor.forClass(MarketplaceSale.class);
-        verify(saleRepository).save(saleCaptor.capture());
+        verify(saleRepository).saveAndFlush(saleCaptor.capture());
         assertThat(saleCaptor.getValue().getSourceEntitlement()).isSameAs(sourceEntitlement);
         assertThat(saleCaptor.getValue().getOriginalGrossCoinAmount()).isEqualTo(200);
         assertThat(saleCaptor.getValue().getDiscountCoinAmount()).isZero();
@@ -289,7 +314,7 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_UPGRADE_SOURCE_ENTITLEMENT_NOT_FOUND);
 
-        verify(saleRepository, never()).save(any());
+        verify(saleRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -301,8 +326,8 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_SALEABLE);
 
-        verify(walletRepository, never()).save(any());
-        verify(saleRepository, never()).save(any());
+        verify(walletRepository, never()).saveAndFlush(any());
+        verify(saleRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -314,9 +339,9 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
 
-        verify(saleRepository, never()).save(any());
-        verify(entitlementRepository, never()).save(any());
-        verify(settlementRepository, never()).save(any());
+        verify(saleRepository, never()).saveAndFlush(any());
+        verify(entitlementRepository, never()).saveAndFlush(any());
+        verify(settlementRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -346,8 +371,8 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_ENTITLEMENT_ALREADY_EXISTS);
 
-        verify(walletRepository, never()).save(any());
-        verify(saleRepository, never()).save(any());
+        verify(walletRepository, never()).saveAndFlush(any());
+        verify(saleRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -360,7 +385,7 @@ class MarketplaceVersionCheckoutServiceTest {
                 .extracting(error -> ((AppException) error).getErrorCode())
                 .isEqualTo(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_SALEABLE);
 
-        verify(walletRepository, never()).save(any());
+        verify(walletRepository, never()).saveAndFlush(any());
     }
 
     private MarketplaceSale sale(String idempotencyKey) {
