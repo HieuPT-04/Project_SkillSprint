@@ -18,6 +18,7 @@ public class MarketplaceItemDetailResponse {
     String description;
     String subject;
     String creatorName;
+    String creatorAvatarUrl;
     Integer priceCoins;
     Integer chapterCount;
     Integer quizCount;

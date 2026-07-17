@@ -35,6 +35,7 @@ import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +66,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock MarketplacePackVersionService packVersionService;
     @Mock MarketplaceVersionCheckoutService versionCheckoutService;
     @Mock MarketplaceOwnershipService marketplaceOwnershipService;
+    @Mock S3PresignedUrlService s3PresignedUrlService;
 
     MarketplaceItem item;
     MarketplaceQuizPackSnapshot snapshot;
@@ -99,7 +101,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void catalogListExposesItemIdAndVersionOneIdentity() {
         MarketplaceCatalogService service = new MarketplaceCatalogService(
-                itemRepository, snapshotRepository, reviewRepository, packVersionService);
+                itemRepository, snapshotRepository, reviewRepository, packVersionService, s3PresignedUrlService);
         when(itemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED))
                 .thenReturn(List.of(item));
         when(reviewRepository.findByItemItemId(item.getItemId())).thenReturn(List.of());
@@ -112,7 +114,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void catalogDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceCatalogService service = new MarketplaceCatalogService(
-                itemRepository, snapshotRepository, reviewRepository, packVersionService);
+                itemRepository, snapshotRepository, reviewRepository, packVersionService, s3PresignedUrlService);
         when(itemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
         when(reviewRepository.findByItemItemId(item.getItemId())).thenReturn(List.of());
 

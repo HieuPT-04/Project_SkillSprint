@@ -12,6 +12,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceItemRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class MarketplaceCatalogService {
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     MarketplaceReviewRepository reviewRepository;
     MarketplacePackVersionService packVersionService;
+    S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional(readOnly = true)
     public List<MarketplaceCatalogItemResponse> getPublishedItems(String subject) {
@@ -97,6 +99,7 @@ public class MarketplaceCatalogService {
                 .description(item.getDescription())
                 .subject(item.getSubject())
                 .creatorName(item.getCreator().getFullName())
+                .creatorAvatarUrl(s3PresignedUrlService.createViewUrl(item.getCreator().getAvatarObjectKey()))
                 .priceCoins(item.getPriceCoins())
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
