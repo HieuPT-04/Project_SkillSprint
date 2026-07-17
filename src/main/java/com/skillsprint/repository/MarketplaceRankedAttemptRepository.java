@@ -5,6 +5,10 @@ import com.skillsprint.enums.marketplace.MarketplaceRankedAttemptStatus;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MarketplaceRankedAttemptRepository extends JpaRepository<MarketplaceRankedAttempt, UUID> {
@@ -20,4 +24,13 @@ public interface MarketplaceRankedAttemptRepository extends JpaRepository<Market
             UUID packVersionId,
             LocalDate attemptDate
     );
+
+    boolean existsByBuyerUserIdAndPackVersionVersionIdAndLeaderboardEligibleTrue(
+            String buyerId,
+            UUID packVersionId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select attempt from MarketplaceRankedAttempt attempt where attempt.attemptId = :attemptId")
+    java.util.Optional<MarketplaceRankedAttempt> findByAttemptIdForUpdate(@Param("attemptId") UUID attemptId);
 }

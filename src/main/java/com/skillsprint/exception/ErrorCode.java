@@ -122,6 +122,9 @@ public enum ErrorCode {
     MARKETPLACE_RANKED_DEFINITION_UNAVAILABLE("Quiz xếp hạng chưa sẵn sàng cho phiên bản gói học liệu này", HttpStatus.CONFLICT),
     MARKETPLACE_RANKED_ATTEMPT_NOT_FOUND("Không có lượt làm Quiz xếp hạng đang diễn ra", HttpStatus.NOT_FOUND),
     MARKETPLACE_RANKED_ATTEMPT_LIMIT_REACHED("Bạn đã dùng hết lượt làm Quiz xếp hạng hôm nay", HttpStatus.CONFLICT),
+    MARKETPLACE_RANKED_ATTEMPT_INVALID("Lượt làm Quiz xếp hạng không hợp lệ", HttpStatus.CONFLICT),
+    MARKETPLACE_RANKED_ATTEMPT_EXPIRED("Lượt làm Quiz xếp hạng đã hết hạn", HttpStatus.CONFLICT),
+    MARKETPLACE_RANKED_SUBMIT_IDEMPOTENCY_CONFLICT("Khóa nộp bài đã được dùng với đáp án khác", HttpStatus.CONFLICT),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
