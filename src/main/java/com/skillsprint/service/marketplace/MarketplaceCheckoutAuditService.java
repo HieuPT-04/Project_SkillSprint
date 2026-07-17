@@ -41,7 +41,7 @@ public class MarketplaceCheckoutAuditService {
         log.setDescription("Ghi nhận thanh toán Marketplace thành công");
         log.setNewValue(toJson(checkoutSnapshot(sale, settlement)));
         log.setMetadata(toJson(metadata(sale)));
-        activityLogRepository.save(log);
+        activityLogRepository.saveAndFlush(log);
     }
 
     private Map<String, Object> checkoutSnapshot(MarketplaceSale sale, MarketplaceSaleSettlement settlement) {

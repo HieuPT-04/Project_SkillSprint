@@ -35,7 +35,7 @@ class MarketplaceCheckoutAuditServiceTest {
         service.recordCompletedCheckout(sale, settlement());
 
         ArgumentCaptor<BusinessActivityLog> logCaptor = ArgumentCaptor.forClass(BusinessActivityLog.class);
-        verify(repository).save(logCaptor.capture());
+        verify(repository).saveAndFlush(logCaptor.capture());
         BusinessActivityLog log = logCaptor.getValue();
         assertThat(log.getUser()).isSameAs(sale.getBuyer());
         assertThat(log.getEntityType()).isEqualTo(BusinessEntityType.MARKETPLACE_SALE);
@@ -57,7 +57,7 @@ class MarketplaceCheckoutAuditServiceTest {
         service.recordCompletedCheckout(sale(true), settlement());
 
         ArgumentCaptor<BusinessActivityLog> logCaptor = ArgumentCaptor.forClass(BusinessActivityLog.class);
-        verify(repository).save(logCaptor.capture());
+        verify(repository).saveAndFlush(logCaptor.capture());
         assertThat(logCaptor.getValue().getActionType())
                 .isEqualTo(BusinessActionType.MARKETPLACE_VERSION_UPGRADE_COMPLETED);
     }
@@ -73,7 +73,7 @@ class MarketplaceCheckoutAuditServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Unable to serialize marketplace checkout audit event");
 
-        verify(repository, never()).save(Mockito.any());
+        verify(repository, never()).saveAndFlush(Mockito.any());
     }
 
     private MarketplaceSale sale(boolean upgrade) {
