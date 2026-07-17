@@ -80,6 +80,16 @@ public class MarketplaceRankedAttempt extends BaseAuditEntity {
     @Column(name = "answer_snapshot_json", nullable = false, columnDefinition = "jsonb")
     private JsonNode answerSnapshot;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "submitted_answers_json", columnDefinition = "jsonb")
+    private JsonNode submittedAnswers;
+
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
+    @Column(name = "request_fingerprint", length = 64)
+    private String requestFingerprint;
+
     @Column
     private Integer score;
 
