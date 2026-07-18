@@ -52,4 +52,11 @@ public interface MarketplaceEntitlementRepository extends JpaRepository<Marketpl
             String buyerId,
             MarketplaceEntitlementStatus status
     );
+
+    Optional<MarketplaceEntitlement>
+    findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdOrderByPackVersionVersionNoDesc(
+            String buyerId,
+            MarketplaceEntitlementStatus status,
+            UUID packId
+    );
 }

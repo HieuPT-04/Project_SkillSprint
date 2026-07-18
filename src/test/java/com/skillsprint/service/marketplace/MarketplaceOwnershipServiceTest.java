@@ -1,9 +1,9 @@
 package com.skillsprint.service.marketplace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.skillsprint.entity.MarketplaceEntitlement;
 import com.skillsprint.entity.MarketplacePack;
 import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.enums.marketplace.MarketplaceEntitlementStatus;
@@ -27,8 +27,9 @@ class MarketplaceOwnershipServiceTest {
     @InjectMocks MarketplaceOwnershipService service;
 
     @Test
-    void legacyPurchaseGrantsAccessWithoutRequiringVersionMapping() {
+    void legacyPurchaseStillGrantsAccessWithoutVersionMapping() {
         UUID itemId = UUID.randomUUID();
+        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.empty());
         when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
                 "buyer", itemId, MarketplacePurchaseStatus.ACTIVE)).thenReturn(true);
 
@@ -36,43 +37,49 @@ class MarketplaceOwnershipServiceTest {
 
         assertThat(ownership.source()).isEqualTo(MarketplaceOwnershipService.Source.LEGACY_PURCHASE);
         assertThat(ownership.packVersion()).isNull();
-        verifyNoInteractions(packVersionService, entitlementRepository);
     }
 
     @Test
-    void entitlementGrantsAccessWhenLegacyPurchaseDoesNotExist() {
+    void latestVersionEntitlementTakesPriorityForMappedPack() {
         UUID itemId = UUID.randomUUID();
-        MarketplacePackVersion version = version();
-        when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                "buyer", itemId, MarketplacePurchaseStatus.ACTIVE)).thenReturn(false);
-        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.of(version));
-        when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                "buyer", version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE)).thenReturn(true);
+        MarketplacePackVersion mappedVersionOne = version(1);
+        MarketplacePackVersion entitledVersionTwo = version(2);
+        entitledVersionTwo.setPack(mappedVersionOne.getPack());
+        MarketplaceEntitlement entitlement = new MarketplaceEntitlement();
+        entitlement.setPackVersion(entitledVersionTwo);
+        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.of(mappedVersionOne));
+        when(entitlementRepository
+                .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdOrderByPackVersionVersionNoDesc(
+                        "buyer", MarketplaceEntitlementStatus.ACTIVE, mappedVersionOne.getPack().getPackId()))
+                .thenReturn(Optional.of(entitlement));
 
         MarketplaceOwnershipService.Ownership ownership = service.findActiveOwnership("buyer", itemId).orElseThrow();
 
         assertThat(ownership.source()).isEqualTo(MarketplaceOwnershipService.Source.ENTITLEMENT);
-        assertThat(ownership.packVersion()).isSameAs(version);
+        assertThat(ownership.packVersion()).isSameAs(entitledVersionTwo);
     }
 
     @Test
     void anotherUsersEntitlementDoesNotGrantAccess() {
         UUID itemId = UUID.randomUUID();
-        MarketplacePackVersion version = version();
+        MarketplacePackVersion mappedVersion = version(1);
+        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.of(mappedVersion));
+        when(entitlementRepository
+                .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdOrderByPackVersionVersionNoDesc(
+                        "buyer", MarketplaceEntitlementStatus.ACTIVE, mappedVersion.getPack().getPackId()))
+                .thenReturn(Optional.empty());
         when(purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
                 "buyer", itemId, MarketplacePurchaseStatus.ACTIVE)).thenReturn(false);
-        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.of(version));
-        when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                "buyer", version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE)).thenReturn(false);
 
         assertThat(service.findActiveOwnership("buyer", itemId)).isEmpty();
     }
 
-    private MarketplacePackVersion version() {
+    private MarketplacePackVersion version(int versionNo) {
         MarketplacePack pack = new MarketplacePack();
         pack.setPackId(UUID.randomUUID());
         MarketplacePackVersion version = new MarketplacePackVersion();
         version.setVersionId(UUID.randomUUID());
+        version.setVersionNo(versionNo);
         version.setPack(pack);
         return version;
     }
