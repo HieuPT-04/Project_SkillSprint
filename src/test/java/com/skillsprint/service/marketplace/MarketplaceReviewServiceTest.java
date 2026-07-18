@@ -35,6 +35,7 @@ class MarketplaceReviewServiceTest {
     @Mock UserRepository userRepository;
     @Mock MarketplacePackVersionService packVersionService;
     @Mock MarketplaceOwnershipService marketplaceOwnershipService;
+    @Mock MarketplaceLearningEligibilityService learningEligibilityService;
 
     private MarketplaceReviewService service;
     private UUID itemId;
@@ -43,7 +44,13 @@ class MarketplaceReviewServiceTest {
     @BeforeEach
     void setUp() {
         service = new MarketplaceReviewService(
-                itemRepository, reviewRepository, userRepository, packVersionService, marketplaceOwnershipService);
+                itemRepository,
+                reviewRepository,
+                userRepository,
+                packVersionService,
+                marketplaceOwnershipService,
+                learningEligibilityService
+        );
         itemId = UUID.randomUUID();
         version = version(itemId);
     }
@@ -71,8 +78,6 @@ class MarketplaceReviewServiceTest {
         when(reviewRepository.findByItemItemIdAndUserUserId(itemId, "buyer")).thenReturn(Optional.empty());
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(userRepository.findById("buyer")).thenReturn(Optional.of(buyer));
-        when(packVersionService.findByItemId(itemId)).thenReturn(Optional.of(version));
-        when(packVersionService.identityOf(itemId)).thenReturn(MarketplacePackVersionIdentity.of(version));
         when(reviewRepository.save(org.mockito.ArgumentMatchers.any(MarketplaceReview.class))).thenReturn(saved);
 
         MarketplaceReviewResponse response = service.upsert("buyer", itemId, request);
@@ -80,6 +85,7 @@ class MarketplaceReviewServiceTest {
         assertThat(response.getRating()).isEqualTo(5);
         verify(marketplaceOwnershipService).requireActiveOwnership("buyer", itemId,
                 "Bạn cần mua Quiz Pack trước khi đánh giá");
+        verify(learningEligibilityService).requireCompletedQuiz("buyer", version.getVersionId());
     }
 
     @Test
@@ -91,6 +97,26 @@ class MarketplaceReviewServiceTest {
                 .isInstanceOf(AppException.class);
 
         verifyNoInteractions(itemRepository, reviewRepository, userRepository, packVersionService);
+    }
+
+    @Test
+    void ownerWithoutCompletedQuizCannotCreateReview() {
+        when(marketplaceOwnershipService.requireActiveOwnership(
+                "buyer", itemId, "Bạn cần mua Quiz Pack trước khi đánh giá"))
+                .thenReturn(new MarketplaceOwnershipService.Ownership(
+                        MarketplaceOwnershipService.Source.ENTITLEMENT,
+                        version
+                ));
+        org.mockito.Mockito.doThrow(new AppException(ErrorCode.MARKETPLACE_REVIEW_QUIZ_COMPLETION_REQUIRED))
+                .when(learningEligibilityService)
+                .requireCompletedQuiz("buyer", version.getVersionId());
+
+        assertThatThrownBy(() -> service.upsert("buyer", itemId, new UpsertMarketplaceReviewRequest()))
+                .isInstanceOf(AppException.class)
+                .satisfies(exception -> assertThat(((AppException) exception).getErrorCode())
+                        .isEqualTo(ErrorCode.MARKETPLACE_REVIEW_QUIZ_COMPLETION_REQUIRED));
+
+        verifyNoInteractions(itemRepository, reviewRepository, userRepository);
     }
 
     private MarketplacePackVersion version(UUID itemId) {

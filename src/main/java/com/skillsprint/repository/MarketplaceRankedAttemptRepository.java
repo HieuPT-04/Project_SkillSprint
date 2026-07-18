@@ -30,6 +30,12 @@ public interface MarketplaceRankedAttemptRepository extends JpaRepository<Market
             UUID packVersionId
     );
 
+    boolean existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
+            String buyerId,
+            UUID packVersionId,
+            MarketplaceRankedAttemptStatus status
+    );
+
     List<MarketplaceRankedAttempt>
     findTop10ByPackVersionVersionIdAndStatusAndSuspiciousFalseAndLeaderboardEligibleTrueOrderByScoreDescDurationSecondsAscCompletedAtAsc(
             UUID packVersionId,

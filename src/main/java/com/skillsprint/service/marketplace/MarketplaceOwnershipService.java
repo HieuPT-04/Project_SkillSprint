@@ -30,17 +30,27 @@ public class MarketplaceOwnershipService {
 
     @Transactional(readOnly = true)
     public Optional<Ownership> findActiveOwnership(String userId, UUID itemId) {
-        if (purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
-                userId, itemId, MarketplacePurchaseStatus.ACTIVE)) {
-            // Do not require a version here: a historical owner must keep access to
-            // the immutable legacy snapshot even if migration data is incomplete.
-            return Optional.of(Ownership.legacyPurchase());
+        Optional<MarketplacePackVersion> mappedVersion = packVersionService.findByItemId(itemId);
+        if (mappedVersion.isPresent()) {
+            Optional<MarketplacePackVersion> latestEntitledVersion = entitlementRepository
+                    .findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdOrderByPackVersionVersionNoDesc(
+                            userId,
+                            MarketplaceEntitlementStatus.ACTIVE,
+                            mappedVersion.get().getPack().getPackId()
+                    )
+                    .map(entitlement -> entitlement.getPackVersion());
+            if (latestEntitledVersion.isPresent()) {
+                return latestEntitledVersion.map(Ownership::entitlement);
+            }
         }
 
-        return packVersionService.findByItemId(itemId)
-                .filter(version -> entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                        userId, version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE))
-                .map(Ownership::entitlement);
+        if (purchaseRepository.existsByUserUserIdAndItemItemIdAndStatus(
+                userId, itemId, MarketplacePurchaseStatus.ACTIVE)) {
+            // Historical owners retain access even if the V1 mapping is incomplete.
+            return Optional.of(Ownership.legacyPurchase(mappedVersion.orElse(null)));
+        }
+
+        return Optional.empty();
     }
 
     @Transactional(readOnly = true)
@@ -56,8 +66,8 @@ public class MarketplaceOwnershipService {
 
     public record Ownership(Source source, MarketplacePackVersion packVersion) {
 
-        static Ownership legacyPurchase() {
-            return new Ownership(Source.LEGACY_PURCHASE, null);
+        static Ownership legacyPurchase(MarketplacePackVersion packVersion) {
+            return new Ownership(Source.LEGACY_PURCHASE, packVersion);
         }
 
         static Ownership entitlement(MarketplacePackVersion packVersion) {
