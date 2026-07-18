@@ -7,9 +7,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.skillsprint.dto.response.marketplace.MarketplacePracticeAttemptResponse;
 import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +40,17 @@ class MarketplacePracticeQuizSnapshotServiceTest {
         assertThat(snapshot.answers().path("answers")).hasSize(2);
         assertThat(objectMapper.writeValueAsString(snapshot.questions()))
                 .doesNotContain("correct", "explanation", "Chapter 1");
-        assertThat(objectMapper.writeValueAsString(service.questionResponses(snapshot.questions())))
+        assertThat(snapshot.questions().path("questions"))
+                .allSatisfy(question -> assertThat(question.path("options"))
+                        .extracting(option -> option.path("label").asText())
+                        .containsExactly("A", "B"));
+        List<MarketplacePracticeAttemptResponse.QuestionResponse> responses =
+                service.questionResponses(snapshot.questions());
+        assertThat(objectMapper.writeValueAsString(responses))
                 .doesNotContain("correct", "explanation");
+        assertThat(responses).allSatisfy(question -> assertThat(question.getOptions())
+                .extracting(MarketplacePracticeAttemptResponse.OptionResponse::getLabel)
+                .containsExactly("A", "B"));
     }
 
     @Test
@@ -48,6 +59,29 @@ class MarketplacePracticeQuizSnapshotServiceTest {
                 .isInstanceOf(AppException.class)
                 .satisfies(exception -> assertThat(((AppException) exception).getErrorCode())
                         .isEqualTo(ErrorCode.MARKETPLACE_PRACTICE_QUIZ_UNAVAILABLE));
+    }
+
+    @Test
+    void relabelsLegacyShuffledOptionsAtResponseBoundary() {
+        ObjectNode snapshot = objectMapper.createObjectNode();
+        ObjectNode question = snapshot.putArray("questions").addObject();
+        question.put("questionId", UUID.randomUUID().toString());
+        question.put("type", "SINGLE_CHOICE");
+        question.put("text", "Legacy question");
+        ArrayNode options = question.putArray("options");
+        for (String label : List.of("C", "A", "D", "B")) {
+            options.addObject()
+                    .put("optionId", UUID.randomUUID().toString())
+                    .put("label", label)
+                    .put("text", "Option " + label);
+        }
+
+        List<MarketplacePracticeAttemptResponse.QuestionResponse> responses =
+                service.questionResponses(snapshot);
+
+        assertThat(responses.get(0).getOptions())
+                .extracting(MarketplacePracticeAttemptResponse.OptionResponse::getLabel)
+                .containsExactly("A", "B", "C", "D");
     }
 
     private JsonNode content() {

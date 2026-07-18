@@ -198,6 +198,7 @@ public class MarketplaceRankedAttemptService {
             throw new AppException(ErrorCode.MARKETPLACE_RANKED_DEFINITION_UNAVAILABLE);
         }
         Collections.shuffle(options, RANDOM);
+        MarketplaceQuizOptionLabels.relabel(options);
 
         ObjectNode question = objectMapper.createObjectNode();
         question.put("questionId", questionId.toString());
@@ -244,10 +245,11 @@ public class MarketplaceRankedAttemptService {
         List<MarketplaceRankedAttemptResponse.QuestionResponse> questions = new ArrayList<>();
         for (JsonNode question : snapshot.path("questions")) {
             List<MarketplaceRankedAttemptResponse.OptionResponse> options = new ArrayList<>();
+            int optionIndex = 0;
             for (JsonNode option : question.path("options")) {
                 options.add(MarketplaceRankedAttemptResponse.OptionResponse.builder()
                         .optionId(uuid(option, "optionId"))
-                        .label(requiredText(option, "label"))
+                        .label(MarketplaceQuizOptionLabels.labelAt(optionIndex++))
                         .text(requiredText(option, "text"))
                         .build());
             }
