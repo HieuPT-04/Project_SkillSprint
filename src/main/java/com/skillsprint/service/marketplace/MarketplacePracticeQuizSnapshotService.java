@@ -63,10 +63,11 @@ public class MarketplacePracticeQuizSnapshotService {
         List<MarketplacePracticeAttemptResponse.QuestionResponse> questions = new ArrayList<>();
         for (JsonNode question : snapshot.path("questions")) {
             List<MarketplacePracticeAttemptResponse.OptionResponse> options = new ArrayList<>();
+            int optionIndex = 0;
             for (JsonNode option : question.path("options")) {
                 options.add(MarketplacePracticeAttemptResponse.OptionResponse.builder()
                         .optionId(uuid(option, "optionId"))
-                        .label(requiredText(option, "label"))
+                        .label(MarketplaceQuizOptionLabels.labelAt(optionIndex++))
                         .text(requiredText(option, "text"))
                         .build());
             }
@@ -118,6 +119,7 @@ public class MarketplacePracticeQuizSnapshotService {
             throw unavailable();
         }
         Collections.shuffle(options, RANDOM);
+        MarketplaceQuizOptionLabels.relabel(options);
 
         ObjectNode safeQuestion = objectMapper.createObjectNode();
         safeQuestion.put("questionId", questionId.toString());

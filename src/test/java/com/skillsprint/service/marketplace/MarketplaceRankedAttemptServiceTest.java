@@ -89,6 +89,9 @@ class MarketplaceRankedAttemptServiceTest {
 
         assertThat(response.getQuestions()).hasSize(45);
         assertThat(response.getAttemptsRemaining()).isEqualTo(2);
+        assertThat(response.getQuestions()).allSatisfy(question -> assertThat(question.getOptions())
+                .extracting(MarketplaceRankedAttemptResponse.OptionResponse::getLabel)
+                .containsExactly("A", "B"));
         assertThat(objectMapper.writeValueAsString(response.getQuestions())).doesNotContain("correct", "explanation");
         MarketplaceRankedAttempt persisted = captureSavedAttempt();
         assertThat(persisted.getAnswerSnapshot().at("/answers/0/correctOptionId").asText()).isNotBlank();
@@ -169,6 +172,9 @@ class MarketplaceRankedAttemptServiceTest {
         assertThat(response.getQuestions()).hasSize(1);
         assertThat(response.getQuestions().get(0).getQuestionId())
                 .isEqualTo(UUID.fromString(existing.getQuestionSnapshot().at("/questions/0/questionId").asText()));
+        assertThat(response.getQuestions().get(0).getOptions())
+                .extracting(MarketplaceRankedAttemptResponse.OptionResponse::getLabel)
+                .containsExactly("A", "B", "C", "D");
     }
 
     private MarketplaceRankedAttempt captureSavedAttempt() {
@@ -198,10 +204,13 @@ class MarketplaceRankedAttemptServiceTest {
         question.put("questionId", UUID.randomUUID().toString());
         question.put("type", "SINGLE_CHOICE");
         question.put("text", "Question");
-        question.putArray("options").addObject()
-                .put("optionId", UUID.randomUUID().toString())
-                .put("label", "A")
-                .put("text", "Answer");
+        ArrayNode options = question.putArray("options");
+        for (String label : List.of("C", "A", "D", "B")) {
+            options.addObject()
+                    .put("optionId", UUID.randomUUID().toString())
+                    .put("label", label)
+                    .put("text", "Answer " + label);
+        }
         attempt.setQuestionSnapshot(snapshot);
         return attempt;
     }
