@@ -127,6 +127,7 @@ public class MarketplaceCatalogService {
                 .description(item.getDescription())
                 .subject(item.getSubject())
                 .creatorName(item.getCreator().getFullName())
+                .creatorAvatarUrl(s3PresignedUrlService.createViewUrl(item.getCreator().getAvatarObjectKey()))
                 .priceCoins(item.getPriceCoins())
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
