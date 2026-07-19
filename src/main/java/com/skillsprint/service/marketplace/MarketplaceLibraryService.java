@@ -155,7 +155,7 @@ public class MarketplaceLibraryService {
 
     private void scrubCorrectAnswers(JsonNode node) {
         if (node instanceof ObjectNode object) {
-            object.remove("correct");
+            object.remove(List.of("correct", "evidence"));
             object.fields().forEachRemaining(entry -> scrubCorrectAnswers(entry.getValue()));
         } else if (node.isArray()) {
             node.forEach(this::scrubCorrectAnswers);

@@ -1,6 +1,7 @@
 package com.skillsprint.dto.response.marketplace;
 
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
+import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Builder;
@@ -24,6 +25,9 @@ public class MarketplaceItemResponse {
     Integer quizCount;
     Integer questionCount;
     Integer creatorValidationScore;
+    MarketplaceQualityJobStatus qualityStatus;
+    Integer qualityScore;
+    boolean qualityCurrent;
     String reviewNote;
     Instant createdAt;
     Instant publishedAt;

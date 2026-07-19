@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillsprint.dto.response.marketplace.CreatorValidationPackResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
 import com.skillsprint.entity.MarketplaceItem;
+import com.skillsprint.entity.MarketplacePack;
+import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
 import com.skillsprint.entity.Quiz;
 import com.skillsprint.entity.QuizOption;
@@ -40,6 +43,7 @@ import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.service.subscription.SubscriptionService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +68,7 @@ class MarketplaceCreatorServiceTest {
     @Mock QuizOptionRepository quizOptionRepository;
     @Mock SubscriptionService subscriptionService;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceQualityService qualityService;
     @Spy ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks MarketplaceCreatorService service;
 
@@ -75,6 +80,7 @@ class MarketplaceCreatorServiceTest {
         lenient().when(packVersionService.identityOf(any()))
                 .thenReturn(MarketplacePackVersionIdentity.EMPTY);
         lenient().when(packVersionService.findByItemId(any())).thenReturn(Optional.empty());
+        lenient().when(qualityService.summariesByLegacyItemIds(any())).thenReturn(Map.of());
     }
 
     @Test
@@ -205,6 +211,8 @@ class MarketplaceCreatorServiceTest {
         assertThat(snapshot.getQuizCount()).isEqualTo(4);
         assertThat(snapshot.getQuestionCount()).isEqualTo(20);
         assertThat(snapshot.getContent().path("chapters").size()).isEqualTo(4);
+        assertThat(snapshot.getContent().at("/chapters/0/quiz/questions/0/evidence/explanation").asText())
+                .isEqualTo("Giai thich 1");
         assertThat(item.getCreatorValidationScore()).isNull();
         assertThat(response.getCreatorValidationScore()).isNull();
         assertThat(response.getQuestionCount()).isEqualTo(20);
@@ -248,10 +256,46 @@ class MarketplaceCreatorServiceTest {
         when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(marketplaceItemRepository.save(any(MarketplaceItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        MarketplacePack pack = new MarketplacePack();
+        pack.setPackId(UUID.randomUUID());
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        version.setVersionId(UUID.randomUUID());
+        version.setVersionNo(1);
+        version.setPack(pack);
+        when(packVersionService.requireByItemId(itemId)).thenReturn(version);
+        when(packVersionService.syncFromLegacyItem(item, snapshot)).thenReturn(Optional.of(version));
+        when(qualityService.summary(version)).thenReturn(
+                new MarketplaceQualityService.Summary(
+                        com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus.PASSED,
+                        100,
+                        true
+                )
+        );
 
         MarketplaceItemResponse response = service.submitForReview("creator", itemId);
 
         assertThat(response.getStatus()).isEqualTo(MarketplaceItemStatus.PENDING_REVIEW);
+        verify(qualityService).requireCurrentPass(version);
+    }
+
+    @Test
+    void currentQualityPassIsRequiredBeforeSubmittingForReview() {
+        UUID itemId = UUID.randomUUID();
+        MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.DRAFT);
+        item.setCreatorValidationScore(95);
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator"))
+                .thenReturn(Optional.of(item));
+        when(packVersionService.requireByItemId(itemId)).thenReturn(version);
+        doThrow(new AppException(ErrorCode.MARKETPLACE_QUALITY_VALIDATION_REQUIRED))
+                .when(qualityService).requireCurrentPass(version);
+
+        assertThatThrownBy(() -> service.submitForReview("creator", itemId))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_QUALITY_VALIDATION_REQUIRED);
+
+        assertThat(item.getStatus()).isEqualTo(MarketplaceItemStatus.DRAFT);
     }
 
     private MarketplaceItem item(UUID itemId, String userId, MarketplaceItemStatus status) {

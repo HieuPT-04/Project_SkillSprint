@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -66,6 +67,7 @@ public class MarketplaceCreatorService {
     QuizOptionRepository quizOptionRepository;
     SubscriptionService subscriptionService;
     MarketplacePackVersionService packVersionService;
+    MarketplaceQualityService qualityService;
     ObjectMapper objectMapper;
 
     @Transactional
@@ -96,8 +98,14 @@ public class MarketplaceCreatorService {
         snapshotRepository.save(snapshot);
 
         MarketplacePackVersion version = packVersionService.createInitialVersion(item, snapshot);
+        qualityService.queue(version);
 
-        return toResponse(item, snapshot, MarketplacePackVersionIdentity.of(version));
+        return toResponse(
+                item,
+                snapshot,
+                MarketplacePackVersionIdentity.of(version),
+                qualityService.summary(version)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -181,7 +189,16 @@ public class MarketplaceCreatorService {
 
         item.setCreatorValidationScore(null);
         item = marketplaceItemRepository.save(item);
-        return toResponse(item, snapshot, syncedIdentity(item, snapshot));
+        MarketplacePackVersion version = packVersionService.syncFromLegacyItem(item, snapshot).orElse(null);
+        if (version != null) {
+            qualityService.queue(version);
+        }
+        return toResponse(
+                item,
+                snapshot,
+                MarketplacePackVersionIdentity.ofNullable(version),
+                version == null ? MarketplaceQualityService.Summary.EMPTY : qualityService.summary(version)
+        );
     }
 
     private PackContent buildPackContent(String userId, StudyWorkspace workspace) {
@@ -223,6 +240,11 @@ public class MarketplaceCreatorService {
                 questionNode.put("text", question.getQuestionText());
                 questionNode.put("explanation", question.getExplanation());
                 questionNode.put("sequenceNo", question.getSequenceNo());
+                ObjectNode evidence = questionNode.putObject("evidence");
+                evidence.put("sourceStepId", step.getStepId().toString());
+                evidence.put("explanation", question.getExplanation());
+                ArrayNode sourceChunkIds = evidence.putArray("sourceChunkIds");
+                evidenceSourceChunkIds(step).forEach(sourceChunkIds::add);
                 ArrayNode options = questionNode.putArray("options");
                 for (QuizOption option : quizOptionRepository.findByQuestionQuizQuizIdOrderByQuestionSequenceNoAscSequenceNoAsc(quiz.getQuizId())
                         .stream().filter(value -> value.getQuestion().getQuestionId().equals(question.getQuestionId())).toList()) {
@@ -248,17 +270,32 @@ public class MarketplaceCreatorService {
     private record PackContent(ObjectNode content, int chapterCount, int quizCount, int questionCount) {
     }
 
+    private List<String> evidenceSourceChunkIds(RoadmapStep step) {
+        Set<String> sourceChunkIds = new LinkedHashSet<>();
+        if (step.getTopic() != null && step.getTopic().getSourceChunkIds() != null) {
+            sourceChunkIds.addAll(step.getTopic().getSourceChunkIds());
+        }
+        if (step.getChapter() != null && step.getChapter().getSourceChunkIds() != null) {
+            sourceChunkIds.addAll(step.getChapter().getSourceChunkIds());
+        }
+        return List.copyOf(sourceChunkIds);
+    }
+
     @Transactional(readOnly = true)
     public List<MarketplaceItemResponse> getMyItems(String userId) {
         List<MarketplaceItem> items = marketplaceItemRepository.findByCreatorUserIdOrderByCreatedAtDesc(userId);
+        List<UUID> itemIds = items.stream().map(MarketplaceItem::getItemId).toList();
         Map<UUID, MarketplacePackVersionIdentity> identities =
-                packVersionService.identitiesOf(items.stream().map(MarketplaceItem::getItemId).toList());
+                packVersionService.identitiesOf(itemIds);
+        Map<UUID, MarketplaceQualityService.Summary> qualitySummaries =
+                qualityService.summariesByLegacyItemIds(itemIds);
         return items.stream()
                 .map(item -> toResponse(
                         item,
                         snapshotRepository.findByItemItemId(item.getItemId())
                                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND)),
-                        identities.getOrDefault(item.getItemId(), MarketplacePackVersionIdentity.EMPTY)))
+                        identities.getOrDefault(item.getItemId(), MarketplacePackVersionIdentity.EMPTY),
+                        qualitySummaries.getOrDefault(item.getItemId(), MarketplaceQualityService.Summary.EMPTY)))
                 .toList();
     }
 
@@ -324,12 +361,20 @@ public class MarketplaceCreatorService {
         if (item.getCreatorValidationScore() == null || item.getCreatorValidationScore() < 90) {
             throw new AppException(ErrorCode.MARKETPLACE_CREATOR_VALIDATION_REQUIRED);
         }
+        MarketplacePackVersion version = packVersionService.requireByItemId(itemId);
+        qualityService.requireCurrentPass(version);
 
         item.setStatus(MarketplaceItemStatus.PENDING_REVIEW);
         item = marketplaceItemRepository.save(item);
         MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
-        return toResponse(item, snapshot, syncedIdentity(item, snapshot));
+        MarketplacePackVersion syncedVersion = packVersionService.syncFromLegacyItem(item, snapshot).orElse(version);
+        return toResponse(
+                item,
+                snapshot,
+                MarketplacePackVersionIdentity.of(syncedVersion),
+                qualityService.summary(syncedVersion)
+        );
     }
 
     private MarketplacePackVersionIdentity syncedIdentity(MarketplaceItem item, MarketplaceQuizPackSnapshot snapshot) {
@@ -383,7 +428,8 @@ public class MarketplaceCreatorService {
     private MarketplaceItemResponse toResponse(
             MarketplaceItem item,
             MarketplaceQuizPackSnapshot snapshot,
-            MarketplacePackVersionIdentity identity
+            MarketplacePackVersionIdentity identity,
+            MarketplaceQualityService.Summary qualitySummary
     ) {
         return MarketplaceItemResponse.builder()
                 .itemId(item.getItemId())
@@ -400,6 +446,9 @@ public class MarketplaceCreatorService {
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
                 .creatorValidationScore(item.getCreatorValidationScore())
+                .qualityStatus(qualitySummary.status())
+                .qualityScore(qualitySummary.score())
+                .qualityCurrent(qualitySummary.current())
                 .reviewNote(item.getReviewNote())
                 .createdAt(item.getCreatedAt())
                 .publishedAt(item.getPublishedAt())
