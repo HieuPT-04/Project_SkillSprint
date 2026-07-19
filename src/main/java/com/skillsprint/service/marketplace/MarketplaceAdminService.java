@@ -78,6 +78,9 @@ public class MarketplaceAdminService {
     public MarketplaceItemResponse review(String adminUserId, UUID itemId, ReviewMarketplaceItemRequest request) {
         MarketplaceItem item = findItem(itemId);
         validateTransition(item.getStatus(), request.getStatus());
+        if (request.getStatus() == MarketplaceItemStatus.PUBLISHED) {
+            qualityService.requireCurrentPass(packVersionService.requireByItemId(itemId));
+        }
         User admin = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_PROFILE_NOT_FOUND));
 

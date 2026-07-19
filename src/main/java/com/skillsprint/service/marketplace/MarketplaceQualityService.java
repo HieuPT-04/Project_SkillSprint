@@ -258,9 +258,20 @@ public class MarketplaceQualityService {
                 .chapterSequenceNo(issue.has("chapterSequenceNo")
                         ? issue.path("chapterSequenceNo").asInt()
                         : null)
-                .questionId(questionId == null ? null : UUID.fromString(questionId))
+                .questionId(parseUuidOrNull(questionId))
                 .message(issue.path("message").asText())
                 .build();
+    }
+
+    private UUID parseUuidOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     public record Summary(MarketplaceQualityJobStatus status, Integer score, boolean current) {

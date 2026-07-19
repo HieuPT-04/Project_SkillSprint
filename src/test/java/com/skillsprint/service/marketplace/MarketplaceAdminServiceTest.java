@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -145,14 +146,17 @@ class MarketplaceAdminServiceTest {
         assertThat(item.getReviewedAt()).isNotNull();
         assertThat(item.getCreatorValidationScore()).isNull();
         assertThat(response.getReviewNote()).isEqualTo("Thieu noi dung chuong 2");
+        verify(qualityService, never()).requireCurrentPass(any());
     }
 
     @Test
     void publishingPendingItemSetsPublishedAt() {
         MarketplaceItem item = item(MarketplaceItemStatus.PENDING_REVIEW);
+        MarketplacePackVersion version = new MarketplacePackVersion();
         User admin = new User();
         admin.setUserId("admin");
         when(marketplaceItemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
+        when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
         when(userRepository.findById("admin")).thenReturn(Optional.of(admin));
         when(marketplaceItemRepository.save(any(MarketplaceItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot(item)));
@@ -164,6 +168,30 @@ class MarketplaceAdminServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(MarketplaceItemStatus.PUBLISHED);
         assertThat(item.getPublishedAt()).isNotNull();
+        verify(qualityService).requireCurrentPass(version);
+    }
+
+    @Test
+    void publishingWithoutCurrentQualityPassLeavesItemUntouched() {
+        MarketplaceItem item = item(MarketplaceItemStatus.PENDING_REVIEW);
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        when(marketplaceItemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
+        when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
+        doThrow(new AppException(ErrorCode.MARKETPLACE_QUALITY_VALIDATION_REQUIRED))
+                .when(qualityService).requireCurrentPass(version);
+
+        ReviewMarketplaceItemRequest request = new ReviewMarketplaceItemRequest();
+        request.setStatus(MarketplaceItemStatus.PUBLISHED);
+
+        assertThatThrownBy(() -> service.review("admin", item.getItemId(), request))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_QUALITY_VALIDATION_REQUIRED);
+        assertThat(item.getStatus()).isEqualTo(MarketplaceItemStatus.PENDING_REVIEW);
+        assertThat(item.getPublishedAt()).isNull();
+        verify(userRepository, never()).findById(any());
+        verify(marketplaceItemRepository, never()).save(any());
+        verify(packVersionService, never()).syncFromLegacyItem(any(), any());
     }
 
     @Test

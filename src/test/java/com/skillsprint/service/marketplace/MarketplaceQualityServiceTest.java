@@ -149,6 +149,29 @@ class MarketplaceQualityServiceTest {
         verify(versionRepository).findByVersionIdForUpdate(version.getVersionId());
     }
 
+    @Test
+    void adminReportReadDoesNotFailForMalformedLegacyQuestionId() {
+        MarketplaceQualityJob failed = job("hash", MarketplaceQualityJobStatus.FAILED);
+        ObjectNode report = objectMapper.createObjectNode();
+        report.put("passingScore", 80);
+        report.put("blockingIssueCount", 1);
+        ObjectNode issue = report.putArray("issues").addObject();
+        issue.put("code", "INVALID_QUESTION_ID");
+        issue.put("severity", "BLOCKING");
+        issue.put("questionId", "legacy-question-id");
+        issue.put("message", "Mã câu hỏi không hợp lệ.");
+        failed.setReport(report);
+        when(qualityJobRepository.findTopByPackVersionVersionIdOrderByCreatedAtDesc(version.getVersionId()))
+                .thenReturn(Optional.of(failed));
+        when(fingerprint.of(version)).thenReturn("hash");
+
+        MarketplaceQualityJobResponse response = service.findLatestForAdmin(version).orElseThrow();
+
+        assertThat(response.getReport().getIssues()).singleElement()
+                .extracting(MarketplaceQualityJobResponse.QualityIssueResponse::getQuestionId)
+                .isNull();
+    }
+
     private MarketplaceQualityJob job(String hash, MarketplaceQualityJobStatus status) {
         MarketplaceQualityJob job = new MarketplaceQualityJob();
         job.setJobId(UUID.randomUUID());
