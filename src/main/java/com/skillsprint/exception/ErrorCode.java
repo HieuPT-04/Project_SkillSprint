@@ -136,6 +136,14 @@ public enum ErrorCode {
             "Bạn cần hoàn thành ít nhất một Quiz trước khi đánh giá",
             HttpStatus.CONFLICT
     ),
+    MARKETPLACE_QUALITY_JOB_NOT_FOUND(
+            "Quiz Pack chưa có lượt kiểm định chất lượng",
+            HttpStatus.NOT_FOUND
+    ),
+    MARKETPLACE_QUALITY_VALIDATION_REQUIRED(
+            "Quiz Pack cần vượt qua kiểm định chất lượng hiện tại trước khi gửi duyệt hoặc xuất bản",
+            HttpStatus.CONFLICT
+    ),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),

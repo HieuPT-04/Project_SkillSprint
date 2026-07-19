@@ -1,9 +1,7 @@
 package com.skillsprint.repository;
 
 import com.skillsprint.entity.MarketplaceQualityJob;
-import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,8 +28,4 @@ public interface MarketplaceQualityJobRepository extends JpaRepository<Marketpla
             """, nativeQuery = true)
     Optional<MarketplaceQualityJob> findNextQueuedForUpdate(@Param("now") Instant now);
 
-    boolean existsByPackVersionVersionIdAndStatusIn(
-            UUID versionId,
-            Collection<MarketplaceQualityJobStatus> statuses
-    );
 }
