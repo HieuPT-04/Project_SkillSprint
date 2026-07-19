@@ -53,6 +53,24 @@ class MarketplaceQualityValidatorTest {
                 .contains("CORRECT_OPTION_COUNT");
     }
 
+    @Test
+    void malformedIdentifiersAndEvidenceWithoutSourceAreBlocking() {
+        MarketplacePackVersion version = validVersion();
+        ObjectNode firstQuestion = (ObjectNode) version.getContent().path("chapters").get(0)
+                .path("quiz").path("questions").get(0);
+        firstQuestion.put("questionId", "legacy-question");
+        ((ObjectNode) firstQuestion.path("options").get(0)).put("optionId", "legacy-option");
+        ObjectNode evidence = (ObjectNode) firstQuestion.path("evidence");
+        evidence.remove("sourceStepId");
+        evidence.putArray("sourceChunkIds");
+
+        MarketplaceQualityValidator.ValidationResult result = validator.validate(version);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.report().path("issues").findValuesAsText("code"))
+                .contains("QUESTION_ID_INVALID", "OPTION_ID_INVALID", "QUESTION_EVIDENCE_MISSING");
+    }
+
     private MarketplacePackVersion validVersion() {
         ObjectNode content = objectMapper.createObjectNode();
         ArrayNode chapters = content.putArray("chapters");

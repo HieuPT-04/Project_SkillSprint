@@ -56,10 +56,11 @@ public class MarketplaceQualityValidator {
             for (JsonNode question : questions) {
                 actualQuestionCount++;
                 String questionId = question.path("questionId").asText(null);
+                boolean validQuestionId = isUuid(questionId);
                 String questionText = question.path("text").asText("").trim();
-                if (questionId == null || !questionIds.add(questionId)) {
+                if (!validQuestionId || !questionIds.add(questionId)) {
                     addIssue(issues, "QUESTION_ID_INVALID", chapterSequence, questionId,
-                            "Mã câu hỏi bị thiếu hoặc trùng lặp.");
+                            "Mã câu hỏi bị thiếu, sai định dạng hoặc trùng lặp.");
                 }
                 if (questionText.isBlank()) {
                     addIssue(issues, "QUESTION_TEXT_MISSING", chapterSequence, questionId,
@@ -70,9 +71,15 @@ public class MarketplaceQualityValidator {
                 }
 
                 JsonNode evidence = question.path("evidence");
-                if (!evidence.isObject() || evidence.path("explanation").asText("").isBlank()) {
+                boolean hasSourceChunk = evidence.path("sourceChunkIds").isArray()
+                        && java.util.stream.StreamSupport.stream(
+                                evidence.path("sourceChunkIds").spliterator(), false)
+                                .anyMatch(sourceId -> !sourceId.asText("").isBlank());
+                if (!evidence.isObject()
+                        || evidence.path("explanation").asText("").isBlank()
+                        || (!isUuid(evidence.path("sourceStepId").asText(null)) && !hasSourceChunk)) {
                     addIssue(issues, "QUESTION_EVIDENCE_MISSING", chapterSequence, questionId,
-                            "Câu hỏi cần có giải thích làm bằng chứng đáp án.");
+                            "Câu hỏi cần có giải thích và nguồn tham chiếu làm bằng chứng đáp án.");
                 }
 
                 validateOptions(issues, chapterSequence, questionId, question.path("options"));
@@ -113,9 +120,9 @@ public class MarketplaceQualityValidator {
         for (JsonNode option : options) {
             String optionId = option.path("optionId").asText(null);
             String text = option.path("text").asText("").trim();
-            if (optionId == null || !optionIds.add(optionId)) {
+            if (!isUuid(optionId) || !optionIds.add(optionId)) {
                 addIssue(issues, "OPTION_ID_INVALID", chapterSequence, questionId,
-                        "Mã đáp án bị thiếu hoặc trùng lặp.");
+                        "Mã đáp án bị thiếu, sai định dạng hoặc trùng lặp.");
             }
             if (text.isBlank() || !optionTexts.add(normalize(text))) {
                 addIssue(issues, "OPTION_TEXT_INVALID", chapterSequence, questionId,
@@ -155,6 +162,18 @@ public class MarketplaceQualityValidator {
                 .trim()
                 .replaceAll("\\s+", " ")
                 .toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isUuid(String value) {
+        if (value == null) {
+            return false;
+        }
+        try {
+            java.util.UUID.fromString(value);
+            return true;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
     }
 
     public record ValidationResult(int score, boolean passed, ObjectNode report) {
