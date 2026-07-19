@@ -21,6 +21,9 @@ public class MarketplaceAdminItemDetailResponse {
     String description;
     String subject;
     Integer priceCoins;
+    Integer chapterCount;
+    Integer quizCount;
+    Integer questionCount;
     String status;
     Integer creatorValidationScore;
     MarketplaceQualityJobResponse qualityJob;

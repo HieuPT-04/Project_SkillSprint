@@ -123,6 +123,9 @@ class MarketplaceAdminServiceTest {
 
         assertThat(response.getQualityJob()).isSameAs(qualityJob);
         assertThat(response.getQualityJobHistory()).containsExactly(qualityJob);
+        assertThat(response.getChapterCount()).isEqualTo(4);
+        assertThat(response.getQuizCount()).isEqualTo(4);
+        assertThat(response.getQuestionCount()).isEqualTo(20);
     }
 
     @Test
