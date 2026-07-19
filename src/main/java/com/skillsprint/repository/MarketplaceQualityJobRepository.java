@@ -8,9 +8,15 @@ import java.util.UUID;
 import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 public interface MarketplaceQualityJobRepository extends JpaRepository<MarketplaceQualityJob, UUID> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select job from MarketplaceQualityJob job where job.jobId = :jobId")
+    Optional<MarketplaceQualityJob> findByJobIdForUpdate(@Param("jobId") UUID jobId);
 
     Optional<MarketplaceQualityJob> findTopByPackVersionVersionIdOrderByCreatedAtDesc(UUID versionId);
 

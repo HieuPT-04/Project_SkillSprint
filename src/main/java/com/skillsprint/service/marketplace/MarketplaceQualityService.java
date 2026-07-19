@@ -24,7 +24,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.experimental.FieldDefaults;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -133,10 +132,53 @@ public class MarketplaceQualityService {
                 .toList();
     }
 
-    @Scheduled(fixedDelayString = "${app.marketplace.quality.fixed-delay-ms:3000}")
     @Transactional
-    public void processNextQueuedJob() {
-        qualityJobRepository.findNextQueuedForUpdate(Instant.now()).ifPresent(this::process);
+    public Optional<ClaimedJob> claimNextQueuedJob() {
+        return qualityJobRepository.findNextQueuedForUpdate(Instant.now()).map(job -> {
+            job.setStatus(MarketplaceQualityJobStatus.RUNNING);
+            job.setStartedAt(Instant.now());
+            job.setNextRetryAt(null);
+            MarketplacePackVersion version = job.getPackVersion();
+            return new ClaimedJob(job.getJobId(), job.getSnapshotFingerprint(), version);
+        });
+    }
+
+    public MarketplaceQualityValidator.ValidationResult validate(ClaimedJob claimedJob) {
+        return validator.validate(claimedJob.version());
+    }
+
+    @Transactional
+    public void completeJob(UUID jobId, MarketplaceQualityValidator.ValidationResult result) {
+        MarketplaceQualityJob job = qualityJobRepository.findByJobIdForUpdate(jobId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_QUALITY_JOB_NOT_FOUND));
+        if (job.getStatus() != MarketplaceQualityJobStatus.RUNNING) {
+            return;
+        }
+
+        MarketplacePackVersion version = job.getPackVersion();
+        if (!job.getSnapshotFingerprint().equals(fingerprint.of(version))) {
+            markStale(job);
+            return;
+        }
+
+        job.setStatus(result.passed()
+                ? MarketplaceQualityJobStatus.PASSED
+                : MarketplaceQualityJobStatus.FAILED);
+        job.setScore(result.score());
+        job.setReport(result.report());
+        job.setErrorCode(null);
+        job.setCompletedAt(Instant.now());
+        applySummary(version, job);
+    }
+
+    @Transactional
+    public void recordJobFailure(UUID jobId, RuntimeException exception) {
+        MarketplaceQualityJob job = qualityJobRepository.findByJobIdForUpdate(jobId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_QUALITY_JOB_NOT_FOUND));
+        if (job.getStatus() != MarketplaceQualityJobStatus.RUNNING) {
+            return;
+        }
+        retryOrFail(job, job.getPackVersion(), exception);
     }
 
     @Transactional(readOnly = true)
@@ -165,34 +207,11 @@ public class MarketplaceQualityService {
         return new Summary(version.getQualityStatus(), version.getQualityScore(), current);
     }
 
-    private void process(MarketplaceQualityJob job) {
-        MarketplacePackVersion version = job.getPackVersion();
-        job.setStatus(MarketplaceQualityJobStatus.RUNNING);
-        job.setStartedAt(Instant.now());
-        job.setNextRetryAt(null);
-
-        try {
-            String currentFingerprint = fingerprint.of(version);
-            if (!currentFingerprint.equals(job.getSnapshotFingerprint())) {
-                job.setStatus(MarketplaceQualityJobStatus.FAILED);
-                job.setScore(0);
-                job.setReport(staleReport());
-                job.setCompletedAt(Instant.now());
-                return;
-            }
-
-            MarketplaceQualityValidator.ValidationResult result = validator.validate(version);
-            job.setStatus(result.passed()
-                    ? MarketplaceQualityJobStatus.PASSED
-                    : MarketplaceQualityJobStatus.FAILED);
-            job.setScore(result.score());
-            job.setReport(result.report());
-            job.setErrorCode(null);
-            job.setCompletedAt(Instant.now());
-            applySummary(version, job);
-        } catch (RuntimeException exception) {
-            retryOrFail(job, version, exception);
-        }
+    private void markStale(MarketplaceQualityJob job) {
+        job.setStatus(MarketplaceQualityJobStatus.FAILED);
+        job.setScore(0);
+        job.setReport(staleReport());
+        job.setCompletedAt(Instant.now());
     }
 
     private void retryOrFail(
@@ -306,5 +325,12 @@ public class MarketplaceQualityService {
 
     public record Summary(MarketplaceQualityJobStatus status, Integer score, boolean current) {
         public static final Summary EMPTY = new Summary(null, null, false);
+    }
+
+    public record ClaimedJob(
+            UUID jobId,
+            String snapshotFingerprint,
+            MarketplacePackVersion version
+    ) {
     }
 }

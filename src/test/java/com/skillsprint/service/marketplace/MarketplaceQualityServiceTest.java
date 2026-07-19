@@ -42,6 +42,7 @@ class MarketplaceQualityServiceTest {
     @InjectMocks MarketplaceQualityService service;
 
     MarketplacePackVersion version;
+    MarketplaceQualityJobWorker worker;
 
     @BeforeEach
     void setUp() {
@@ -55,6 +56,7 @@ class MarketplaceQualityServiceTest {
         version.setVersionNo(1);
         version.setPack(pack);
         version.setStatus(MarketplacePackVersionStatus.DRAFT);
+        worker = new MarketplaceQualityJobWorker(service);
     }
 
     @Test
@@ -106,11 +108,12 @@ class MarketplaceQualityServiceTest {
         report.put("blockingIssueCount", 0);
         report.putArray("issues");
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
+        when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
         when(fingerprint.of(version)).thenReturn("hash");
         when(validator.validate(version)).thenReturn(
                 new MarketplaceQualityValidator.ValidationResult(100, true, report));
 
-        service.processNextQueuedJob();
+        worker.processNextQueuedJob();
 
         assertThat(queued.getStatus()).isEqualTo(MarketplaceQualityJobStatus.PASSED);
         assertThat(queued.getScore()).isEqualTo(100);
@@ -125,9 +128,13 @@ class MarketplaceQualityServiceTest {
         version.setQualityStatus(MarketplaceQualityJobStatus.QUEUED);
         version.setQualitySnapshotFingerprint("new-hash");
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
+        when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
         when(fingerprint.of(version)).thenReturn("new-hash");
+        ObjectNode report = objectMapper.createObjectNode();
+        when(validator.validate(version)).thenReturn(
+                new MarketplaceQualityValidator.ValidationResult(100, true, report));
 
-        service.processNextQueuedJob();
+        worker.processNextQueuedJob();
 
         assertThat(queued.getStatus()).isEqualTo(MarketplaceQualityJobStatus.FAILED);
         assertThat(queued.getReport().path("issues").get(0).path("code").asText())
@@ -140,10 +147,10 @@ class MarketplaceQualityServiceTest {
     void unexpectedFailureRetriesWithinBound() {
         MarketplaceQualityJob queued = job("hash", MarketplaceQualityJobStatus.QUEUED);
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
-        when(fingerprint.of(version)).thenReturn("hash");
+        when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
         when(validator.validate(version)).thenThrow(new IllegalStateException("broken draft"));
 
-        service.processNextQueuedJob();
+        worker.processNextQueuedJob();
 
         assertThat(queued.getStatus()).isEqualTo(MarketplaceQualityJobStatus.QUEUED);
         assertThat(queued.getRetryCount()).isEqualTo(1);
