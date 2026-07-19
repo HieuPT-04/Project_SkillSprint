@@ -4,6 +4,7 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.ReviewMarketplaceItemRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceAdminItemDetailResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceQualityJobResponse;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
 import com.skillsprint.service.marketplace.MarketplaceAdminService;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +47,16 @@ public class AdminMarketplaceController {
             @PathVariable UUID itemId
     ) {
         return ResponseEntity.ok(ApiResponse.success(marketplaceAdminService.getItemDetail(itemId)));
+    }
+
+    @PostMapping("/{itemId}/quality-jobs")
+    public ResponseEntity<ApiResponse<MarketplaceQualityJobResponse>> queueQuality(
+            @PathVariable UUID itemId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã xếp lịch kiểm định chất lượng Quiz Pack",
+                marketplaceAdminService.queueQuality(itemId)
+        ));
     }
 
     @PatchMapping("/{itemId}/status")

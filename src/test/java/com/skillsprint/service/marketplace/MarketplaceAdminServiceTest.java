@@ -116,16 +116,33 @@ class MarketplaceAdminServiceTest {
         when(marketplaceItemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot(item)));
         when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
-        when(qualityService.findLatestForAdmin(version)).thenReturn(Optional.of(qualityJob));
         when(qualityService.findRecentForAdmin(version)).thenReturn(List.of(qualityJob));
 
         var response = service.getItemDetail(item.getItemId());
 
         assertThat(response.getQualityJob()).isSameAs(qualityJob);
-        assertThat(response.getQualityJobHistory()).containsExactly(qualityJob);
+        assertThat(response.getQualityJobHistory()).isEmpty();
         assertThat(response.getChapterCount()).isEqualTo(4);
         assertThat(response.getQuizCount()).isEqualTo(4);
         assertThat(response.getQuestionCount()).isEqualTo(20);
+    }
+
+    @Test
+    void queuesQualityForLegacyPendingReviewItem() {
+        MarketplaceItem item = item(MarketplaceItemStatus.PENDING_REVIEW);
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        version.setVersionId(UUID.randomUUID());
+        MarketplaceQualityJobResponse queued = MarketplaceQualityJobResponse.builder()
+                .jobId(UUID.randomUUID())
+                .versionId(version.getVersionId())
+                .status(MarketplaceQualityJobStatus.QUEUED)
+                .build();
+        when(marketplaceItemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
+        when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
+        when(qualityService.queueForAdmin(version.getVersionId())).thenReturn(queued);
+
+        assertThat(service.queueQuality(item.getItemId())).isSameAs(queued);
+        verify(qualityService).queueForAdmin(version.getVersionId());
     }
 
     @Test

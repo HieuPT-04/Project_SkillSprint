@@ -3,6 +3,7 @@ package com.skillsprint.service.marketplace;
 import com.skillsprint.dto.request.marketplace.ReviewMarketplaceItemRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceAdminItemDetailResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceQualityJobResponse;
 import com.skillsprint.entity.MarketplaceItem;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
 import com.skillsprint.entity.User;
@@ -52,12 +53,10 @@ public class MarketplaceAdminService {
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(itemId);
         MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
         var version = packVersionService.findByItemId(itemId);
-        var qualityJob = version
-                .flatMap(qualityService::findLatestForAdmin)
-                .orElse(null);
         var qualityJobHistory = version
                 .map(qualityService::findRecentForAdmin)
                 .orElse(List.of());
+        var qualityJob = qualityJobHistory.stream().findFirst().orElse(null);
         return MarketplaceAdminItemDetailResponse.builder()
                 .itemId(item.getItemId())
                 .packId(identity.packId())
@@ -75,11 +74,20 @@ public class MarketplaceAdminService {
                 .status(item.getStatus().name())
                 .creatorValidationScore(item.getCreatorValidationScore())
                 .qualityJob(qualityJob)
-                .qualityJobHistory(qualityJobHistory)
+                .qualityJobHistory(qualityJobHistory.stream().skip(1).toList())
                 .reviewNote(item.getReviewNote())
                 .createdAt(item.getCreatedAt())
                 .content(snapshot.getContent())
                 .build();
+    }
+
+    @Transactional
+    public MarketplaceQualityJobResponse queueQuality(UUID itemId) {
+        MarketplaceItem item = findItem(itemId);
+        if (item.getStatus() != MarketplaceItemStatus.PENDING_REVIEW) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+        return qualityService.queueForAdmin(packVersionService.requireByItemId(itemId).getVersionId());
     }
 
     @Transactional

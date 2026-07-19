@@ -65,6 +65,16 @@ public class MarketplaceQualityService {
         return queueLocked(lockedVersion);
     }
 
+    @Transactional
+    public MarketplaceQualityJobResponse queueForAdmin(UUID versionId) {
+        MarketplacePackVersion version = versionRepository.findByVersionIdForUpdate(versionId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+        if (version.getStatus() != MarketplacePackVersionStatus.PENDING_REVIEW) {
+            throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+        }
+        return response(queueLocked(version), version);
+    }
+
     private MarketplaceQualityJob queueLocked(MarketplacePackVersion version) {
         String currentFingerprint = fingerprint.of(version);
         Optional<MarketplaceQualityJob> reusable = qualityJobRepository

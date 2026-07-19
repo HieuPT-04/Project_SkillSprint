@@ -76,6 +76,31 @@ class MarketplaceQualityServiceTest {
     }
 
     @Test
+    void adminCanQueueQualityForLegacyPendingReviewVersion() {
+        version.setStatus(MarketplacePackVersionStatus.PENDING_REVIEW);
+        MarketplaceQualityJob existing = job("hash", MarketplaceQualityJobStatus.QUEUED);
+        when(versionRepository.findByVersionIdForUpdate(version.getVersionId())).thenReturn(Optional.of(version));
+        when(fingerprint.of(version)).thenReturn("hash");
+        when(qualityJobRepository.findTopByPackVersionVersionIdAndSnapshotFingerprintOrderByCreatedAtDesc(
+                version.getVersionId(), "hash")).thenReturn(Optional.of(existing));
+
+        MarketplaceQualityJobResponse response = service.queueForAdmin(version.getVersionId());
+
+        assertThat(response.getJobId()).isEqualTo(existing.getJobId());
+        assertThat(response.getStatus()).isEqualTo(MarketplaceQualityJobStatus.QUEUED);
+    }
+
+    @Test
+    void adminCannotQueueQualityOutsidePendingReview() {
+        when(versionRepository.findByVersionIdForUpdate(version.getVersionId())).thenReturn(Optional.of(version));
+
+        assertThatThrownBy(() -> service.queueForAdmin(version.getVersionId()))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
+    }
+
+    @Test
     void queueSupersedesAnActiveJobFromAnOlderSnapshot() {
         MarketplaceQualityJob oldJob = job("old-hash", MarketplaceQualityJobStatus.RUNNING);
         when(versionRepository.findByVersionIdForUpdate(version.getVersionId())).thenReturn(Optional.of(version));
