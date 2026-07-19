@@ -14,6 +14,7 @@ import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
 import com.skillsprint.repository.UserRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,14 +30,19 @@ public class MarketplaceAdminService {
     MarketplaceItemRepository marketplaceItemRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
     MarketplacePackVersionService packVersionService;
+    MarketplaceQualityService qualityService;
     UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<MarketplaceItemResponse> getItems(MarketplaceItemStatus status) {
         MarketplaceItemStatus effectiveStatus = status == null ? MarketplaceItemStatus.PENDING_REVIEW : status;
-        return marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(effectiveStatus)
-                .stream()
-                .map(this::toResponse)
+        List<MarketplaceItem> items = marketplaceItemRepository
+                .findByStatusOrderByPublishedAtDesc(effectiveStatus);
+        Map<UUID, MarketplaceQualityService.Summary> qualitySummaries = qualityService
+                .summariesByLegacyItemIds(items.stream().map(MarketplaceItem::getItemId).toList());
+        return items.stream()
+                .map(item -> toResponse(item, qualitySummaries.getOrDefault(
+                        item.getItemId(), MarketplaceQualityService.Summary.EMPTY)))
                 .toList();
     }
 
@@ -45,6 +51,9 @@ public class MarketplaceAdminService {
         MarketplaceItem item = findItem(itemId);
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(itemId);
         MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
+        var qualityJob = packVersionService.findByItemId(itemId)
+                .flatMap(qualityService::findLatestForAdmin)
+                .orElse(null);
         return MarketplaceAdminItemDetailResponse.builder()
                 .itemId(item.getItemId())
                 .packId(identity.packId())
@@ -58,6 +67,7 @@ public class MarketplaceAdminService {
                 .priceCoins(item.getPriceCoins())
                 .status(item.getStatus().name())
                 .creatorValidationScore(item.getCreatorValidationScore())
+                .qualityJob(qualityJob)
                 .reviewNote(item.getReviewNote())
                 .createdAt(item.getCreatedAt())
                 .content(snapshot.getContent())
@@ -87,7 +97,10 @@ public class MarketplaceAdminService {
         // Mirrors the moderation outcome onto Version 1, including the saleable
         // marker: publishing makes it saleable, suspending or rejecting clears it.
         packVersionService.syncFromLegacyItem(item, findSnapshot(itemId));
-        return toResponse(item);
+        MarketplaceQualityService.Summary qualitySummary = packVersionService.findByItemId(itemId)
+                .map(qualityService::summary)
+                .orElse(MarketplaceQualityService.Summary.EMPTY);
+        return toResponse(item, qualitySummary);
     }
 
     private void validateTransition(MarketplaceItemStatus current, MarketplaceItemStatus target) {
@@ -109,7 +122,10 @@ public class MarketplaceAdminService {
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
     }
 
-    private MarketplaceItemResponse toResponse(MarketplaceItem item) {
+    private MarketplaceItemResponse toResponse(
+            MarketplaceItem item,
+            MarketplaceQualityService.Summary qualitySummary
+    ) {
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(item.getItemId());
         MarketplacePackVersionIdentity identity = packVersionService.identityOf(item.getItemId());
         return MarketplaceItemResponse.builder()
@@ -127,6 +143,9 @@ public class MarketplaceAdminService {
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
                 .creatorValidationScore(item.getCreatorValidationScore())
+                .qualityStatus(qualitySummary.status())
+                .qualityScore(qualitySummary.score())
+                .qualityCurrent(qualitySummary.current())
                 .reviewNote(item.getReviewNote())
                 .createdAt(item.getCreatedAt())
                 .publishedAt(item.getPublishedAt())

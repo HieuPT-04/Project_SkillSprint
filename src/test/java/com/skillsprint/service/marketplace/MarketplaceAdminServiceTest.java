@@ -11,11 +11,14 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.dto.request.marketplace.ReviewMarketplaceItemRequest;
 import com.skillsprint.dto.response.marketplace.MarketplaceItemResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceQualityJobResponse;
 import com.skillsprint.entity.MarketplaceItem;
+import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.entity.MarketplaceQuizPackSnapshot;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.marketplace.MarketplaceItemStatus;
+import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceItemRepository;
@@ -37,6 +40,7 @@ class MarketplaceAdminServiceTest {
     @Mock MarketplaceItemRepository marketplaceItemRepository;
     @Mock MarketplaceQuizPackSnapshotRepository snapshotRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceQualityService qualityService;
     @Mock UserRepository userRepository;
     @InjectMocks MarketplaceAdminService service;
 
@@ -47,6 +51,8 @@ class MarketplaceAdminServiceTest {
         // MarketplacePackVersionCompatibilityTest.
         lenient().when(packVersionService.identityOf(any()))
                 .thenReturn(MarketplacePackVersionIdentity.EMPTY);
+        lenient().when(qualityService.summariesByLegacyItemIds(any()))
+                .thenReturn(java.util.Map.of());
     }
 
     @Test
@@ -75,6 +81,45 @@ class MarketplaceAdminServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getStatus()).isEqualTo(MarketplaceItemStatus.PUBLISHED);
         verify(marketplaceItemRepository).findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED);
+    }
+
+    @Test
+    void listIncludesCurrentQualitySummaryWithoutLoadingJobReports() {
+        MarketplaceItem item = item(MarketplaceItemStatus.PENDING_REVIEW);
+        when(marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PENDING_REVIEW))
+                .thenReturn(List.of(item));
+        when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot(item)));
+        when(qualityService.summariesByLegacyItemIds(List.of(item.getItemId())))
+                .thenReturn(java.util.Map.of(item.getItemId(),
+                        new MarketplaceQualityService.Summary(MarketplaceQualityJobStatus.PASSED, 95, true)));
+
+        MarketplaceItemResponse response = service.getItems(null).get(0);
+
+        assertThat(response.getQualityStatus()).isEqualTo(MarketplaceQualityJobStatus.PASSED);
+        assertThat(response.getQualityScore()).isEqualTo(95);
+        assertThat(response.isQualityCurrent()).isTrue();
+    }
+
+    @Test
+    void detailIncludesLatestVersionScopedQualityReport() {
+        MarketplaceItem item = item(MarketplaceItemStatus.PENDING_REVIEW);
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        version.setVersionId(UUID.randomUUID());
+        MarketplaceQualityJobResponse qualityJob = MarketplaceQualityJobResponse.builder()
+                .jobId(UUID.randomUUID())
+                .versionId(version.getVersionId())
+                .status(MarketplaceQualityJobStatus.PASSED)
+                .score(95)
+                .currentSnapshot(true)
+                .build();
+        when(marketplaceItemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
+        when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot(item)));
+        when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
+        when(qualityService.findLatestForAdmin(version)).thenReturn(Optional.of(qualityJob));
+
+        var response = service.getItemDetail(item.getItemId());
+
+        assertThat(response.getQualityJob()).isSameAs(qualityJob);
     }
 
     @Test

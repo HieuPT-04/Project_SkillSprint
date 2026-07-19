@@ -64,6 +64,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock MarketplacePackVersionService packVersionService;
+    @Mock MarketplaceQualityService qualityService;
     @Mock MarketplaceVersionCheckoutService versionCheckoutService;
     @Mock MarketplaceOwnershipService marketplaceOwnershipService;
     @Mock S3PresignedUrlService s3PresignedUrlService;
@@ -85,6 +86,7 @@ class MarketplacePackVersionCompatibilityTest {
                 .thenReturn(Map.of(item.getItemId(), identity));
         lenient().when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
         lenient().when(packVersionService.requireByItemId(item.getItemId())).thenReturn(version);
+        lenient().when(qualityService.summariesByLegacyItemIds(any())).thenReturn(Map.of());
         lenient().when(entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(false);
@@ -126,7 +128,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void adminItemDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceAdminService service = new MarketplaceAdminService(
-                itemRepository, snapshotRepository, packVersionService, userRepository);
+                itemRepository, snapshotRepository, packVersionService, qualityService, userRepository);
         when(itemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
 
         MarketplaceAdminItemDetailResponse response = service.getItemDetail(item.getItemId());
@@ -137,7 +139,7 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void adminItemListExposesItemIdAndVersionOneIdentity() {
         MarketplaceAdminService service = new MarketplaceAdminService(
-                itemRepository, snapshotRepository, packVersionService, userRepository);
+                itemRepository, snapshotRepository, packVersionService, qualityService, userRepository);
         when(itemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED))
                 .thenReturn(List.of(item));
 

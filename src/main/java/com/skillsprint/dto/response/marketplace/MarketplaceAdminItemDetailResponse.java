@@ -22,6 +22,7 @@ public class MarketplaceAdminItemDetailResponse {
     Integer priceCoins;
     String status;
     Integer creatorValidationScore;
+    MarketplaceQualityJobResponse qualityJob;
     String reviewNote;
     Instant createdAt;
     JsonNode content;
