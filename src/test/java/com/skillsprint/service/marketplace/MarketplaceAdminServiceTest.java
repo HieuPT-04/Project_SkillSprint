@@ -117,10 +117,12 @@ class MarketplaceAdminServiceTest {
         when(snapshotRepository.findByItemItemId(item.getItemId())).thenReturn(Optional.of(snapshot(item)));
         when(packVersionService.findByItemId(item.getItemId())).thenReturn(Optional.of(version));
         when(qualityService.findLatestForAdmin(version)).thenReturn(Optional.of(qualityJob));
+        when(qualityService.findRecentForAdmin(version)).thenReturn(List.of(qualityJob));
 
         var response = service.getItemDetail(item.getItemId());
 
         assertThat(response.getQualityJob()).isSameAs(qualityJob);
+        assertThat(response.getQualityJobHistory()).containsExactly(qualityJob);
     }
 
     @Test

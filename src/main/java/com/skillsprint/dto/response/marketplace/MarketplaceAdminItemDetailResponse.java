@@ -2,6 +2,7 @@ package com.skillsprint.dto.response.marketplace;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +24,7 @@ public class MarketplaceAdminItemDetailResponse {
     String status;
     Integer creatorValidationScore;
     MarketplaceQualityJobResponse qualityJob;
+    List<MarketplaceQualityJobResponse> qualityJobHistory;
     String reviewNote;
     Instant createdAt;
     JsonNode content;

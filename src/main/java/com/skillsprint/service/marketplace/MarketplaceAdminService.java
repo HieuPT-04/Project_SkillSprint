@@ -51,9 +51,13 @@ public class MarketplaceAdminService {
         MarketplaceItem item = findItem(itemId);
         MarketplaceQuizPackSnapshot snapshot = findSnapshot(itemId);
         MarketplacePackVersionIdentity identity = packVersionService.identityOf(itemId);
-        var qualityJob = packVersionService.findByItemId(itemId)
+        var version = packVersionService.findByItemId(itemId);
+        var qualityJob = version
                 .flatMap(qualityService::findLatestForAdmin)
                 .orElse(null);
+        var qualityJobHistory = version
+                .map(qualityService::findRecentForAdmin)
+                .orElse(List.of());
         return MarketplaceAdminItemDetailResponse.builder()
                 .itemId(item.getItemId())
                 .packId(identity.packId())
@@ -68,6 +72,7 @@ public class MarketplaceAdminService {
                 .status(item.getStatus().name())
                 .creatorValidationScore(item.getCreatorValidationScore())
                 .qualityJob(qualityJob)
+                .qualityJobHistory(qualityJobHistory)
                 .reviewNote(item.getReviewNote())
                 .createdAt(item.getCreatedAt())
                 .content(snapshot.getContent())

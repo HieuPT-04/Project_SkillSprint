@@ -103,6 +103,15 @@ public class MarketplaceQualityService {
                 .map(job -> response(job, version));
     }
 
+    @Transactional(readOnly = true)
+    public List<MarketplaceQualityJobResponse> findRecentForAdmin(MarketplacePackVersion version) {
+        return qualityJobRepository
+                .findTop10ByPackVersionVersionIdOrderByCreatedAtDesc(version.getVersionId())
+                .stream()
+                .map(job -> response(job, version))
+                .toList();
+    }
+
     @Scheduled(fixedDelayString = "${app.marketplace.quality.fixed-delay-ms:3000}")
     @Transactional
     public void processNextQueuedJob() {

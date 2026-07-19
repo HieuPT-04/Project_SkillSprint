@@ -2,6 +2,7 @@ package com.skillsprint.repository;
 
 import com.skillsprint.entity.MarketplaceQualityJob;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 public interface MarketplaceQualityJobRepository extends JpaRepository<MarketplaceQualityJob, UUID> {
 
     Optional<MarketplaceQualityJob> findTopByPackVersionVersionIdOrderByCreatedAtDesc(UUID versionId);
+
+    List<MarketplaceQualityJob> findTop10ByPackVersionVersionIdOrderByCreatedAtDesc(UUID versionId);
 
     Optional<MarketplaceQualityJob> findTopByPackVersionVersionIdAndSnapshotFingerprintOrderByCreatedAtDesc(
             UUID versionId,
