@@ -179,6 +179,7 @@ class MarketplaceCreatorServiceTest {
         UUID itemId = UUID.randomUUID();
         MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.PENDING_REVIEW);
         when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, "creator")).thenReturn(Optional.of(item));
 
         assertThatThrownBy(() -> service.getCreatorValidationPack("creator", itemId))
                 .isInstanceOf(AppException.class)
@@ -200,7 +201,7 @@ class MarketplaceCreatorServiceTest {
         snapshot.setChapterCount(1);
         snapshot.setQuizCount(1);
         snapshot.setQuestionCount(1);
-        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, "creator")).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(marketplaceItemRepository.save(any(MarketplaceItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         mockWorkspaceGraph("creator", item.getSourceWorkspace());
@@ -226,7 +227,7 @@ class MarketplaceCreatorServiceTest {
         MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.DRAFT);
         item.setReviewNote("Thieu noi dung chuong 2");
         MarketplaceQuizPackSnapshot snapshot = snapshot(item, objectMapper.createObjectNode());
-        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, "creator")).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(marketplaceItemRepository.save(any(MarketplaceItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         mockWorkspaceGraph("creator", item.getSourceWorkspace());
@@ -253,7 +254,7 @@ class MarketplaceCreatorServiceTest {
         snapshot.setChapterCount(4);
         snapshot.setQuizCount(4);
         snapshot.setQuestionCount(20);
-        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator")).thenReturn(Optional.of(item));
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, "creator")).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(marketplaceItemRepository.save(any(MarketplaceItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         MarketplacePack pack = new MarketplacePack();
@@ -262,7 +263,6 @@ class MarketplaceCreatorServiceTest {
         version.setVersionId(UUID.randomUUID());
         version.setVersionNo(1);
         version.setPack(pack);
-        when(packVersionService.requireByItemId(itemId)).thenReturn(version);
         when(packVersionService.syncFromLegacyItem(item, snapshot)).thenReturn(Optional.of(version));
         when(qualityService.summary(version)).thenReturn(
                 new MarketplaceQualityService.Summary(
@@ -284,9 +284,11 @@ class MarketplaceCreatorServiceTest {
         MarketplaceItem item = item(itemId, "creator", MarketplaceItemStatus.DRAFT);
         item.setCreatorValidationScore(95);
         MarketplacePackVersion version = new MarketplacePackVersion();
-        when(marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, "creator"))
+        MarketplaceQuizPackSnapshot snapshot = snapshot(item, objectMapper.createObjectNode());
+        when(marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, "creator"))
                 .thenReturn(Optional.of(item));
-        when(packVersionService.requireByItemId(itemId)).thenReturn(version);
+        when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
+        when(packVersionService.syncFromLegacyItem(item, snapshot)).thenReturn(Optional.of(version));
         doThrow(new AppException(ErrorCode.MARKETPLACE_QUALITY_VALIDATION_REQUIRED))
                 .when(qualityService).requireCurrentPass(version);
 

@@ -161,13 +161,14 @@ public class MarketplaceCreatorService {
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
+                .creatorValidationScore(item.getCreatorValidationScore())
                 .chapters(chapters)
                 .build();
     }
 
     @Transactional
     public MarketplaceItemResponse refreshSnapshot(String userId, UUID itemId) {
-        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
         if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
             throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
@@ -305,7 +306,7 @@ public class MarketplaceCreatorService {
             UUID itemId,
             SubmitMarketplaceQuizRequest request
     ) {
-        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
         if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
             throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
@@ -353,7 +354,7 @@ public class MarketplaceCreatorService {
 
     @Transactional
     public MarketplaceItemResponse submitForReview(String userId, UUID itemId) {
-        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserId(itemId, userId)
+        MarketplaceItem item = marketplaceItemRepository.findByItemIdAndCreatorUserIdForUpdate(itemId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
         if (item.getStatus() != MarketplaceItemStatus.DRAFT) {
             throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
@@ -361,14 +362,15 @@ public class MarketplaceCreatorService {
         if (item.getCreatorValidationScore() == null || item.getCreatorValidationScore() < 90) {
             throw new AppException(ErrorCode.MARKETPLACE_CREATOR_VALIDATION_REQUIRED);
         }
-        MarketplacePackVersion version = packVersionService.requireByItemId(itemId);
-        qualityService.requireCurrentPass(version);
+        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
+        MarketplacePackVersion syncedVersion = packVersionService.syncFromLegacyItem(item, snapshot)
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+        qualityService.requireCurrentPass(syncedVersion);
 
         item.setStatus(MarketplaceItemStatus.PENDING_REVIEW);
         item = marketplaceItemRepository.save(item);
-        MarketplaceQuizPackSnapshot snapshot = snapshotRepository.findByItemItemId(itemId)
-                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_FOUND));
-        MarketplacePackVersion syncedVersion = packVersionService.syncFromLegacyItem(item, snapshot).orElse(version);
+        syncedVersion = packVersionService.syncFromLegacyItem(item, snapshot).orElse(syncedVersion);
         return toResponse(
                 item,
                 snapshot,

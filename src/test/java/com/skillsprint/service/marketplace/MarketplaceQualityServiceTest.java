@@ -21,6 +21,7 @@ import com.skillsprint.repository.MarketplacePackVersionRepository;
 import com.skillsprint.repository.MarketplaceQualityJobRepository;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,31 @@ class MarketplaceQualityServiceTest {
         assertThat(response.getStatus()).isEqualTo(MarketplaceQualityJobStatus.QUEUED);
         assertThat(version.getQualitySnapshotFingerprint()).isEqualTo("hash");
         assertThat(response.isCurrentSnapshot()).isTrue();
+    }
+
+    @Test
+    void queueSupersedesAnActiveJobFromAnOlderSnapshot() {
+        MarketplaceQualityJob oldJob = job("old-hash", MarketplaceQualityJobStatus.RUNNING);
+        when(versionRepository.findByVersionIdForUpdate(version.getVersionId())).thenReturn(Optional.of(version));
+        when(fingerprint.of(version)).thenReturn("new-hash");
+        when(qualityJobRepository.findTopByPackVersionVersionIdAndSnapshotFingerprintOrderByCreatedAtDesc(
+                version.getVersionId(), "new-hash")).thenReturn(Optional.empty());
+        when(qualityJobRepository.findByPackVersionVersionIdAndStatusIn(
+                version.getVersionId(),
+                List.of(MarketplaceQualityJobStatus.QUEUED, MarketplaceQualityJobStatus.RUNNING)))
+                .thenReturn(List.of(oldJob));
+        when(qualityJobRepository.save(any(MarketplaceQualityJob.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MarketplaceQualityJob queued = service.queue(version);
+
+        assertThat(oldJob.getStatus()).isEqualTo(MarketplaceQualityJobStatus.FAILED);
+        assertThat(oldJob.getCompletedAt()).isNotNull();
+        assertThat(oldJob.getReport().path("issues").get(0).path("code").asText())
+                .isEqualTo("SNAPSHOT_STALE");
+        assertThat(queued.getStatus()).isEqualTo(MarketplaceQualityJobStatus.QUEUED);
+        assertThat(queued.getSnapshotFingerprint()).isEqualTo("new-hash");
+        verify(qualityJobRepository).saveAll(List.of(oldJob));
     }
 
     @Test

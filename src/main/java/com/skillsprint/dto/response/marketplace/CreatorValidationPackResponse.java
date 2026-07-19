@@ -19,6 +19,7 @@ public class CreatorValidationPackResponse {
     Integer chapterCount;
     Integer quizCount;
     Integer questionCount;
+    Integer creatorValidationScore;
     List<ChapterResponse> chapters;
 
     @Getter

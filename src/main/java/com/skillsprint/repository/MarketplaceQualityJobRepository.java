@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +15,11 @@ public interface MarketplaceQualityJobRepository extends JpaRepository<Marketpla
     Optional<MarketplaceQualityJob> findTopByPackVersionVersionIdOrderByCreatedAtDesc(UUID versionId);
 
     List<MarketplaceQualityJob> findTop10ByPackVersionVersionIdOrderByCreatedAtDesc(UUID versionId);
+
+    List<MarketplaceQualityJob> findByPackVersionVersionIdAndStatusIn(
+            UUID versionId,
+            List<MarketplaceQualityJobStatus> statuses
+    );
 
     Optional<MarketplaceQualityJob> findTopByPackVersionVersionIdAndSnapshotFingerprintOrderByCreatedAtDesc(
             UUID versionId,

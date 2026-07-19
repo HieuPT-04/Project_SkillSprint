@@ -56,11 +56,17 @@ public class MarketplaceQualityService {
         if (version.getStatus() != MarketplacePackVersionStatus.DRAFT) {
             throw new AppException(ErrorCode.MARKETPLACE_ITEM_NOT_EDITABLE);
         }
-        return response(queue(version), version);
+        return response(queueLocked(version), version);
     }
 
     @Transactional
     public MarketplaceQualityJob queue(MarketplacePackVersion version) {
+        MarketplacePackVersion lockedVersion = versionRepository.findByVersionIdForUpdate(version.getVersionId())
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+        return queueLocked(lockedVersion);
+    }
+
+    private MarketplaceQualityJob queueLocked(MarketplacePackVersion version) {
         String currentFingerprint = fingerprint.of(version);
         Optional<MarketplaceQualityJob> reusable = qualityJobRepository
                 .findTopByPackVersionVersionIdAndSnapshotFingerprintOrderByCreatedAtDesc(
@@ -69,6 +75,21 @@ public class MarketplaceQualityService {
         if (reusable.isPresent()) {
             applySummary(version, reusable.get());
             return reusable.get();
+        }
+
+        List<MarketplaceQualityJob> supersededJobs = qualityJobRepository
+                .findByPackVersionVersionIdAndStatusIn(
+                        version.getVersionId(),
+                        List.of(MarketplaceQualityJobStatus.QUEUED, MarketplaceQualityJobStatus.RUNNING));
+        supersededJobs.forEach(job -> {
+            job.setStatus(MarketplaceQualityJobStatus.FAILED);
+            job.setScore(0);
+            job.setReport(staleReport());
+            job.setNextRetryAt(null);
+            job.setCompletedAt(Instant.now());
+        });
+        if (!supersededJobs.isEmpty()) {
+            qualityJobRepository.saveAll(supersededJobs);
         }
 
         MarketplaceQualityJob job = new MarketplaceQualityJob();

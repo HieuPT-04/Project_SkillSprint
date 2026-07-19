@@ -16,8 +16,8 @@ CREATE TABLE marketplace_quality_jobs (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX uq_marketplace_quality_job_active_snapshot
-    ON marketplace_quality_jobs (pack_version_id, snapshot_fingerprint)
+CREATE UNIQUE INDEX uq_marketplace_quality_job_active
+    ON marketplace_quality_jobs (pack_version_id)
     WHERE status IN ('QUEUED', 'RUNNING');
 
 CREATE INDEX idx_marketplace_quality_job_next
