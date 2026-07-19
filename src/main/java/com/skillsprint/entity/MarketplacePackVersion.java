@@ -3,6 +3,7 @@ package com.skillsprint.entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.skillsprint.enums.marketplace.MarketplacePackUpdateType;
 import com.skillsprint.enums.marketplace.MarketplacePackVersionStatus;
+import com.skillsprint.enums.marketplace.MarketplaceQualityJobStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -112,4 +113,17 @@ public class MarketplacePackVersion extends BaseAuditEntity {
 
     @Column(name = "superseded_at")
     private Instant supersededAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "quality_status", length = 20)
+    private MarketplaceQualityJobStatus qualityStatus;
+
+    @Column(name = "quality_score")
+    private Integer qualityScore;
+
+    @Column(name = "quality_snapshot_fingerprint", length = 64)
+    private String qualitySnapshotFingerprint;
+
+    @Column(name = "quality_validated_at")
+    private Instant qualityValidatedAt;
 }
