@@ -29,13 +29,18 @@ public class MarketplaceVersionAccessService {
     public MarketplacePackVersion requireAccess(String buyerId, UUID versionId) {
         MarketplacePackVersion version = requireVersion(versionId);
 
-        if (entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
-                buyerId, versionId, MarketplaceEntitlementStatus.ACTIVE)
-                || hasActiveLegacyPurchase(buyerId, version)) {
+        if (hasAccess(buyerId, version)) {
             return version;
         }
 
         throw accessDenied();
+    }
+
+    /** Checks access for a version already resolved by the calling transaction. */
+    public boolean hasAccess(String buyerId, MarketplacePackVersion version) {
+        return entitlementRepository.existsByBuyerUserIdAndPackVersionVersionIdAndStatus(
+                buyerId, version.getVersionId(), MarketplaceEntitlementStatus.ACTIVE)
+                || hasActiveLegacyPurchase(buyerId, version);
     }
 
     /** Locks the access record before a start-or-resume write operation. */
