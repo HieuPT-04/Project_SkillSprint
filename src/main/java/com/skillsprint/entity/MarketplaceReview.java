@@ -26,11 +26,12 @@ public class MarketplaceReview extends BaseAuditEntity {
     @Column(name = "review_id")
     private UUID reviewId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "item_id", nullable = false)
+    /** Compatibility pointer for Version 1 and unmapped legacy reviews. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "item_id")
     private MarketplaceItem item;
 
-    /** Nullable until every legacy row is backfilled; see V7 migration notes. */
+    /** Canonical review scope. Null only for an unmapped legacy review. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pack_version_id")
     private MarketplacePackVersion packVersion;
