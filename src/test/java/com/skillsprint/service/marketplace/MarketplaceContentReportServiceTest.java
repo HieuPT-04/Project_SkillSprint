@@ -64,9 +64,10 @@ class MarketplaceContentReportServiceTest {
     }
 
     @Test
-    void buyerReportsQuestionOnPublishedVersionWithoutSupplyingUserId() {
+    void ownerReportsQuestionWithoutSupplyingUserId() {
         CreateMarketplaceContentReportRequest request = request(
                 MarketplaceReportTargetType.QUESTION, "11111111-1111-1111-1111-111111111111");
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(reportRepository.existsActiveReport(any(), any(), any(), any(), any())).thenReturn(false);
         when(userRepository.findById("buyer")).thenReturn(Optional.of(reporter));
@@ -87,6 +88,7 @@ class MarketplaceContentReportServiceTest {
     void reportingUnknownQuestionIsRejected() {
         CreateMarketplaceContentReportRequest request = request(
                 MarketplaceReportTargetType.QUESTION, "99999999-9999-9999-9999-999999999999");
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
 
         assertThatThrownBy(() -> service.createReport("buyer", request))
@@ -100,6 +102,7 @@ class MarketplaceContentReportServiceTest {
     void duplicateActiveReportIsRejected() {
         // The active guard covers both OPEN and IN_REVIEW; the repository boolean stands in for either.
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.VERSION, null);
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(reportRepository.existsActiveReport(
                 "buyer", version.getVersionId(), MarketplaceReportTargetType.VERSION, null,
@@ -116,6 +119,7 @@ class MarketplaceContentReportServiceTest {
     void concurrentDuplicateRaceReturnsTypedDuplicateError() {
         // Guard passed, but the DB partial unique index closed a race on insert.
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.VERSION, null);
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(reportRepository.existsActiveReport(any(), any(), any(), any(), any())).thenReturn(false);
         when(userRepository.findById("buyer")).thenReturn(Optional.of(reporter));
@@ -132,6 +136,7 @@ class MarketplaceContentReportServiceTest {
     void buyerReportsAReviewBelongingToTheVersion() {
         String reviewId = "33333333-3333-3333-3333-333333333333";
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.REVIEW, reviewId);
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(reviewRepository.existsByReviewIdAndPackVersionVersionId(
                 UUID.fromString(reviewId), version.getVersionId())).thenReturn(true);
@@ -150,6 +155,7 @@ class MarketplaceContentReportServiceTest {
     void reportingAReviewFromAnotherVersionIsRejected() {
         String reviewId = "44444444-4444-4444-4444-444444444444";
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.REVIEW, reviewId);
+        allowOwner();
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(reviewRepository.existsByReviewIdAndPackVersionVersionId(
                 UUID.fromString(reviewId), version.getVersionId())).thenReturn(false);
@@ -162,8 +168,7 @@ class MarketplaceContentReportServiceTest {
     }
 
     @Test
-    void reportOnInaccessibleUnpublishedVersionIsHidden() {
-        version.setStatus(MarketplacePackVersionStatus.DRAFT);
+    void reportOnPublishedVersionWithoutOwnershipIsForbidden() {
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.VERSION, null);
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(versionAccessService.hasAccess("buyer", version)).thenReturn(false);
@@ -171,7 +176,8 @@ class MarketplaceContentReportServiceTest {
         assertThatThrownBy(() -> service.createReport("buyer", request))
                 .isInstanceOf(AppException.class)
                 .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+                        .isEqualTo(ErrorCode.FORBIDDEN));
+        verify(reportRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -226,6 +232,10 @@ class MarketplaceContentReportServiceTest {
         request.setCategory(MarketplaceReportCategory.MISLEADING);
         request.setDescription("  problem  ");
         return request;
+    }
+
+    private void allowOwner() {
+        when(versionAccessService.hasAccess("buyer", version)).thenReturn(true);
     }
 
     private MarketplaceContentReport openReport() {

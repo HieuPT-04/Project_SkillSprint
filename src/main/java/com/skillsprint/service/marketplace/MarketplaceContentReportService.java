@@ -10,7 +10,6 @@ import com.skillsprint.dto.response.marketplace.MarketplaceReportEvidenceUploadU
 import com.skillsprint.entity.MarketplaceContentReport;
 import com.skillsprint.entity.MarketplacePackVersion;
 import com.skillsprint.entity.User;
-import com.skillsprint.enums.marketplace.MarketplacePackVersionStatus;
 import com.skillsprint.enums.marketplace.MarketplaceReportCategory;
 import com.skillsprint.enums.marketplace.MarketplaceReportStatus;
 import com.skillsprint.enums.marketplace.MarketplaceReportTargetType;
@@ -58,7 +57,7 @@ public class MarketplaceContentReportService {
             String reporterId,
             CreateMarketplaceContentReportRequest request
     ) {
-        MarketplacePackVersion version = requireReadableVersion(reporterId, request.getPackVersionId());
+        MarketplacePackVersion version = requireOwnedVersion(reporterId, request.getPackVersionId());
         String targetRef = resolveAndValidateTarget(version, request.getTargetType(), request.getTargetRef());
 
         if (reportRepository.existsActiveReport(
@@ -155,14 +154,14 @@ public class MarketplaceContentReportService {
         return toAdminResponse(saved);
     }
 
-    private MarketplacePackVersion requireReadableVersion(String viewerId, UUID versionId) {
+    /** Reports are a post-purchase quality channel, not public marketplace feedback. */
+    private MarketplacePackVersion requireOwnedVersion(String viewerId, UUID versionId) {
         MarketplacePackVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
-        if (version.getStatus() == MarketplacePackVersionStatus.PUBLISHED
-                || versionAccessService.hasAccess(viewerId, version)) {
+        if (versionAccessService.hasAccess(viewerId, version)) {
             return version;
         }
-        throw new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND);
+        throw new AppException(ErrorCode.FORBIDDEN);
     }
 
     /** Confirms the target exists in the snapshot and normalizes the stored reference. */
