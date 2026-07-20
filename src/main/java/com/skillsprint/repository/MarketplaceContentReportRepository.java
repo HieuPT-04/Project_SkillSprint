@@ -51,4 +51,8 @@ public interface MarketplaceContentReportRepository extends JpaRepository<Market
     );
 
     Optional<MarketplaceContentReport> findByReportIdAndReporterUserId(UUID reportId, String reporterId);
+
+    long countByPackVersionVersionId(UUID versionId);
+
+    long countByPackVersionVersionIdAndStatus(UUID versionId, MarketplaceReportStatus status);
 }

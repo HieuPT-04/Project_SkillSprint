@@ -27,4 +27,14 @@ public interface MarketplaceVersionProgressRepository extends JpaRepository<Mark
             @Param("buyerId") String buyerId,
             @Param("versionId") UUID versionId
     );
+
+    long countByPackVersionVersionId(UUID versionId);
+
+    @Query("""
+            select count(progress)
+            from MarketplaceVersionProgress progress
+            where progress.packVersion.versionId = :versionId
+              and progress.completionPercent >= 100
+            """)
+    long countCompletedByVersion(@Param("versionId") UUID versionId);
 }

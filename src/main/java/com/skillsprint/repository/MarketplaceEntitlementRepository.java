@@ -41,6 +41,8 @@ public interface MarketplaceEntitlementRepository extends JpaRepository<Marketpl
 
     Optional<MarketplaceEntitlement> findBySourceSaleSaleId(UUID saleId);
 
+    long countByPackVersionVersionId(UUID versionId);
+
     Optional<MarketplaceEntitlement> findFirstByBuyerUserIdAndStatusAndPackVersionPackPackIdAndPackVersionVersionNoLessThanOrderByPackVersionVersionNoDesc(
             String buyerId,
             MarketplaceEntitlementStatus status,
