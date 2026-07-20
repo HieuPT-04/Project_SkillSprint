@@ -51,25 +51,34 @@ class MarketplaceContentReportRepositoryTest {
     }
 
     @Test
-    void existsOpenReportDistinguishesReporterAndStatus() {
+    void existsActiveReportDistinguishesReporterAndStatus() {
         reportRepository.saveAndFlush(report(buyer, MarketplaceReportStatus.OPEN));
 
-        assertThat(reportRepository.existsOpenReport(
-                buyer.getUserId(), version.getVersionId(),
-                MarketplaceReportTargetType.VERSION, null, MarketplaceReportCategory.MISLEADING)).isTrue();
+        assertThat(activeReport(buyer)).isTrue();
         // A different user reporting the same target is allowed.
-        assertThat(reportRepository.existsOpenReport(
-                otherBuyer.getUserId(), version.getVersionId(),
-                MarketplaceReportTargetType.VERSION, null, MarketplaceReportCategory.MISLEADING)).isFalse();
+        assertThat(activeReport(otherBuyer)).isFalse();
     }
 
     @Test
-    void resolvedReportNoLongerBlocksNewOpenReport() {
-        reportRepository.saveAndFlush(report(buyer, MarketplaceReportStatus.RESOLVED));
+    void inReviewReportStillBlocksADuplicate() {
+        reportRepository.saveAndFlush(report(buyer, MarketplaceReportStatus.IN_REVIEW));
 
-        assertThat(reportRepository.existsOpenReport(
-                buyer.getUserId(), version.getVersionId(),
-                MarketplaceReportTargetType.VERSION, null, MarketplaceReportCategory.MISLEADING)).isFalse();
+        assertThat(activeReport(buyer)).isTrue();
+    }
+
+    @Test
+    void resolvedOrDismissedReportNoLongerBlocksNewReport() {
+        reportRepository.saveAndFlush(report(buyer, MarketplaceReportStatus.RESOLVED));
+        assertThat(activeReport(buyer)).isFalse();
+
+        reportRepository.saveAndFlush(report(otherBuyer, MarketplaceReportStatus.DISMISSED));
+        assertThat(activeReport(otherBuyer)).isFalse();
+    }
+
+    private boolean activeReport(User reporter) {
+        return reportRepository.existsActiveReport(
+                reporter.getUserId(), version.getVersionId(),
+                MarketplaceReportTargetType.VERSION, null, MarketplaceReportCategory.MISLEADING);
     }
 
     @Test

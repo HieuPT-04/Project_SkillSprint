@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface MarketplaceContentReportRepository extends JpaRepository<MarketplaceContentReport, UUID> {
 
+    /** Active duplicate states are OPEN and IN_REVIEW; a resolved/dismissed report no longer blocks. */
     @Query("""
             select count(report) > 0
             from MarketplaceContentReport report
@@ -22,11 +23,13 @@ public interface MarketplaceContentReportRepository extends JpaRepository<Market
               and report.packVersion.versionId = :versionId
               and report.targetType = :targetType
               and report.category = :category
-              and report.status = com.skillsprint.enums.marketplace.MarketplaceReportStatus.OPEN
+              and report.status in (
+                  com.skillsprint.enums.marketplace.MarketplaceReportStatus.OPEN,
+                  com.skillsprint.enums.marketplace.MarketplaceReportStatus.IN_REVIEW)
               and ((:targetRef is null and report.targetRef is null)
                    or report.targetRef = :targetRef)
             """)
-    boolean existsOpenReport(
+    boolean existsActiveReport(
             @Param("reporterId") String reporterId,
             @Param("versionId") UUID versionId,
             @Param("targetType") MarketplaceReportTargetType targetType,

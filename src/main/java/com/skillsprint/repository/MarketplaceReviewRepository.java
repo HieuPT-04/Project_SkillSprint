@@ -18,6 +18,9 @@ public interface MarketplaceReviewRepository extends JpaRepository<MarketplaceRe
     /** Kept for callers that still aggregate unmigrated item-scoped reviews. */
     List<MarketplaceReview> findByItemItemId(UUID itemId);
 
+    /** True only when the review exists and belongs to the exact pack version. */
+    boolean existsByReviewIdAndPackVersionVersionId(UUID reviewId, UUID versionId);
+
     @EntityGraph(attributePaths = {"user"})
     Optional<MarketplaceReview> findByPackVersionVersionIdAndUserUserId(UUID versionId, String userId);
 

@@ -18,6 +18,7 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceContentReportRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
+import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +48,7 @@ public class MarketplaceContentReportService {
 
     MarketplaceContentReportRepository reportRepository;
     MarketplacePackVersionRepository versionRepository;
+    MarketplaceReviewRepository reviewRepository;
     UserRepository userRepository;
     MarketplaceVersionAccessService versionAccessService;
     S3PresignedUrlService s3PresignedUrlService;
@@ -58,7 +61,7 @@ public class MarketplaceContentReportService {
         MarketplacePackVersion version = requireReadableVersion(reporterId, request.getPackVersionId());
         String targetRef = resolveAndValidateTarget(version, request.getTargetType(), request.getTargetRef());
 
-        if (reportRepository.existsOpenReport(
+        if (reportRepository.existsActiveReport(
                 reporterId,
                 version.getVersionId(),
                 request.getTargetType(),
@@ -83,8 +86,13 @@ public class MarketplaceContentReportService {
         report.setEvidenceObjectKey(evidenceObjectKey);
         report.setStatus(MarketplaceReportStatus.OPEN);
 
-        MarketplaceContentReport saved = reportRepository.saveAndFlush(report);
-        return toReporterResponse(saved);
+        try {
+            MarketplaceContentReport saved = reportRepository.saveAndFlush(report);
+            return toReporterResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            // The active-report partial unique index closed a race with a concurrent create/retry.
+            throw new AppException(ErrorCode.MARKETPLACE_REPORT_DUPLICATED);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -178,7 +186,26 @@ public class MarketplaceContentReportService {
                 }
                 yield ref;
             }
+            case REVIEW -> {
+                UUID reviewId = parseUuid(ref);
+                if (reviewId == null
+                        || !reviewRepository.existsByReviewIdAndPackVersionVersionId(reviewId, version.getVersionId())) {
+                    throw new AppException(ErrorCode.MARKETPLACE_REPORT_TARGET_INVALID);
+                }
+                yield reviewId.toString();
+            }
         };
+    }
+
+    private UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private boolean chapterExists(MarketplacePackVersion version, String chapterId) {

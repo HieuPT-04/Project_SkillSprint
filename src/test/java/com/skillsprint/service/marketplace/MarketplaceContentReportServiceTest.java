@@ -25,6 +25,7 @@ import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceContentReportRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
+import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.time.Instant;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class MarketplaceContentReportServiceTest {
@@ -43,6 +45,7 @@ class MarketplaceContentReportServiceTest {
 
     @Mock MarketplaceContentReportRepository reportRepository;
     @Mock MarketplacePackVersionRepository versionRepository;
+    @Mock MarketplaceReviewRepository reviewRepository;
     @Mock UserRepository userRepository;
     @Mock MarketplaceVersionAccessService versionAccessService;
     @Mock S3PresignedUrlService s3PresignedUrlService;
@@ -54,7 +57,8 @@ class MarketplaceContentReportServiceTest {
     @BeforeEach
     void setUp() {
         service = new MarketplaceContentReportService(
-                reportRepository, versionRepository, userRepository, versionAccessService, s3PresignedUrlService);
+                reportRepository, versionRepository, reviewRepository, userRepository,
+                versionAccessService, s3PresignedUrlService);
         version = publishedVersion();
         reporter = user("buyer", "Buyer");
     }
@@ -64,7 +68,7 @@ class MarketplaceContentReportServiceTest {
         CreateMarketplaceContentReportRequest request = request(
                 MarketplaceReportTargetType.QUESTION, "11111111-1111-1111-1111-111111111111");
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
-        when(reportRepository.existsOpenReport(any(), any(), any(), any(), any())).thenReturn(false);
+        when(reportRepository.existsActiveReport(any(), any(), any(), any(), any())).thenReturn(false);
         when(userRepository.findById("buyer")).thenReturn(Optional.of(reporter));
         when(reportRepository.saveAndFlush(any(MarketplaceContentReport.class)))
                 .thenAnswer(invocation -> persisted(invocation.getArgument(0)));
@@ -93,10 +97,11 @@ class MarketplaceContentReportServiceTest {
     }
 
     @Test
-    void duplicateOpenReportIsRejected() {
+    void duplicateActiveReportIsRejected() {
+        // The active guard covers both OPEN and IN_REVIEW; the repository boolean stands in for either.
         CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.VERSION, null);
         when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
-        when(reportRepository.existsOpenReport(
+        when(reportRepository.existsActiveReport(
                 "buyer", version.getVersionId(), MarketplaceReportTargetType.VERSION, null,
                 MarketplaceReportCategory.MISLEADING)).thenReturn(true);
 
@@ -104,6 +109,56 @@ class MarketplaceContentReportServiceTest {
                 .isInstanceOf(AppException.class)
                 .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
                         .isEqualTo(ErrorCode.MARKETPLACE_REPORT_DUPLICATED));
+        verify(reportRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void concurrentDuplicateRaceReturnsTypedDuplicateError() {
+        // Guard passed, but the DB partial unique index closed a race on insert.
+        CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.VERSION, null);
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
+        when(reportRepository.existsActiveReport(any(), any(), any(), any(), any())).thenReturn(false);
+        when(userRepository.findById("buyer")).thenReturn(Optional.of(reporter));
+        when(reportRepository.saveAndFlush(any(MarketplaceContentReport.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatThrownBy(() -> service.createReport("buyer", request))
+                .isInstanceOf(AppException.class)
+                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.MARKETPLACE_REPORT_DUPLICATED));
+    }
+
+    @Test
+    void buyerReportsAReviewBelongingToTheVersion() {
+        String reviewId = "33333333-3333-3333-3333-333333333333";
+        CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.REVIEW, reviewId);
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
+        when(reviewRepository.existsByReviewIdAndPackVersionVersionId(
+                UUID.fromString(reviewId), version.getVersionId())).thenReturn(true);
+        when(reportRepository.existsActiveReport(any(), any(), any(), any(), any())).thenReturn(false);
+        when(userRepository.findById("buyer")).thenReturn(Optional.of(reporter));
+        when(reportRepository.saveAndFlush(any(MarketplaceContentReport.class)))
+                .thenAnswer(invocation -> persisted(invocation.getArgument(0)));
+
+        MarketplaceContentReportResponse response = service.createReport("buyer", request);
+
+        assertThat(response.getTargetType()).isEqualTo(MarketplaceReportTargetType.REVIEW);
+        assertThat(response.getTargetRef()).isEqualTo(reviewId);
+    }
+
+    @Test
+    void reportingAReviewFromAnotherVersionIsRejected() {
+        String reviewId = "44444444-4444-4444-4444-444444444444";
+        CreateMarketplaceContentReportRequest request = request(MarketplaceReportTargetType.REVIEW, reviewId);
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
+        when(reviewRepository.existsByReviewIdAndPackVersionVersionId(
+                UUID.fromString(reviewId), version.getVersionId())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createReport("buyer", request))
+                .isInstanceOf(AppException.class)
+                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.MARKETPLACE_REPORT_TARGET_INVALID));
+        verify(reportRepository, never()).saveAndFlush(any());
     }
 
     @Test

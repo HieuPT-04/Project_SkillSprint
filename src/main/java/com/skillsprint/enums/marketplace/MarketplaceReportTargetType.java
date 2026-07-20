@@ -5,5 +5,6 @@ public enum MarketplaceReportTargetType {
     VERSION,
     CHAPTER,
     QUESTION,
-    CREATOR
+    CREATOR,
+    REVIEW
 }
