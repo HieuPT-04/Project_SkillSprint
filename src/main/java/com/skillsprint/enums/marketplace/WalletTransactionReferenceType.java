@@ -16,5 +16,7 @@ public enum WalletTransactionReferenceType {
     /** Reserved for Plan 3 settlement: the platform's commission on a sale. */
     MARKETPLACE_PLATFORM_COMMISSION,
     /** Reserved for Plan 3: an admin-controlled debit of creator earnings. */
-    CREATOR_PAYOUT
+    CREATOR_PAYOUT,
+    /** Plan 6E: compensating credit to a buyer when an approved dispute refund completes. */
+    MARKETPLACE_REFUND
 }
