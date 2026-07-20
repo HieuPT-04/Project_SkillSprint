@@ -38,6 +38,16 @@ public class MarketplaceDisputeController {
         return ResponseEntity.ok(ApiResponse.success(disputeService.getEligibility(jwt.getSubject(), saleId)));
     }
 
+    @GetMapping("/versions/{versionId}/dispute-eligibility")
+    public ResponseEntity<ApiResponse<MarketplaceDisputeEligibilityResponse>> eligibilityByVersion(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID versionId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                disputeService.getEligibilityByVersion(jwt.getSubject(), versionId)
+        ));
+    }
+
     @PostMapping("/disputes")
     public ResponseEntity<ApiResponse<MarketplaceDisputeResponse>> create(
             @AuthenticationPrincipal Jwt jwt,

@@ -93,6 +93,21 @@ public class MarketplaceDisputeService {
         return eligibility(saleId, true, null, active);
     }
 
+    /**
+     * Resolves the caller's own sale for a version and returns its dispute eligibility. Lets the
+     * owned-pack UI open a dispute from a versionId without ever handling another buyer's sale id.
+     */
+    @Transactional(readOnly = true)
+    public MarketplaceDisputeEligibilityResponse getEligibilityByVersion(String buyerId, UUID versionId) {
+        MarketplaceEntitlement entitlement = entitlementRepository
+                .findFirstByBuyerUserIdAndPackVersionVersionIdOrderByGrantedAtDesc(buyerId, versionId)
+                .orElse(null);
+        if (entitlement == null) {
+            return eligibility(null, false, "NOT_OWNER", null);
+        }
+        return getEligibility(buyerId, entitlement.getSourceSale().getSaleId());
+    }
+
     @Transactional
     public MarketplaceDisputeResponse createDispute(String buyerId, CreateMarketplaceDisputeRequest request) {
         MarketplaceSale sale = saleRepository.findByIdForUpdate(request.getSaleId())
