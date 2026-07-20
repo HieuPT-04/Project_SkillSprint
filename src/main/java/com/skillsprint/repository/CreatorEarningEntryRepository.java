@@ -30,4 +30,11 @@ public interface CreatorEarningEntryRepository extends JpaRepository<CreatorEarn
             order by earning.createdAt asc
             """)
     List<CreatorEarningEntry> findEligibleForUpdate(@Param("creatorId") String creatorId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select earning from CreatorEarningEntry earning
+            where earning.settlement.settlementId = :settlementId
+            """)
+    java.util.Optional<CreatorEarningEntry> findBySettlementIdForUpdate(@Param("settlementId") UUID settlementId);
 }

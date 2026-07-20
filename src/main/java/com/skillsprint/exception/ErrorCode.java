@@ -169,6 +169,36 @@ public enum ErrorCode {
             "Ảnh minh chứng chưa được tải lên",
             HttpStatus.BAD_REQUEST
     ),
+    MARKETPLACE_DISPUTE_NOT_FOUND("Không tìm thấy yêu cầu hoàn tiền", HttpStatus.NOT_FOUND),
+    MARKETPLACE_DISPUTE_SALE_NOT_FOUND("Không tìm thấy giao dịch mua tương ứng", HttpStatus.NOT_FOUND),
+    MARKETPLACE_DISPUTE_NOT_ELIGIBLE(
+            "Giao dịch này không đủ điều kiện để yêu cầu hoàn tiền",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_DISPUTE_ALREADY_ACTIVE(
+            "Bạn đã có một yêu cầu hoàn tiền đang xử lý cho giao dịch này",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_DISPUTE_STATE_INVALID(
+            "Không thể chuyển yêu cầu hoàn tiền sang trạng thái này",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_DISPUTE_DECISION_NOTE_REQUIRED(
+            "Cần nhập ghi chú quyết định trước khi xử lý yêu cầu hoàn tiền",
+            HttpStatus.BAD_REQUEST
+    ),
+    MARKETPLACE_REFUND_NOT_APPROVED(
+            "Chỉ có thể hoàn tiền cho yêu cầu đã được phê duyệt",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_REFUND_EARNING_LOCKED(
+            "Thu nhập Creator của giao dịch này đã được đưa vào đợt rút tiền, không thể tự động hoàn tiền. Cần xử lý thủ công.",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_REFUND_STATE_INCONSISTENT(
+            "Dữ liệu thanh toán của giao dịch không nhất quán để hoàn tiền",
+            HttpStatus.CONFLICT
+    ),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),
