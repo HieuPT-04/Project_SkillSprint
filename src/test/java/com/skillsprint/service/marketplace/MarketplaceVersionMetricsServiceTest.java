@@ -11,12 +11,12 @@ import com.skillsprint.enums.marketplace.MarketplaceDisputeStatus;
 import com.skillsprint.enums.marketplace.MarketplaceRankedAttemptStatus;
 import com.skillsprint.enums.marketplace.MarketplaceReportStatus;
 import com.skillsprint.repository.MarketplaceContentReportRepository;
-import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
 import com.skillsprint.repository.MarketplaceRankedAttemptRepository;
 import com.skillsprint.repository.MarketplaceRefundDisputeRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.MarketplaceVersionProgressRepository;
+import com.skillsprint.repository.PlatformRevenueEntryRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +35,7 @@ class MarketplaceVersionMetricsServiceTest {
     @Mock MarketplaceRankedAttemptRepository rankedAttemptRepository;
     @Mock MarketplaceVersionProgressRepository progressRepository;
     @Mock MarketplaceRefundDisputeRepository disputeRepository;
-    @Mock MarketplaceEntitlementRepository entitlementRepository;
+    @Mock PlatformRevenueEntryRepository platformRevenueEntryRepository;
 
     MarketplaceVersionMetricsService service;
     UUID versionId;
@@ -44,7 +44,7 @@ class MarketplaceVersionMetricsServiceTest {
     void setUp() {
         service = new MarketplaceVersionMetricsService(
                 versionRepository, reviewRepository, reportRepository, rankedAttemptRepository,
-                progressRepository, disputeRepository, entitlementRepository);
+                progressRepository, disputeRepository, platformRevenueEntryRepository);
         versionId = UUID.randomUUID();
     }
 
@@ -68,10 +68,11 @@ class MarketplaceVersionMetricsServiceTest {
                 eq(versionId), eq(MarketplaceRankedAttemptStatus.COMPLETED))).thenReturn(20L);
         when(rankedAttemptRepository.countByPackVersionVersionIdAndStatusAndSuspiciousTrue(
                 eq(versionId), eq(MarketplaceRankedAttemptStatus.COMPLETED))).thenReturn(1L);
-        when(entitlementRepository.countByPackVersionVersionId(versionId)).thenReturn(10L);
+        // 3 total disputes, 2 refunded, 10 entitlements. refundRate must be dispute-based: 2/3, not 2/10.
         when(disputeRepository.countByPackVersionVersionId(versionId)).thenReturn(3L);
         when(disputeRepository.countByPackVersionVersionIdAndStatus(versionId, MarketplaceDisputeStatus.REFUNDED)).thenReturn(2L);
         when(disputeRepository.sumRefundedCoinAmountByVersion(versionId)).thenReturn(200L);
+        when(platformRevenueEntryRepository.sumRecognizedPlatformRevenueByVersion(versionId)).thenReturn(160L);
 
         MarketplaceVersionMetricsResponse metrics = service.getMetrics(versionId);
 
@@ -80,8 +81,9 @@ class MarketplaceVersionMetricsServiceTest {
         assertThat(metrics.getReviewCount()).isEqualTo(8L);
         assertThat(metrics.getOpenReportRate()).isEqualTo(0.4D);
         assertThat(metrics.getSuspiciousRankedAttemptRate()).isEqualTo(0.05D);
-        assertThat(metrics.getRefundRate()).isEqualTo(0.2D);
+        assertThat(metrics.getRefundRate()).isEqualTo(2D / 3D);
         assertThat(metrics.getRefundedCoinAmount()).isEqualTo(200L);
+        assertThat(metrics.getRecognizedPlatformRevenue()).isEqualTo(160L);
     }
 
     @Test

@@ -8,12 +8,12 @@ import com.skillsprint.enums.marketplace.MarketplaceReportStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceContentReportRepository;
-import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
 import com.skillsprint.repository.MarketplaceRankedAttemptRepository;
 import com.skillsprint.repository.MarketplaceRefundDisputeRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.MarketplaceVersionProgressRepository;
+import com.skillsprint.repository.PlatformRevenueEntryRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -37,7 +37,7 @@ public class MarketplaceVersionMetricsService {
     MarketplaceRankedAttemptRepository rankedAttemptRepository;
     MarketplaceVersionProgressRepository progressRepository;
     MarketplaceRefundDisputeRepository disputeRepository;
-    MarketplaceEntitlementRepository entitlementRepository;
+    PlatformRevenueEntryRepository platformRevenueEntryRepository;
 
     @Transactional(readOnly = true)
     public MarketplaceVersionMetricsResponse getMetrics(UUID versionId) {
@@ -64,11 +64,12 @@ public class MarketplaceVersionMetricsService {
                 .countByPackVersionVersionIdAndStatusAndSuspiciousTrue(
                         versionId, MarketplaceRankedAttemptStatus.COMPLETED);
 
-        long entitlementCount = entitlementRepository.countByPackVersionVersionId(versionId);
         long disputeCount = disputeRepository.countByPackVersionVersionId(versionId);
         long refundedDisputeCount = disputeRepository.countByPackVersionVersionIdAndStatus(
                 versionId, MarketplaceDisputeStatus.REFUNDED);
         long refundedCoinAmount = disputeRepository.sumRefundedCoinAmountByVersion(versionId);
+        long recognizedPlatformRevenue = platformRevenueEntryRepository
+                .sumRecognizedPlatformRevenueByVersion(versionId);
 
         return MarketplaceVersionMetricsResponse.builder()
                 .versionId(version.getVersionId())
@@ -88,8 +89,9 @@ public class MarketplaceVersionMetricsService {
                 .suspiciousRankedAttemptRate(rate(suspiciousRankedAttemptCount, rankedAttemptCount))
                 .disputeCount(disputeCount)
                 .refundedDisputeCount(refundedDisputeCount)
-                .refundRate(rate(refundedDisputeCount, entitlementCount))
+                .refundRate(rate(refundedDisputeCount, disputeCount))
                 .refundedCoinAmount(refundedCoinAmount)
+                .recognizedPlatformRevenue(recognizedPlatformRevenue)
                 .build();
     }
 

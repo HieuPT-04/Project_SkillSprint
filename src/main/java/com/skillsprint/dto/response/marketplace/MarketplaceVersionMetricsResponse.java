@@ -39,4 +39,7 @@ public class MarketplaceVersionMetricsResponse {
     long refundedDisputeCount;
     double refundRate;
     long refundedCoinAmount;
+
+    /** Recognized (net-of-refund) platform revenue: sum of RECORDED settlement platform amounts. */
+    long recognizedPlatformRevenue;
 }

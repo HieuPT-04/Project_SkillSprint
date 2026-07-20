@@ -177,6 +177,37 @@ class MarketplaceCheckoutFoundationRepositoryTest {
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
+    @Test
+    void recognizedPlatformRevenueCountsOnlyRecordedSettlements() {
+        // A recorded sale (20) recognized; a refunded sale whose settlement is REVERSED (30) excluded.
+        recordRevenue("recorded-sale", MarketplaceSettlementStatus.RECORDED, 20);
+        recordRevenue("reversed-sale", MarketplaceSettlementStatus.REVERSED, 30);
+
+        assertThat(platformRevenueEntryRepository.sumRecognizedPlatformRevenueByVersion(version.getVersionId()))
+                .isEqualTo(20L);
+    }
+
+    private void recordRevenue(String idempotencyKey, MarketplaceSettlementStatus status, int platformAmount) {
+        MarketplaceSale sale = saleRepository.saveAndFlush(sale(idempotencyKey));
+
+        MarketplaceSaleSettlement settlement = new MarketplaceSaleSettlement();
+        settlement.setSale(sale);
+        settlement.setCreator(creator);
+        settlement.setCreatorShareBps(8000);
+        settlement.setCreatorAmount(100 - platformAmount);
+        settlement.setPlatformShareBps(2000);
+        settlement.setPlatformAmount(platformAmount);
+        settlement.setCoinToVndRate(new BigDecimal("1.0000"));
+        settlement.setStatus(status);
+        settlement = settlementRepository.saveAndFlush(settlement);
+
+        PlatformRevenueEntry revenue = new PlatformRevenueEntry();
+        revenue.setSettlement(settlement);
+        revenue.setSale(sale);
+        revenue.setAmount(platformAmount);
+        platformRevenueEntryRepository.saveAndFlush(revenue);
+    }
+
     private MarketplaceSale sale(String idempotencyKey) {
         MarketplaceSale sale = new MarketplaceSale();
         sale.setBuyer(buyer);
