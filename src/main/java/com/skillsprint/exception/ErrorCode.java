@@ -144,6 +144,31 @@ public enum ErrorCode {
             "Quiz Pack cần vượt qua kiểm định chất lượng hiện tại trước khi gửi duyệt hoặc xuất bản",
             HttpStatus.CONFLICT
     ),
+    MARKETPLACE_REPORT_TARGET_INVALID(
+            "Nội dung được báo cáo không thuộc phiên bản Quiz Pack này",
+            HttpStatus.BAD_REQUEST
+    ),
+    MARKETPLACE_REPORT_DUPLICATED(
+            "Bạn đã có một báo cáo đang xử lý cho nội dung này",
+            HttpStatus.CONFLICT
+    ),
+    MARKETPLACE_REPORT_NOT_FOUND("Không tìm thấy báo cáo Marketplace", HttpStatus.NOT_FOUND),
+    MARKETPLACE_REPORT_STATUS_INVALID(
+            "Không thể chuyển báo cáo sang trạng thái này",
+            HttpStatus.CONFLICT
+    ),
+    INVALID_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPE(
+            "Ảnh minh chứng phải ở định dạng JPEG, PNG, WebP hoặc GIF",
+            HttpStatus.BAD_REQUEST
+    ),
+    INVALID_MARKETPLACE_REPORT_EVIDENCE_OBJECT_KEY(
+            "Bạn không có quyền đính kèm ảnh minh chứng này",
+            HttpStatus.FORBIDDEN
+    ),
+    MARKETPLACE_REPORT_EVIDENCE_NOT_UPLOADED(
+            "Ảnh minh chứng chưa được tải lên",
+            HttpStatus.BAD_REQUEST
+    ),
 
     // AI Tutor
     TUTOR_QUESTION_REQUIRED("Câu hỏi không được để trống", HttpStatus.BAD_REQUEST),

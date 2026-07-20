@@ -3,10 +3,12 @@ package com.skillsprint.service.storage;
 import com.skillsprint.configuration.s3.S3Properties;
 import com.skillsprint.dto.request.feedback.CreateFeedbackUploadUrlRequest;
 import com.skillsprint.dto.request.marketplace.CreateCreatorPayoutQrUploadUrlRequest;
+import com.skillsprint.dto.request.marketplace.CreateMarketplaceReportEvidenceUploadUrlRequest;
 import com.skillsprint.dto.request.user.ConfirmAvatarUploadRequest;
 import com.skillsprint.dto.request.user.CreateAvatarUploadUrlRequest;
 import com.skillsprint.dto.response.feedback.FeedbackUploadUrlResponse;
 import com.skillsprint.dto.response.marketplace.CreatorPayoutQrUploadUrlResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceReportEvidenceUploadUrlResponse;
 import com.skillsprint.dto.response.user.AvatarUploadUrlResponse;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
@@ -52,6 +54,14 @@ public class S3PresignedUrlService {
             "image/webp"
     );
     private static final long MAX_CREATOR_PAYOUT_QR_BYTES = 5L * 1024 * 1024;
+
+    private static final Set<String> ALLOWED_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif"
+    );
+    private static final long MAX_MARKETPLACE_REPORT_EVIDENCE_BYTES = 5L * 1024 * 1024;
 
     S3Presigner s3Presigner;
     S3Client s3Client;
@@ -174,6 +184,61 @@ public class S3PresignedUrlService {
         return key;
     }
 
+    /** Creates a private, reporter-scoped evidence upload URL for a marketplace content report. */
+    public MarketplaceReportEvidenceUploadUrlResponse createMarketplaceReportEvidenceUploadUrl(
+            String userId,
+            CreateMarketplaceReportEvidenceUploadUrlRequest request
+    ) {
+        String contentType = request.getContentType().trim().toLowerCase();
+        if (!ALLOWED_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPES.contains(contentType)) {
+            throw new AppException(ErrorCode.INVALID_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPE);
+        }
+
+        String objectKey = buildMarketplaceReportEvidenceObjectKey(userId, contentType);
+        Duration signatureDuration = Duration.ofMinutes(properties.uploadUrlExpirationMinutes());
+        Instant expiresAt = Instant.now().plus(signatureDuration);
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(objectKey)
+                .contentType(contentType)
+                .build();
+        String uploadUrl = s3Presigner.presignPutObject(PutObjectPresignRequest.builder()
+                .signatureDuration(signatureDuration)
+                .putObjectRequest(putObjectRequest)
+                .build()).url().toString();
+
+        return MarketplaceReportEvidenceUploadUrlResponse.builder()
+                .uploadUrl(uploadUrl)
+                .objectKey(objectKey)
+                .expiresAt(expiresAt)
+                .build();
+    }
+
+    /** Validates the reporter-scoped prefix and uploaded object metadata before persistence. */
+    public String confirmMarketplaceReportEvidence(String userId, String objectKey) {
+        String key = objectKey.trim();
+        if (!key.startsWith("marketplace-reports/%s/".formatted(userId))) {
+            throw new AppException(ErrorCode.INVALID_MARKETPLACE_REPORT_EVIDENCE_OBJECT_KEY);
+        }
+
+        try {
+            HeadObjectResponse object = s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(key)
+                    .build());
+            String contentType = object.contentType() == null ? "" : object.contentType().trim().toLowerCase();
+            if (!ALLOWED_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPES.contains(contentType)
+                    || object.contentLength() == null
+                    || object.contentLength() > MAX_MARKETPLACE_REPORT_EVIDENCE_BYTES) {
+                throw new AppException(ErrorCode.MARKETPLACE_REPORT_EVIDENCE_NOT_UPLOADED);
+            }
+        } catch (S3Exception ex) {
+            throw new AppException(ErrorCode.MARKETPLACE_REPORT_EVIDENCE_NOT_UPLOADED);
+        }
+
+        return key;
+    }
+
     /**
      * Validates that {@code objectKey} belongs to {@code userId} and that the file was actually
      * uploaded to S3, then returns the normalized key. Mirrors {@link #confirmAvatarUpload}.
@@ -247,6 +312,17 @@ public class S3PresignedUrlService {
             default -> throw new AppException(ErrorCode.INVALID_FEEDBACK_IMAGE_CONTENT_TYPE);
         };
         return "feedback/%s/%s.%s".formatted(userId, UUID.randomUUID(), extension);
+    }
+
+    private String buildMarketplaceReportEvidenceObjectKey(String userId, String contentType) {
+        String extension = switch (contentType) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            case "image/gif" -> "gif";
+            default -> throw new AppException(ErrorCode.INVALID_MARKETPLACE_REPORT_EVIDENCE_CONTENT_TYPE);
+        };
+        return "marketplace-reports/%s/%s.%s".formatted(userId, UUID.randomUUID(), extension);
     }
 
     private String buildCreatorPayoutQrObjectKey(String userId, String fileName, String contentType) {
