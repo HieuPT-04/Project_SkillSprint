@@ -15,6 +15,8 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.MarketplaceEntitlementRepository;
 import com.skillsprint.repository.MarketplacePurchaseRepository;
 import com.skillsprint.repository.MarketplaceQuizPackSnapshotRepository;
+import com.skillsprint.repository.MarketplaceReviewRepository;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,6 +38,7 @@ public class MarketplaceLibraryService {
     MarketplacePurchaseRepository purchaseRepository;
     MarketplaceEntitlementRepository entitlementRepository;
     MarketplaceQuizPackSnapshotRepository snapshotRepository;
+    MarketplaceReviewRepository reviewRepository;
     MarketplacePackVersionService packVersionService;
     MarketplaceOwnershipService marketplaceOwnershipService;
 
@@ -45,23 +48,50 @@ public class MarketplaceLibraryService {
                 .findByUserUserIdAndStatusOrderByPurchasedAtDesc(userId, MarketplacePurchaseStatus.ACTIVE);
         Map<UUID, MarketplacePackVersionIdentity> identities = packVersionService.identitiesOf(
                 purchases.stream().map(purchase -> purchase.getItem().getItemId()).distinct().toList());
-        List<MarketplaceCatalogItemResponse> legacyPacks = purchases.stream()
-                .map(purchase -> legacyCatalogResponse(
-                        purchase,
-                        identities.getOrDefault(purchase.getItem().getItemId(), MarketplacePackVersionIdentity.EMPTY)))
-                .toList();
-
         Set<UUID> legacyVersionIds = purchases.stream()
                 .map(MarketplacePurchase::getPackVersion)
                 .filter(Objects::nonNull)
                 .map(MarketplacePackVersion::getVersionId)
                 .collect(Collectors.toSet());
-        List<MarketplaceCatalogItemResponse> entitlementPacks = entitlementRepository
+        List<MarketplacePackVersion> entitlementVersions = entitlementRepository
                 .findByBuyerUserIdAndStatusOrderByGrantedAtDesc(userId, MarketplaceEntitlementStatus.ACTIVE)
                 .stream()
                 .map(MarketplaceEntitlement::getPackVersion)
                 .filter(version -> !legacyVersionIds.contains(version.getVersionId()))
-                .map(this::catalogResponse)
+                .toList();
+
+        Set<UUID> versionIds = identities.values().stream()
+                .map(MarketplacePackVersionIdentity::versionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        entitlementVersions.stream().map(MarketplacePackVersion::getVersionId).forEach(versionIds::add);
+        Map<UUID, RatingSummary> versionRatings = versionRatings(versionIds);
+        Set<UUID> legacyItemIds = purchases.stream()
+                .map(purchase -> purchase.getItem().getItemId())
+                .filter(itemId -> identities.getOrDefault(
+                        itemId,
+                        MarketplacePackVersionIdentity.EMPTY
+                ).versionId() == null)
+                .collect(Collectors.toSet());
+        Map<UUID, RatingSummary> legacyRatings = legacyRatings(legacyItemIds);
+
+        List<MarketplaceCatalogItemResponse> legacyPacks = purchases.stream()
+                .map(purchase -> {
+                    MarketplacePackVersionIdentity identity = identities.getOrDefault(
+                            purchase.getItem().getItemId(),
+                            MarketplacePackVersionIdentity.EMPTY
+                    );
+                    RatingSummary rating = identity.versionId() == null
+                            ? legacyRatings.getOrDefault(purchase.getItem().getItemId(), RatingSummary.EMPTY)
+                            : versionRatings.getOrDefault(identity.versionId(), RatingSummary.EMPTY);
+                    return legacyCatalogResponse(purchase, identity, rating);
+                })
+                .toList();
+        List<MarketplaceCatalogItemResponse> entitlementPacks = entitlementVersions.stream()
+                .map(version -> catalogResponse(
+                        version,
+                        versionRatings.getOrDefault(version.getVersionId(), RatingSummary.EMPTY)
+                ))
                 .toList();
 
         return Stream.concat(legacyPacks.stream(), entitlementPacks.stream()).toList();
@@ -92,7 +122,8 @@ public class MarketplaceLibraryService {
 
     private MarketplaceCatalogItemResponse legacyCatalogResponse(
             MarketplacePurchase purchase,
-            MarketplacePackVersionIdentity identity
+            MarketplacePackVersionIdentity identity,
+            RatingSummary rating
     ) {
         UUID itemId = purchase.getItem().getItemId();
         MarketplaceQuizPackSnapshot snapshot = snapshot(itemId);
@@ -109,11 +140,16 @@ public class MarketplaceLibraryService {
                 .chapterCount(snapshot.getChapterCount())
                 .quizCount(snapshot.getQuizCount())
                 .questionCount(snapshot.getQuestionCount())
+                .averageRating(rating.averageRating())
+                .reviewCount(rating.reviewCount())
                 .publishedAt(purchase.getItem().getPublishedAt())
                 .build();
     }
 
-    private MarketplaceCatalogItemResponse catalogResponse(MarketplacePackVersion version) {
+    private MarketplaceCatalogItemResponse catalogResponse(
+            MarketplacePackVersion version,
+            RatingSummary rating
+    ) {
         return MarketplaceCatalogItemResponse.builder()
                 .itemId(version.getLegacyItemId())
                 .packId(version.getPack().getPackId())
@@ -127,6 +163,8 @@ public class MarketplaceLibraryService {
                 .chapterCount(version.getChapterCount())
                 .quizCount(version.getQuizCount())
                 .questionCount(version.getQuestionCount())
+                .averageRating(rating.averageRating())
+                .reviewCount(rating.reviewCount())
                 .publishedAt(version.getPublishedAt())
                 .build();
     }
@@ -160,5 +198,37 @@ public class MarketplaceLibraryService {
         } else if (node.isArray()) {
             node.forEach(this::scrubCorrectAnswers);
         }
+    }
+
+    private Map<UUID, RatingSummary> versionRatings(Set<UUID> versionIds) {
+        if (versionIds.isEmpty()) {
+            return Map.of();
+        }
+        return reviewRepository.summarizeByVersionIds(versionIds).stream()
+                .collect(Collectors.toMap(
+                        MarketplaceReviewRepository.VersionRatingSummary::getVersionId,
+                        summary -> new RatingSummary(
+                                summary.getAverageRating(),
+                                Math.toIntExact(summary.getReviewCount())
+                        )
+                ));
+    }
+
+    private Map<UUID, RatingSummary> legacyRatings(Set<UUID> itemIds) {
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        return reviewRepository.summarizeLegacyByItemIds(itemIds).stream()
+                .collect(Collectors.toMap(
+                        MarketplaceReviewRepository.LegacyRatingSummary::getItemId,
+                        summary -> new RatingSummary(
+                                summary.getAverageRating(),
+                                Math.toIntExact(summary.getReviewCount())
+                        )
+                ));
+    }
+
+    private record RatingSummary(double averageRating, int reviewCount) {
+        private static final RatingSummary EMPTY = new RatingSummary(0D, 0);
     }
 }

@@ -18,6 +18,7 @@ import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +46,6 @@ class MarketplaceCatalogServiceTest {
         when(marketplaceItemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(packVersionService.identityOf(itemId)).thenReturn(MarketplacePackVersionIdentity.EMPTY);
-        when(reviewRepository.findByItemItemId(itemId)).thenReturn(List.of());
         when(s3PresignedUrlService.createViewUrl("users/creator/avatar/avatar.webp"))
                 .thenReturn("https://signed.example/avatar.webp");
 
@@ -76,7 +76,6 @@ class MarketplaceCatalogServiceTest {
         when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
         when(packVersionService.identitiesOf(List.of(itemId)))
                 .thenReturn(Map.of(itemId, MarketplacePackVersionIdentity.EMPTY));
-        when(reviewRepository.findByItemItemId(itemId)).thenReturn(List.of());
         when(s3PresignedUrlService.createViewUrl("users/creator/avatar/avatar.webp"))
                 .thenReturn("https://signed.example/avatar.webp");
 
@@ -92,6 +91,65 @@ class MarketplaceCatalogServiceTest {
 
         assertThat(response.getCreatorAvatarUrl()).isEqualTo("https://signed.example/avatar.webp");
         verify(s3PresignedUrlService).createViewUrl("users/creator/avatar/avatar.webp");
+    }
+
+    @Test
+    void catalogRatingUsesTheMappedVersionAggregate() {
+        UUID itemId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID versionId = UUID.randomUUID();
+        MarketplaceItem item = publishedItem(itemId);
+        MarketplaceQuizPackSnapshot snapshot = new MarketplaceQuizPackSnapshot();
+        snapshot.setChapterCount(1);
+        snapshot.setQuizCount(1);
+        snapshot.setQuestionCount(5);
+        when(marketplaceItemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED))
+                .thenReturn(List.of(item));
+        when(snapshotRepository.findByItemItemId(itemId)).thenReturn(Optional.of(snapshot));
+        when(packVersionService.identitiesOf(List.of(itemId))).thenReturn(Map.of(
+                itemId,
+                new MarketplacePackVersionIdentity(packId, versionId, 2)
+        ));
+        when(reviewRepository.summarizeByVersionIds(Set.of(versionId)))
+                .thenReturn(List.of(versionSummary(versionId, 4.25D, 4L)));
+
+        MarketplaceCatalogService service = new MarketplaceCatalogService(
+                marketplaceItemRepository,
+                snapshotRepository,
+                reviewRepository,
+                packVersionService,
+                s3PresignedUrlService
+        );
+
+        MarketplaceCatalogItemResponse response = service.getPublishedItems(null).get(0);
+
+        assertThat(response.getVersionId()).isEqualTo(versionId);
+        assertThat(response.getAverageRating()).isEqualTo(4.25D);
+        assertThat(response.getReviewCount()).isEqualTo(4);
+        verify(reviewRepository).summarizeByVersionIds(Set.of(versionId));
+    }
+
+    private MarketplaceReviewRepository.VersionRatingSummary versionSummary(
+            UUID versionId,
+            double averageRating,
+            long reviewCount
+    ) {
+        return new MarketplaceReviewRepository.VersionRatingSummary() {
+            @Override
+            public UUID getVersionId() {
+                return versionId;
+            }
+
+            @Override
+            public Double getAverageRating() {
+                return averageRating;
+            }
+
+            @Override
+            public Long getReviewCount() {
+                return reviewCount;
+            }
+        };
     }
 
     private MarketplaceItem publishedItem(UUID itemId) {

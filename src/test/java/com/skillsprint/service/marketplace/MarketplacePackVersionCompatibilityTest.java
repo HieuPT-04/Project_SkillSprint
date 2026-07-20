@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -106,7 +107,6 @@ class MarketplacePackVersionCompatibilityTest {
                 itemRepository, snapshotRepository, reviewRepository, packVersionService, s3PresignedUrlService);
         when(itemRepository.findByStatusOrderByPublishedAtDesc(MarketplaceItemStatus.PUBLISHED))
                 .thenReturn(List.of(item));
-        when(reviewRepository.findByItemItemId(item.getItemId())).thenReturn(List.of());
 
         MarketplaceCatalogItemResponse response = service.getPublishedItems(null).get(0);
 
@@ -118,7 +118,6 @@ class MarketplacePackVersionCompatibilityTest {
         MarketplaceCatalogService service = new MarketplaceCatalogService(
                 itemRepository, snapshotRepository, reviewRepository, packVersionService, s3PresignedUrlService);
         when(itemRepository.findById(item.getItemId())).thenReturn(Optional.of(item));
-        when(reviewRepository.findByItemItemId(item.getItemId())).thenReturn(List.of());
 
         MarketplaceItemDetailResponse response = service.getPublishedItem(item.getItemId());
 
@@ -151,19 +150,25 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void purchasedLibraryListExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+                purchaseRepository, entitlementRepository, snapshotRepository, reviewRepository,
+                packVersionService, marketplaceOwnershipService);
         when(purchaseRepository.findByUserUserIdAndStatusOrderByPurchasedAtDesc(
                 "buyer", MarketplacePurchaseStatus.ACTIVE)).thenReturn(List.of(purchase()));
+        when(reviewRepository.summarizeByVersionIds(Set.of(version.getVersionId())))
+                .thenReturn(List.of(versionSummary(version.getVersionId(), 4.5D, 2L)));
 
         MarketplaceCatalogItemResponse response = service.getMyPacks("buyer").get(0);
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
+        assertThat(response.getAverageRating()).isEqualTo(4.5D);
+        assertThat(response.getReviewCount()).isEqualTo(2);
     }
 
     @Test
     void purchasedPackDetailExposesItemIdAndVersionOneIdentity() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+                purchaseRepository, entitlementRepository, snapshotRepository, reviewRepository,
+                packVersionService, marketplaceOwnershipService);
 
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
@@ -173,7 +178,8 @@ class MarketplacePackVersionCompatibilityTest {
     @Test
     void legacyPurchasedPackStillOpensWhenVersionMappingIsMissing() {
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+                purchaseRepository, entitlementRepository, snapshotRepository, reviewRepository,
+                packVersionService, marketplaceOwnershipService);
         when(packVersionService.identityOf(item.getItemId())).thenReturn(MarketplacePackVersionIdentity.EMPTY);
 
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
@@ -194,7 +200,8 @@ class MarketplacePackVersionCompatibilityTest {
                         MarketplaceOwnershipService.Source.ENTITLEMENT, version));
 
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+                purchaseRepository, entitlementRepository, snapshotRepository, reviewRepository,
+                packVersionService, marketplaceOwnershipService);
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
         assertIdentity(response.getItemId(), response.getPackId(), response.getVersionId(), response.getVersionNo());
@@ -213,7 +220,8 @@ class MarketplacePackVersionCompatibilityTest {
                         MarketplaceOwnershipService.Source.ENTITLEMENT, version));
 
         MarketplaceLibraryService service = new MarketplaceLibraryService(
-                purchaseRepository, entitlementRepository, snapshotRepository, packVersionService, marketplaceOwnershipService);
+                purchaseRepository, entitlementRepository, snapshotRepository, reviewRepository,
+                packVersionService, marketplaceOwnershipService);
 
         PurchasedQuizPackResponse response = service.getMyPack("buyer", item.getItemId());
 
@@ -256,6 +264,29 @@ class MarketplacePackVersionCompatibilityTest {
         purchase.setStatus(MarketplacePurchaseStatus.ACTIVE);
         purchase.setPurchasedAt(Instant.now());
         return purchase;
+    }
+
+    private MarketplaceReviewRepository.VersionRatingSummary versionSummary(
+            UUID versionId,
+            double averageRating,
+            long reviewCount
+    ) {
+        return new MarketplaceReviewRepository.VersionRatingSummary() {
+            @Override
+            public UUID getVersionId() {
+                return versionId;
+            }
+
+            @Override
+            public Double getAverageRating() {
+                return averageRating;
+            }
+
+            @Override
+            public Long getReviewCount() {
+                return reviewCount;
+            }
+        };
     }
 
     private MarketplacePackVersion version(MarketplaceItem item) {
