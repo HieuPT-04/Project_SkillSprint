@@ -21,6 +21,12 @@ import com.skillsprint.repository.PaymentTransactionRepository;
 import com.skillsprint.repository.ServicePlanRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.service.subscription.SubscriptionService;
+import com.skillsprint.service.marketplace.PlatformTreasuryService;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
+import java.util.Map;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -49,6 +55,7 @@ public class SepayPaymentService {
     PaymentTransactionRepository paymentTransactionRepository;
     SubscriptionService subscriptionService;
     CoinTopUpService coinTopUpService;
+    PlatformTreasuryService platformTreasuryService;
     PaymentMapper paymentMapper;
     ObjectMapper objectMapper;
 
@@ -133,6 +140,14 @@ public class SepayPaymentService {
                 transaction.getUser().getUserId(),
                 transaction.getPlan()
         );
+        recordSubscriptionReceipt(transaction);
+    }
+
+    private void recordSubscriptionReceipt(PaymentTransaction payment) {
+        platformTreasuryService.record(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.CREDIT,
+                PlatformTreasuryEntryType.SUBSCRIPTION_PAYMENT_RECEIVED, PlatformTreasuryReferenceType.PAYMENT,
+                payment.getPaymentId(), payment.getAmount(), null, payment.getUser(), payment.getProviderTransactionId(),
+                "Subscription payment received", Map.of("planId", payment.getPlan().getPlanId().toString()), payment.getPaidAt());
     }
 
     @Transactional(readOnly = true)

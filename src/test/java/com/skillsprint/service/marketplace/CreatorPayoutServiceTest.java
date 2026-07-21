@@ -51,6 +51,7 @@ class CreatorPayoutServiceTest {
     @Mock CreatorPayoutRepository payoutRepository;
     @Mock S3PresignedUrlService s3PresignedUrlService;
     @Mock MarketplacePayoutAuditService payoutAuditService;
+    @Mock PlatformTreasuryService platformTreasuryService;
 
     private CreatorPayoutService service;
     private User creator;
@@ -65,7 +66,8 @@ class CreatorPayoutServiceTest {
                 destinationRepository,
                 payoutRepository,
                 s3PresignedUrlService,
-                payoutAuditService);
+                payoutAuditService,
+                platformTreasuryService);
         creator = user("creator", "creator@example.com");
         admin = user("admin", "admin@example.com");
         lenient().when(userRepository.findById("creator")).thenReturn(Optional.of(creator));

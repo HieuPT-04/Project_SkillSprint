@@ -38,6 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.skillsprint.service.marketplace.PlatformTreasuryService;
 
 @ExtendWith(MockitoExtension.class)
 class CoinTopUpServiceTest {
@@ -49,6 +50,7 @@ class CoinTopUpServiceTest {
     @Mock PaymentTransactionRepository paymentTransactionRepository;
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
+    @Mock PlatformTreasuryService platformTreasuryService;
 
     SepayProperties sepayProperties;
     CoinTopUpService service;
@@ -414,7 +416,8 @@ class CoinTopUpServiceTest {
                 userRepository,
                 paymentTransactionRepository,
                 walletRepository,
-                walletTransactionRepository
+                walletTransactionRepository,
+                platformTreasuryService
         );
     }
 }

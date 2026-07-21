@@ -60,6 +60,8 @@ class MarketplaceDisputeServiceTest {
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock UserRepository userRepository;
+    @Mock PlatformTreasuryService platformTreasuryService;
+    @Mock MarketplaceDisputeAuditService disputeAuditService;
 
     MarketplaceDisputeService service;
     User buyer;
@@ -71,7 +73,7 @@ class MarketplaceDisputeServiceTest {
     void setUp() {
         service = new MarketplaceDisputeService(
                 disputeRepository, saleRepository, entitlementRepository, settlementRepository,
-                earningRepository, walletRepository, walletTransactionRepository, userRepository);
+                earningRepository, walletRepository, walletTransactionRepository, userRepository, platformTreasuryService, disputeAuditService);
         buyer = user("buyer", "Buyer");
         admin = user("admin", "Admin");
         version = version();
