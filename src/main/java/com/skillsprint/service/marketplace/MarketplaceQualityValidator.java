@@ -40,7 +40,6 @@ public class MarketplaceQualityValidator {
                     "Quiz Pack cần tối thiểu " + MINIMUM_CHAPTER_COUNT + " chương.");
         }
 
-        Set<String> normalizedQuestions = new HashSet<>();
         Set<String> questionIds = new HashSet<>();
         int actualQuestionCount = 0;
         for (JsonNode chapter : chapters) {
@@ -67,21 +66,6 @@ public class MarketplaceQualityValidator {
                 if (questionText.isBlank()) {
                     addIssue(issues, "QUESTION_TEXT_MISSING", chapterSequence, questionId,
                             "Câu hỏi chưa có nội dung.");
-                } else if (!normalizedQuestions.add(normalize(questionText))) {
-                    addIssue(issues, "QUESTION_DUPLICATE", chapterSequence, questionId,
-                            "Nội dung câu hỏi bị trùng trong Quiz Pack.");
-                }
-
-                JsonNode evidence = question.path("evidence");
-                boolean hasSourceChunk = evidence.path("sourceChunkIds").isArray()
-                        && java.util.stream.StreamSupport.stream(
-                                evidence.path("sourceChunkIds").spliterator(), false)
-                                .anyMatch(sourceId -> !sourceId.asText("").isBlank());
-                if (!evidence.isObject()
-                        || evidence.path("explanation").asText("").isBlank()
-                        || (!isUuid(evidence.path("sourceStepId").asText(null)) && !hasSourceChunk)) {
-                    addIssue(issues, "QUESTION_EVIDENCE_MISSING", chapterSequence, questionId,
-                            "Câu hỏi cần có giải thích và nguồn tham chiếu làm bằng chứng đáp án.");
                 }
 
                 validateOptions(issues, chapterSequence, questionId, question.path("options"));
