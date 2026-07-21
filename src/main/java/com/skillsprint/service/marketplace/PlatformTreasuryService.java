@@ -14,12 +14,17 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
+import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -44,8 +49,17 @@ public class PlatformTreasuryService {
     @Transactional(readOnly = true)
     public PageResponse<PlatformTreasuryEntryResponse> getEntries(
             PlatformTreasuryAsset asset, PlatformTreasuryEntryType entryType, Instant from, Instant to, int page, int size) {
-        return PageResponse.from(treasuryEntryRepository.search(asset, entryType, from, to,
-                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))).map(this::toResponse));
+        Specification<PlatformTreasuryEntry> filters = (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (asset != null) predicates.add(criteriaBuilder.equal(root.get("asset"), asset));
+            if (entryType != null) predicates.add(criteriaBuilder.equal(root.get("entryType"), entryType));
+            if (from != null) predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("occurredAt"), from));
+            if (to != null) predicates.add(criteriaBuilder.lessThan(root.get("occurredAt"), to));
+            return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
+        };
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100),
+                Sort.by(Sort.Order.desc("occurredAt"), Sort.Order.desc("createdAt")));
+        return PageResponse.from(treasuryEntryRepository.findAll(filters, pageable).map(this::toResponse));
     }
 
     public void record(
