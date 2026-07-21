@@ -434,6 +434,46 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void finishSessionAcceptsAnAlreadyCompletedPomodoro() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = pomodoro(session, PomodoroSessionStatus.COMPLETED);
+        pomodoro.setCompletedFocusMinutes(25);
+        StudySessionResponse expected = StudySessionResponse.builder()
+                .sessionId(session.getSessionId())
+                .status(StudySessionStatus.COMPLETED)
+                .build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(studySessionRepository.save(session)).thenReturn(session);
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of(pomodoro));
+        when(studySessionRepository.sumValidDurationMinutesByUserAndCalendarTaskAndStatus(
+                "user-1",
+                task.getTaskId(),
+                StudySessionStatus.COMPLETED,
+                15
+        )).thenReturn(25L);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                any(PomodoroSession.class),
+                org.mockito.Mockito.eq(0),
+                org.mockito.Mockito.eq(false),
+                org.mockito.Mockito.eq(60)
+        )).thenReturn(expected);
+
+        StudySessionResponse response = studySessionService.finishSession("user-1", session.getSessionId(), null);
+
+        assertSame(expected, response);
+        assertEquals(StudySessionStatus.COMPLETED, session.getStatus());
+        assertEquals(25, session.getDurationMinutes());
+    }
+
+    @Test
     void finishSessionWithIncompletePomodoroFocusStoresZeroProgress() {
         StudySession session = studySession(task);
         session.setStartedAt(Instant.now().minusSeconds(90 * 60L));
