@@ -267,9 +267,30 @@ public class StudySessionService {
             throw new AppException(ErrorCode.POMODORO_SESSION_NOT_RUNNING);
         }
 
+        Instant now = Instant.now();
+        if (hasPhaseElapsed(pomodoro, now)) {
+            int focusCreditMinutes = pomodoro.getCurrentPhase() == PomodoroPhase.FOCUS
+                    ? pomodoro.getFocusMinutes()
+                    : 0;
+            advancePomodoroPhase(session, pomodoro, focusCreditMinutes);
+
+            if (pomodoro.getStatus() == PomodoroSessionStatus.COMPLETED) {
+                return studySessionMapper.toResponse(session, pomodoro, 0);
+            }
+
+            pomodoro.setStatus(PomodoroSessionStatus.PAUSED);
+            pomodoro.setPausedAt(now);
+            pomodoro.setRemainingSecondsWhenPaused(phaseDurationMinutes(pomodoro) * 60);
+            PomodoroSession savedPomodoro = pomodoroSessionRepository.save(pomodoro);
+            return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));
+        }
+
         pomodoro.setStatus(PomodoroSessionStatus.PAUSED);
-        pomodoro.setPausedAt(Instant.now());
-        pomodoro.setRemainingSecondsWhenPaused(calculateRemainingSeconds(pomodoro));
+        pomodoro.setPausedAt(now);
+        // Duration#getSeconds truncates sub-second values. Preserve at least one
+        // second for a genuinely active phase so PAUSED never masquerades as a
+        // completed focus cycle on clients.
+        pomodoro.setRemainingSecondsWhenPaused(Math.max(1, calculateRemainingSeconds(pomodoro)));
         PomodoroSession savedPomodoro = pomodoroSessionRepository.save(pomodoro);
 
         return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));
@@ -334,6 +355,11 @@ public class StudySessionService {
         Instant phaseEndAt = pomodoro.getPhaseEndAt();
         return phaseEndAt != null
                 && !Instant.now().isBefore(phaseEndAt.minusSeconds(PHASE_EXPIRY_GRACE_SECONDS));
+    }
+
+    private boolean hasPhaseElapsed(PomodoroSession pomodoro, Instant now) {
+        Instant phaseEndAt = pomodoro.getPhaseEndAt();
+        return phaseEndAt != null && !now.isBefore(phaseEndAt);
     }
 
     /**

@@ -589,6 +589,21 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void pausePomodoroAfterFocusExpiresCreditsTheCycleAndPausesTheBreak() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 26 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.pausePomodoro("user-1", session.getSessionId());
+
+        assertEquals(25, pomodoro.getCompletedFocusMinutes());
+        assertEquals(PomodoroPhase.SHORT_BREAK, pomodoro.getCurrentPhase());
+        assertEquals(PomodoroSessionStatus.PAUSED, pomodoro.getStatus());
+        assertEquals(5 * 60, pomodoro.getRemainingSecondsWhenPaused());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+    }
+
+    @Test
     void repeatedNextPomodoroPhaseDoesNotDoubleAdvanceTheSamePhase() {
         StudySession session = studySession(task);
         // phaseEndAt is 60s in the past → the focus phase has genuinely expired.
