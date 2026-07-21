@@ -18,6 +18,7 @@ public class MarketplaceQualityJobResponse {
     boolean currentSnapshot;
     Integer retryCount;
     Integer maxRetries;
+    String errorCode;
     Instant startedAt;
     Instant completedAt;
     Instant createdAt;

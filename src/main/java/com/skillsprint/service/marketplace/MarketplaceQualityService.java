@@ -35,6 +35,7 @@ public class MarketplaceQualityService {
 
     static final int MAX_RETRIES = 2;
     static final Duration RETRY_DELAY = Duration.ofSeconds(30);
+    static final String VALIDATION_ERROR_CODE = "QUALITY_VALIDATION_ERROR";
     static final List<MarketplaceQualityJobStatus> REUSABLE_STATUSES = List.of(
             MarketplaceQualityJobStatus.QUEUED,
             MarketplaceQualityJobStatus.RUNNING,
@@ -231,7 +232,7 @@ public class MarketplaceQualityService {
     ) {
         int retryCount = job.getRetryCount() + 1;
         job.setRetryCount(retryCount);
-        job.setErrorCode("QUALITY_VALIDATION_ERROR");
+        job.setErrorCode(VALIDATION_ERROR_CODE);
         job.setStartedAt(null);
         if (retryCount <= job.getMaxRetries()) {
             job.setStatus(MarketplaceQualityJobStatus.QUEUED);
@@ -242,6 +243,8 @@ public class MarketplaceQualityService {
         }
 
         job.setStatus(MarketplaceQualityJobStatus.ERROR);
+        job.setScore(0);
+        job.setReport(errorReport(job.getErrorCode()));
         job.setCompletedAt(Instant.now());
         if (job.getSnapshotFingerprint().equals(fingerprint.of(version))) {
             applySummary(version, job);
@@ -272,6 +275,19 @@ public class MarketplaceQualityService {
         return report;
     }
 
+    private ObjectNode errorReport(String errorCode) {
+        ObjectNode report = objectMapper.createObjectNode();
+        report.put("passingScore", MarketplaceQualityValidator.PASSING_SCORE);
+        report.put("blockingIssueCount", 1);
+        report.put("chapterCount", 0);
+        report.put("questionCount", 0);
+        ObjectNode issue = report.putArray("issues").addObject();
+        issue.put("code", errorCode);
+        issue.put("severity", "SYSTEM");
+        issue.put("message", "Hệ thống chưa thể xử lý kiểm định này sau nhiều lần thử. Vui lòng chạy lại sau hoặc liên hệ quản trị viên kèm mã lỗi.");
+        return report;
+    }
+
     private MarketplaceQualityJobResponse response(
             MarketplaceQualityJob job,
             MarketplacePackVersion version
@@ -284,6 +300,7 @@ public class MarketplaceQualityService {
                 .currentSnapshot(job.getSnapshotFingerprint().equals(fingerprint.of(version)))
                 .retryCount(job.getRetryCount())
                 .maxRetries(job.getMaxRetries())
+                .errorCode(job.getErrorCode())
                 .startedAt(job.getStartedAt())
                 .completedAt(job.getCompletedAt())
                 .createdAt(job.getCreatedAt())
