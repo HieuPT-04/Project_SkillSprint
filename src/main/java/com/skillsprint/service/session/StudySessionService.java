@@ -53,6 +53,9 @@ public class StudySessionService {
     private static final int DEFAULT_TOTAL_CYCLES = 4;
     static final int MIN_VALID_STUDY_MINUTES = 15;
     private static final int FALLBACK_REQUIRED_STUDY_MINUTES = 5;
+    // Grace window (seconds) absorbing timer/network jitter when confirming that a
+    // running phase has naturally expired. Small enough that it can't be gamed.
+    private static final long PHASE_EXPIRY_GRACE_SECONDS = 2;
     private static final EnumSet<PomodoroSessionStatus> ACTIVE_POMODORO_STATUSES =
             EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED);
 
@@ -189,7 +192,10 @@ public class StudySessionService {
         if (session == null) {
             return null;
         }
-        PomodoroSession pomodoro = findActivePomodoro(session);
+        // Fall back to the latest completed/interrupted Pomodoro so an open
+        // StudySession whose timer has finished still reports its final Pomodoro
+        // (exhausted state) instead of a null timer.
+        PomodoroSession pomodoro = findLatestPomodoro(session);
         return studySessionMapper.toResponse(session, pomodoro, calculateRemainingSeconds(pomodoro));
     }
 
@@ -207,11 +213,13 @@ public class StudySessionService {
                 .pausePomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/pause")
                 .resumePomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/resume")
                 .nextPomodoroPhaseEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/next-phase")
+                .skipPomodoroPhaseEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/skip")
                 .finishPomodoroEndpoint(sessionId == null ? null : "/api/study-sessions/" + sessionId + "/pomodoro/finish")
                 .finishEndpointTemplate("/api/study-sessions/{sessionId}/finish")
                 .pausePomodoroEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/pause")
                 .resumePomodoroEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/resume")
                 .nextPomodoroPhaseEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/next-phase")
+                .skipPomodoroPhaseEndpointTemplate("/api/study-sessions/{sessionId}/pomodoro/skip")
                 .completeTaskEndpoint("/api/calendar/tasks/" + taskId + "/complete")
                 .build();
     }
@@ -244,7 +252,10 @@ public class StudySessionService {
     @Transactional(readOnly = true)
     public StudySessionResponse getSession(String userId, UUID sessionId) {
         StudySession session = findOwnedSession(userId, sessionId);
-        PomodoroSession pomodoro = findActivePomodoro(session);
+        // An IN_PROGRESS StudySession whose latest Pomodoro is COMPLETED/INTERRUPTED
+        // must still surface that Pomodoro (not null) so the client can render the
+        // exhausted "start a new cycle" state after a refresh.
+        PomodoroSession pomodoro = findLatestPomodoro(session);
         return studySessionMapper.toResponse(session, pomodoro, calculateRemainingSeconds(pomodoro));
     }
 
@@ -286,6 +297,12 @@ public class StudySessionService {
         return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));
     }
 
+    /**
+     * Natural phase transition: the timer for the current phase has genuinely
+     * elapsed. A completed FOCUS phase credits the full configured focus duration
+     * exactly once. This is the endpoint the client calls when a phase runs out on
+     * its own — never for a manual skip (use {@link #skipPomodoroPhase}).
+     */
     @Transactional
     public StudySessionResponse nextPomodoroPhase(String userId, UUID sessionId) {
         StudySession session = findOwnedSession(userId, sessionId);
@@ -293,10 +310,67 @@ public class StudySessionService {
         if (pomodoro.getStatus() == PomodoroSessionStatus.COMPLETED) {
             throw new AppException(ErrorCode.POMODORO_SESSION_ALREADY_COMPLETED);
         }
+        // Natural expiry is server-authoritative: reject an early call so a client
+        // cannot claim a full focus credit before the phase clock actually runs out.
+        // A learner who wants to end a phase early must use the manual skip endpoint.
+        if (!isPhaseExpired(pomodoro)) {
+            throw new AppException(ErrorCode.POMODORO_PHASE_NOT_EXPIRED);
+        }
+        int focusCreditMinutes = pomodoro.getCurrentPhase() == PomodoroPhase.FOCUS
+                ? pomodoro.getFocusMinutes()
+                : 0;
+        return advancePomodoroPhase(session, pomodoro, focusCreditMinutes);
+    }
 
+    /**
+     * Whether the current phase has genuinely run out according to the server
+     * clock. Only a running phase can naturally expire; a small grace absorbs
+     * timer/network jitter without letting an early call earn a full cycle.
+     */
+    private boolean isPhaseExpired(PomodoroSession pomodoro) {
+        if (pomodoro.getStatus() != PomodoroSessionStatus.IN_PROGRESS) {
+            return false;
+        }
+        Instant phaseEndAt = pomodoro.getPhaseEndAt();
+        return phaseEndAt != null
+                && !Instant.now().isBefore(phaseEndAt.minusSeconds(PHASE_EXPIRY_GRACE_SECONDS));
+    }
+
+    /**
+     * Manual skip ("Bỏ qua"): the learner voluntarily ends the current phase early.
+     * A skipped FOCUS phase must NOT credit the full focus duration — only the
+     * whole minutes actually spent, measured server-side against the phase clock,
+     * so an instant skip credits ~0 and cannot satisfy study-time gates. Client
+     * elapsed values are never trusted.
+     */
+    @Transactional
+    public StudySessionResponse skipPomodoroPhase(String userId, UUID sessionId) {
+        StudySession session = findOwnedSession(userId, sessionId);
+        PomodoroSession pomodoro = findRequiredActivePomodoro(session);
+        if (pomodoro.getStatus() == PomodoroSessionStatus.COMPLETED) {
+            throw new AppException(ErrorCode.POMODORO_SESSION_ALREADY_COMPLETED);
+        }
+        int focusCreditMinutes = pomodoro.getCurrentPhase() == PomodoroPhase.FOCUS
+                ? elapsedFocusMinutes(pomodoro)
+                : 0;
+        return advancePomodoroPhase(session, pomodoro, focusCreditMinutes);
+    }
+
+    /**
+     * Shared phase-advance mechanics for both natural completion and manual skip.
+     * The only difference between the two is {@code focusCreditMinutes} — the
+     * amount added to {@code completedFocusMinutes} when leaving a FOCUS phase.
+     * Reaching the final cycle completes the Pomodoro but deliberately leaves the
+     * parent StudySession IN_PROGRESS: the timer is done, the learning record is not.
+     */
+    private StudySessionResponse advancePomodoroPhase(
+            StudySession session,
+            PomodoroSession pomodoro,
+            int focusCreditMinutes
+    ) {
         Instant now = Instant.now();
         if (pomodoro.getCurrentPhase() == PomodoroPhase.FOCUS) {
-            pomodoro.setCompletedFocusMinutes(safeInt(pomodoro.getCompletedFocusMinutes()) + pomodoro.getFocusMinutes());
+            pomodoro.setCompletedFocusMinutes(safeInt(pomodoro.getCompletedFocusMinutes()) + focusCreditMinutes);
             if (pomodoro.getCurrentCycle() >= pomodoro.getTotalCycles()) {
                 pomodoro.setStatus(PomodoroSessionStatus.COMPLETED);
                 pomodoro.setEndedAt(now);
@@ -321,6 +395,19 @@ public class StudySessionService {
         PomodoroSession savedPomodoro = pomodoroSessionRepository.save(pomodoro);
 
         return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));
+    }
+
+    /**
+     * Whole minutes actually spent in the current FOCUS phase, derived from the
+     * authoritative server-side phase clock (full duration minus remaining, which
+     * already accounts for pauses). Capped at the configured focus length and
+     * floored at zero so a manual skip can never over-credit.
+     */
+    private int elapsedFocusMinutes(PomodoroSession pomodoro) {
+        int focusSeconds = safeInt(pomodoro.getFocusMinutes()) * 60;
+        int remainingSeconds = calculateRemainingSeconds(pomodoro);
+        int elapsedSeconds = Math.max(0, focusSeconds - remainingSeconds);
+        return Math.min(safeInt(pomodoro.getFocusMinutes()), elapsedSeconds / 60);
     }
 
     @Transactional

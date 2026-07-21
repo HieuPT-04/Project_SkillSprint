@@ -63,11 +63,13 @@ public class StudySessionDetailResponse {
         String pausePomodoroEndpoint;
         String resumePomodoroEndpoint;
         String nextPomodoroPhaseEndpoint;
+        String skipPomodoroPhaseEndpoint;
         String finishPomodoroEndpoint;
         String finishEndpointTemplate;
         String pausePomodoroEndpointTemplate;
         String resumePomodoroEndpointTemplate;
         String nextPomodoroPhaseEndpointTemplate;
+        String skipPomodoroPhaseEndpointTemplate;
         String completeTaskEndpoint;
     }
 }

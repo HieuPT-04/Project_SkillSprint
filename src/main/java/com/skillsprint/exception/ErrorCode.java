@@ -86,6 +86,7 @@ public enum ErrorCode {
     POMODORO_SESSION_ALREADY_COMPLETED("Pomodoro session đã hoàn thành", HttpStatus.CONFLICT),
     POMODORO_SESSION_NOT_RUNNING("Pomodoro session không ở trạng thái đang chạy", HttpStatus.BAD_REQUEST),
     POMODORO_SESSION_NOT_PAUSED("Pomodoro session không ở trạng thái tạm dừng", HttpStatus.BAD_REQUEST),
+    POMODORO_PHASE_NOT_EXPIRED("Phase Pomodoro hiện tại chưa kết thúc", HttpStatus.BAD_REQUEST),
 
     // Quiz
     QUIZ_NOT_FOUND("Không tìm thấy quiz", HttpStatus.NOT_FOUND),

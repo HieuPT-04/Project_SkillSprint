@@ -84,6 +84,15 @@ public class StudySessionController {
         return ResponseEntity.ok(ApiResponse.success("Chuyển Pomodoro phase thành công", response));
     }
 
+    @PostMapping("/study-sessions/{sessionId}/pomodoro/skip")
+    public ResponseEntity<ApiResponse<StudySessionResponse>> skipPomodoroPhase(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId
+    ) {
+        StudySessionResponse response = studySessionService.skipPomodoroPhase(jwt.getSubject(), sessionId);
+        return ResponseEntity.ok(ApiResponse.success("Đã bỏ qua phase Pomodoro (không tính thời gian tập trung đã bỏ qua)", response));
+    }
+
     @PostMapping("/study-sessions/{sessionId}/pomodoro/finish")
     public ResponseEntity<ApiResponse<StudySessionResponse>> finishPomodoro(
             @AuthenticationPrincipal Jwt jwt,
