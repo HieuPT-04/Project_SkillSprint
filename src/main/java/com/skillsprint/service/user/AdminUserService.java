@@ -4,12 +4,14 @@ import com.skillsprint.configuration.cognito.CognitoProperties;
 import com.skillsprint.dto.request.admin.UpdateUserRoleRequest;
 import com.skillsprint.dto.request.admin.UpdateUserStatusRequest;
 import com.skillsprint.dto.response.admin.AdminUserResponse;
+import com.skillsprint.dto.response.admin.AdminUserSummaryResponse;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.entity.Role;
 import com.skillsprint.entity.User;
 import com.skillsprint.entity.UserRole;
 import com.skillsprint.entity.Subscription;
 import com.skillsprint.enums.auth.RoleName;
+import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.UserMapper;
@@ -55,7 +57,7 @@ public class AdminUserService {
     CognitoProperties cognitoProperties;
 
     @Transactional(readOnly = true)
-    public PageResponse<AdminUserResponse> getUsers(String search, int page, int size) {
+    public PageResponse<AdminUserResponse> getUsers(String search, int page, int size, RoleName role) {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizeSize(size),
@@ -63,12 +65,7 @@ public class AdminUserService {
         );
 
         String normalizedSearch = normalizeSearch(search);
-        Page<User> users = normalizedSearch == null
-                ? userRepository.findAll(pageable)
-                : userRepository.searchAdminUsers(
-                        normalizedSearch,
-                        pageable
-                );
+        Page<User> users = findUsers(normalizedSearch, role, pageable);
         
         Map<String, List<String>> rolesByUserId = getRolesByUserId(users.getContent());
 
@@ -96,6 +93,26 @@ public class AdminUserService {
         ));
 
         return PageResponse.from(response);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserSummaryResponse getUserSummary(String search) {
+        String normalizedSearch = normalizeSearch(search);
+        if (normalizedSearch != null) {
+            return AdminUserSummaryResponse.builder()
+                    .totalUsers(userRepository.countAdminUsersBySearch(normalizedSearch))
+                    .activeUsers(userRepository.countAdminUsersByStatusAndSearch(UserStatus.ACTIVE, normalizedSearch))
+                    .learnerUsers(userRoleRepository.countGlobalUsersByRoleAndSearch(RoleName.LEARNER, normalizedSearch))
+                    .adminUsers(userRoleRepository.countGlobalUsersByRoleAndSearch(RoleName.ADMIN, normalizedSearch))
+                    .build();
+        }
+
+        return AdminUserSummaryResponse.builder()
+                .totalUsers(userRepository.count())
+                .activeUsers(userRepository.countByStatus(UserStatus.ACTIVE))
+                .learnerUsers(userRoleRepository.countGlobalUsersByRole(RoleName.LEARNER))
+                .adminUsers(userRoleRepository.countGlobalUsersByRole(RoleName.ADMIN))
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -172,6 +189,18 @@ public class AdminUserService {
             return 10;
         }
         return Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    private Page<User> findUsers(String search, RoleName role, Pageable pageable) {
+        if (role == null) {
+            return search == null
+                    ? userRepository.findAll(pageable)
+                    : userRepository.searchAdminUsers(search, pageable);
+        }
+
+        return search == null
+                ? userRepository.findAdminUsersByRole(role, pageable)
+                : userRepository.searchAdminUsersByRole(search, role, pageable);
     }
 
     private String normalizeSearch(String search) {
