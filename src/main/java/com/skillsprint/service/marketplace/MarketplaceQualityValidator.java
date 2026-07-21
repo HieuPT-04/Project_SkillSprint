@@ -28,12 +28,14 @@ public class MarketplaceQualityValidator {
 
     public ValidationResult validate(MarketplacePackVersion version) {
         ArrayNode issues = objectMapper.createArrayNode();
-        JsonNode chapters = version.getContent().path("chapters");
+        JsonNode content = version.getContent();
+        JsonNode chapters = content == null ? objectMapper.missingNode() : content.path("chapters");
         if (!chapters.isArray()) {
             addIssue(issues, "CHAPTERS_MISSING", null, null, "Snapshot không có danh sách chương hợp lệ.");
         }
 
-        if (version.getChapterCount() < MINIMUM_CHAPTER_COUNT || chapters.size() < MINIMUM_CHAPTER_COUNT) {
+        int storedChapterCount = version.getChapterCount() == null ? 0 : version.getChapterCount();
+        if (storedChapterCount < MINIMUM_CHAPTER_COUNT || chapters.size() < MINIMUM_CHAPTER_COUNT) {
             addIssue(issues, "MINIMUM_CHAPTERS", null, null,
                     "Quiz Pack cần tối thiểu " + MINIMUM_CHAPTER_COUNT + " chương.");
         }
@@ -86,7 +88,8 @@ public class MarketplaceQualityValidator {
             }
         }
 
-        if (actualQuestionCount < MINIMUM_QUESTION_COUNT || version.getQuestionCount() != actualQuestionCount) {
+        int storedQuestionCount = version.getQuestionCount() == null ? 0 : version.getQuestionCount();
+        if (actualQuestionCount < MINIMUM_QUESTION_COUNT || storedQuestionCount != actualQuestionCount) {
             addIssue(issues, "QUESTION_COUNT_INVALID", null, null,
                     "Số câu hỏi không khớp hoặc chưa đạt tối thiểu " + MINIMUM_QUESTION_COUNT + ".");
         }

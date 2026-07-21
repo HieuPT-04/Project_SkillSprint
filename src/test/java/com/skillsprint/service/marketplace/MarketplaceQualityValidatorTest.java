@@ -71,6 +71,20 @@ class MarketplaceQualityValidatorTest {
                 .contains("QUESTION_ID_INVALID", "OPTION_ID_INVALID", "QUESTION_EVIDENCE_MISSING");
     }
 
+    @Test
+    void incompleteLegacySnapshotReturnsBlockingIssuesInsteadOfThrowing() {
+        MarketplacePackVersion version = new MarketplacePackVersion();
+        version.setContent(null);
+        version.setChapterCount(null);
+        version.setQuestionCount(null);
+
+        MarketplaceQualityValidator.ValidationResult result = validator.validate(version);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.report().path("issues").findValuesAsText("code"))
+                .contains("CHAPTERS_MISSING", "MINIMUM_CHAPTERS", "QUESTION_COUNT_INVALID");
+    }
+
     private MarketplacePackVersion validVersion() {
         ObjectNode content = objectMapper.createObjectNode();
         ArrayNode chapters = content.putArray("chapters");
