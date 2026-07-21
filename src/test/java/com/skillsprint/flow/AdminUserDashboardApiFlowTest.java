@@ -15,6 +15,7 @@ import com.skillsprint.dto.request.admin.UpdateUserRoleRequest;
 import com.skillsprint.dto.request.admin.UpdateUserStatusRequest;
 import com.skillsprint.dto.response.admin.AdminDashboardResponse;
 import com.skillsprint.dto.response.admin.AdminUserResponse;
+import com.skillsprint.dto.response.admin.AdminUserSummaryResponse;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.payment.PaymentTransactionResponse;
 import com.skillsprint.entity.User;
@@ -101,7 +102,7 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard"));
 
-        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class));
+        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any());
         verify(adminDashboardService, never()).getDashboard(any(), any());
     }
 
@@ -126,14 +127,14 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
-        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class));
+        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any());
         verify(adminUserService, never()).updateUserStatus(any(), any());
         verify(adminDashboardService, never()).getDashboard(any(), any());
     }
 
     @Test
     void adminCanListAndReadUsers() throws Exception {
-        when(adminUserService.getUsers("learner", 1, 20))
+        when(adminUserService.getUsers("learner", 1, 20, null))
                 .thenReturn(PageResponse.<AdminUserResponse>builder()
                         .items(List.of(adminUserResponse(TARGET_ID, "target-user-dashboard-flow@example.com",
                                 "Target Learner", UserStatus.ACTIVE, List.of("LEARNER"))))
@@ -147,6 +148,13 @@ class AdminUserDashboardApiFlowTest {
         when(adminUserService.getUser(TARGET_ID))
                 .thenReturn(adminUserResponse(TARGET_ID, "target-user-dashboard-flow@example.com",
                         "Target Learner", UserStatus.ACTIVE, List.of("LEARNER")));
+        when(adminUserService.getUserSummary(null))
+                .thenReturn(AdminUserSummaryResponse.builder()
+                        .totalUsers(108)
+                        .activeUsers(100)
+                        .learnerUsers(104)
+                        .adminUsers(4)
+                        .build());
 
         mockMvc.perform(get("/api/admin/users")
                         .with(adminJwt())
@@ -164,6 +172,14 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(jsonPath("$.data.size").value(20))
                 .andExpect(jsonPath("$.data.totalItems").value(1));
 
+        mockMvc.perform(get("/api/admin/users/summary").with(adminJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalUsers").value(108))
+                .andExpect(jsonPath("$.data.activeUsers").value(100))
+                .andExpect(jsonPath("$.data.learnerUsers").value(104))
+                .andExpect(jsonPath("$.data.adminUsers").value(4));
+
         mockMvc.perform(get("/api/admin/users/{userId}", TARGET_ID).with(adminJwt()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -172,7 +188,8 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(jsonPath("$.data.currentSubscription.planName").value("Premium"))
                 .andExpect(jsonPath("$.data.currentSubscription.status").value("ACTIVE"));
 
-        verify(adminUserService).getUsers("learner", 1, 20);
+        verify(adminUserService).getUsers("learner", 1, 20, null);
+        verify(adminUserService).getUserSummary(null);
         verify(adminUserService).getUser(TARGET_ID);
     }
 

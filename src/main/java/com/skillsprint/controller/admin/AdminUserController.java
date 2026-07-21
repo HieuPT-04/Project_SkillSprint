@@ -4,8 +4,10 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.admin.UpdateUserRoleRequest;
 import com.skillsprint.dto.request.admin.UpdateUserStatusRequest;
 import com.skillsprint.dto.response.admin.AdminUserResponse;
+import com.skillsprint.dto.response.admin.AdminUserSummaryResponse;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.service.user.AdminUserService;
+import com.skillsprint.enums.auth.RoleName;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -33,10 +35,19 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<PageResponse<AdminUserResponse>>> getUsers(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) RoleName role
     ) {
-        PageResponse<AdminUserResponse> response = adminUserService.getUsers(search, page, size);
+        PageResponse<AdminUserResponse> response = adminUserService.getUsers(search, page, size, role);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<AdminUserSummaryResponse>> getUserSummary(
+            @RequestParam(required = false) String search
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(adminUserService.getUserSummary(search)));
     }
 
     @GetMapping("/{userId}")
