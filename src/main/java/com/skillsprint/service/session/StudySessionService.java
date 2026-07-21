@@ -285,12 +285,18 @@ public class StudySessionService {
             return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));
         }
 
+        // Capture the remaining time from the phase clock BEFORE flipping the status
+        // to PAUSED: once the status is PAUSED, calculateRemainingSeconds reads back
+        // remainingSecondsWhenPaused (still null → 0 for a never-paused phase) instead
+        // of the phaseEndAt-derived value, which would collapse a genuinely active
+        // 25-minute focus to 1 second — over-crediting elapsed time on the client and
+        // forcing an instant expiry on the next resume. Duration#getSeconds truncates
+        // sub-second values, so keep at least one second so PAUSED never masquerades
+        // as a completed focus cycle.
+        int remainingSeconds = Math.max(1, calculateRemainingSeconds(pomodoro));
         pomodoro.setStatus(PomodoroSessionStatus.PAUSED);
         pomodoro.setPausedAt(now);
-        // Duration#getSeconds truncates sub-second values. Preserve at least one
-        // second for a genuinely active phase so PAUSED never masquerades as a
-        // completed focus cycle on clients.
-        pomodoro.setRemainingSecondsWhenPaused(Math.max(1, calculateRemainingSeconds(pomodoro)));
+        pomodoro.setRemainingSecondsWhenPaused(remainingSeconds);
         PomodoroSession savedPomodoro = pomodoroSessionRepository.save(pomodoro);
 
         return studySessionMapper.toResponse(session, savedPomodoro, calculateRemainingSeconds(savedPomodoro));

@@ -629,6 +629,49 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void pausePomodoroDuringActiveFocusPreservesRemainingWithoutChangingPhaseOrCredit() {
+        StudySession session = studySession(task);
+        // 3 minutes into a 25-minute focus → 22 minutes (1320s) still remaining.
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 3 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.pausePomodoro("user-1", session.getSessionId());
+
+        // A normal pause must not advance the phase, start a break, or credit a cycle.
+        assertEquals(PomodoroPhase.FOCUS, pomodoro.getCurrentPhase());
+        assertEquals(PomodoroSessionStatus.PAUSED, pomodoro.getStatus());
+        assertEquals(0, pomodoro.getCompletedFocusMinutes());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+        // The server-calculated remaining time is preserved (≈1320s) and, crucially,
+        // is never zero — a zero-second PAUSED focus would masquerade as a completed
+        // cycle on the client.
+        Integer remaining = pomodoro.getRemainingSecondsWhenPaused();
+        assertTrue(remaining != null && remaining >= 1315 && remaining <= 1320,
+                "Paused focus must keep the server-calculated remaining time, got " + remaining);
+    }
+
+    @Test
+    void resumeAfterNormalPauseRestoresRealRemainingTimeAndDoesNotInstantlyExpire() {
+        StudySession session = studySession(task);
+        // 3 minutes into a 25-minute focus.
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 3 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.pausePomodoro("user-1", session.getSessionId());
+        studySessionService.resumePomodoro("user-1", session.getSessionId());
+
+        assertEquals(PomodoroSessionStatus.IN_PROGRESS, pomodoro.getStatus());
+        assertEquals(PomodoroPhase.FOCUS, pomodoro.getCurrentPhase());
+        assertEquals(0, pomodoro.getCompletedFocusMinutes());
+        // The restored phase still has ~22 minutes left — a resumed pause must never
+        // collapse to a near-zero deadline that would instantly expire and auto-credit
+        // a full cycle / advance into a break.
+        long secondsLeft = java.time.Duration.between(Instant.now(), pomodoro.getPhaseEndAt()).getSeconds();
+        assertTrue(secondsLeft >= 1300 && secondsLeft <= 1320,
+                "Resumed focus must restore the real remaining time, got " + secondsLeft);
+    }
+
+    @Test
     void pausePomodoroAfterFocusExpiresCreditsTheCycleAndPausesTheBreak() {
         StudySession session = studySession(task);
         PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 26 * 60);
