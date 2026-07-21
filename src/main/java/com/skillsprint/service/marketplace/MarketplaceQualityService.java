@@ -149,13 +149,15 @@ public class MarketplaceQualityService {
             job.setStatus(MarketplaceQualityJobStatus.RUNNING);
             job.setStartedAt(Instant.now());
             job.setNextRetryAt(null);
-            MarketplacePackVersion version = job.getPackVersion();
-            return new ClaimedJob(job.getJobId(), job.getSnapshotFingerprint(), version);
+            return new ClaimedJob(job.getJobId(), job.getSnapshotFingerprint(), job.getPackVersion().getVersionId());
         });
     }
 
+    @Transactional(readOnly = true)
     public MarketplaceQualityValidator.ValidationResult validate(ClaimedJob claimedJob) {
-        return validator.validate(claimedJob.version());
+        MarketplacePackVersion version = versionRepository.findById(claimedJob.versionId())
+                .orElseThrow(() -> new AppException(ErrorCode.MARKETPLACE_PACK_VERSION_NOT_FOUND));
+        return validator.validate(version);
     }
 
     @Transactional
@@ -357,7 +359,7 @@ public class MarketplaceQualityService {
     public record ClaimedJob(
             UUID jobId,
             String snapshotFingerprint,
-            MarketplacePackVersion version
+            UUID versionId
     ) {
     }
 }
