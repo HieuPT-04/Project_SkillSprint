@@ -134,6 +134,7 @@ class MarketplaceQualityServiceTest {
         report.putArray("issues");
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
         when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(fingerprint.of(version)).thenReturn("hash");
         when(validator.validate(version)).thenReturn(
                 new MarketplaceQualityValidator.ValidationResult(100, true, report));
@@ -154,6 +155,7 @@ class MarketplaceQualityServiceTest {
         version.setQualitySnapshotFingerprint("new-hash");
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
         when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(fingerprint.of(version)).thenReturn("new-hash");
         ObjectNode report = objectMapper.createObjectNode();
         when(validator.validate(version)).thenReturn(
@@ -173,6 +175,7 @@ class MarketplaceQualityServiceTest {
         MarketplaceQualityJob queued = job("hash", MarketplaceQualityJobStatus.QUEUED);
         when(qualityJobRepository.findNextQueuedForUpdate(any(Instant.class))).thenReturn(Optional.of(queued));
         when(qualityJobRepository.findByJobIdForUpdate(queued.getJobId())).thenReturn(Optional.of(queued));
+        when(versionRepository.findById(version.getVersionId())).thenReturn(Optional.of(version));
         when(validator.validate(version)).thenThrow(new IllegalStateException("broken draft"));
 
         worker.processNextQueuedJob();
