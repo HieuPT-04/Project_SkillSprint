@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.UUID;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -65,6 +66,9 @@ public class CreatorPayout extends BaseAuditEntity {
 
     @Column(name = "external_transfer_reference", length = 200)
     private String externalTransferReference;
+
+    @Column(name = "paid_vnd_amount", precision = 19, scale = 2)
+    private BigDecimal paidVndAmount;
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;

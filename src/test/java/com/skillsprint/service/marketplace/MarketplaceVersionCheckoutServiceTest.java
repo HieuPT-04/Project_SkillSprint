@@ -67,6 +67,7 @@ class MarketplaceVersionCheckoutServiceTest {
     @Mock UserWalletRepository walletRepository;
     @Mock WalletTransactionRepository walletTransactionRepository;
     @Mock MarketplaceCheckoutAuditService checkoutAuditService;
+    @Mock PlatformTreasuryService platformTreasuryService;
 
     private MarketplaceVersionCheckoutService service;
     private MarketplacePackVersion version;
@@ -88,7 +89,8 @@ class MarketplaceVersionCheckoutServiceTest {
                 walletRepository,
                 walletTransactionRepository,
                 new MarketplaceCheckoutMapper(),
-                checkoutAuditService);
+                checkoutAuditService,
+                platformTreasuryService);
 
         versionId = UUID.randomUUID();
         User creator = user("creator", "creator@example.com");

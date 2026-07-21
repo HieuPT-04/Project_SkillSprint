@@ -17,6 +17,10 @@ import com.skillsprint.enums.marketplace.MarketplaceSaleStatus;
 import com.skillsprint.enums.marketplace.MarketplaceSettlementStatus;
 import com.skillsprint.enums.marketplace.MarketplacePackVersionStatus;
 import com.skillsprint.enums.marketplace.MarketplacePurchaseStatus;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.enums.marketplace.WalletTransactionDirection;
 import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
 import com.skillsprint.exception.AppException;
@@ -36,6 +40,7 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Map;
 import java.util.function.Function;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +70,7 @@ public class MarketplaceVersionCheckoutService {
     WalletTransactionRepository walletTransactionRepository;
     MarketplaceCheckoutMapper checkoutMapper;
     MarketplaceCheckoutAuditService checkoutAuditService;
+    PlatformTreasuryService platformTreasuryService;
 
     @Transactional
     public MarketplaceVersionPurchaseResponse purchaseWithCoins(
@@ -198,6 +204,20 @@ public class MarketplaceVersionCheckoutService {
         revenue.setSale(sale);
         revenue.setAmount(platformAmount);
         persist(CheckoutPersistencePhase.PLATFORM_REVENUE, revenue, platformRevenueEntryRepository::saveAndFlush);
+        platformTreasuryService.record(
+                PlatformTreasuryAsset.COIN,
+                PlatformTreasuryDirection.CREDIT,
+                PlatformTreasuryEntryType.MARKETPLACE_COMMISSION_EARNED,
+                PlatformTreasuryReferenceType.SALE,
+                sale.getSaleId(),
+                BigDecimal.valueOf(platformAmount),
+                null,
+                buyer,
+                null,
+                "Marketplace commission",
+                Map.of("settlementId", settlement.getSettlementId(), "platformShareBps", PLATFORM_SHARE_BPS),
+                Instant.now()
+        );
 
         if (wallet != null && price > 0) {
             WalletTransaction transaction = new WalletTransaction();

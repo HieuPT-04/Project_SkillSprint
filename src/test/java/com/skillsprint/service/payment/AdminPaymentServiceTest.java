@@ -39,6 +39,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import com.skillsprint.service.marketplace.PlatformTreasuryService;
 
 @ExtendWith(MockitoExtension.class)
 class AdminPaymentServiceTest {
@@ -53,6 +54,9 @@ class AdminPaymentServiceTest {
     CoinTopUpService coinTopUpService;
 
     @Mock
+    PlatformTreasuryService platformTreasuryService;
+
+    @Mock
     PaymentMapper paymentMapper;
 
     AdminPaymentService adminPaymentService;
@@ -65,6 +69,7 @@ class AdminPaymentServiceTest {
                 paymentTransactionRepository,
                 subscriptionService,
                 coinTopUpService,
+                platformTreasuryService,
                 paymentMapper,
                 new ObjectMapper()
         );

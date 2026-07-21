@@ -17,4 +17,6 @@ public interface BusinessActivityLogRepository extends JpaRepository<BusinessAct
     List<BusinessActivityLog> findByActionTypeOrderByCreatedAtDesc(BusinessActionType actionType);
 
     List<BusinessActivityLog> findTop100ByEntityTypeOrderByCreatedAtDesc(BusinessEntityType entityType);
+
+    List<BusinessActivityLog> findByEntityTypeAndEntityIdOrderByCreatedAtAsc(BusinessEntityType entityType, UUID entityId);
 }

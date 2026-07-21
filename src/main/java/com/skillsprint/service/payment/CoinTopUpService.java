@@ -8,6 +8,10 @@ import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.User;
 import com.skillsprint.entity.UserWallet;
 import com.skillsprint.entity.WalletTransaction;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.enums.marketplace.WalletTransactionDirection;
 import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
 import com.skillsprint.enums.payment.PaymentPurpose;
@@ -18,8 +22,11 @@ import com.skillsprint.repository.PaymentTransactionRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserWalletRepository;
 import com.skillsprint.repository.WalletTransactionRepository;
+import com.skillsprint.service.marketplace.PlatformTreasuryService;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +55,7 @@ public class CoinTopUpService {
     PaymentTransactionRepository paymentTransactionRepository;
     UserWalletRepository walletRepository;
     WalletTransactionRepository walletTransactionRepository;
+    PlatformTreasuryService platformTreasuryService;
 
     @Transactional(readOnly = true)
     public List<CoinPackageResponse> getAvailablePackages() {
@@ -134,6 +142,7 @@ public class CoinTopUpService {
         }
         if (walletTransactionRepository.existsByReferenceTypeAndReferenceId(
                 WalletTransactionReferenceType.COIN_TOP_UP, payment.getPaymentId())) {
+            recordTopUpReceipt(payment);
             return;
         }
 
@@ -155,6 +164,24 @@ public class CoinTopUpService {
         ledgerEntry.setReferenceType(WalletTransactionReferenceType.COIN_TOP_UP);
         ledgerEntry.setReferenceId(payment.getPaymentId());
         walletTransactionRepository.save(ledgerEntry);
+        recordTopUpReceipt(payment);
+    }
+
+    private void recordTopUpReceipt(PaymentTransaction payment) {
+        platformTreasuryService.record(
+                PlatformTreasuryAsset.VND,
+                PlatformTreasuryDirection.CREDIT,
+                PlatformTreasuryEntryType.COIN_TOP_UP_RECEIVED,
+                PlatformTreasuryReferenceType.PAYMENT,
+                payment.getPaymentId(),
+                payment.getAmount(),
+                null,
+                payment.getUser(),
+                payment.getProviderTransactionId(),
+                "Coin top-up received",
+                Map.of("coinAmount", payment.getCoinAmount()),
+                payment.getPaidAt() == null ? Instant.now() : payment.getPaidAt()
+        );
     }
 
     private UserWallet createWallet(User user) {

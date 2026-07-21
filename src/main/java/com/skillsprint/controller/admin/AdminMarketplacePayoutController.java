@@ -4,8 +4,10 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.CompleteCreatorPayoutRequest;
 import com.skillsprint.dto.request.marketplace.RejectCreatorPayoutRequest;
 import com.skillsprint.dto.response.marketplace.CreatorPayoutResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceAuditTimelineEventResponse;
 import com.skillsprint.enums.marketplace.CreatorPayoutStatus;
 import com.skillsprint.service.marketplace.CreatorPayoutService;
+import com.skillsprint.service.marketplace.MarketplacePayoutAuditQueryService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -32,12 +34,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminMarketplacePayoutController {
 
     CreatorPayoutService creatorPayoutService;
+    MarketplacePayoutAuditQueryService payoutAuditQueryService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<CreatorPayoutResponse>>> getPayouts(
             @RequestParam(required = false) CreatorPayoutStatus status
     ) {
         return ResponseEntity.ok(ApiResponse.success(creatorPayoutService.getAdminPayouts(status)));
+    }
+
+    @GetMapping("/{payoutId}/timeline")
+    public ResponseEntity<ApiResponse<List<MarketplaceAuditTimelineEventResponse>>> timeline(@PathVariable UUID payoutId) {
+        return ResponseEntity.ok(ApiResponse.success(payoutAuditQueryService.getTimeline(payoutId)));
     }
 
     @PatchMapping("/{payoutId}/approve")

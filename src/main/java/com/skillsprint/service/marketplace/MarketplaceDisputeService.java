@@ -21,6 +21,11 @@ import com.skillsprint.enums.marketplace.MarketplaceSaleStatus;
 import com.skillsprint.enums.marketplace.MarketplaceSettlementStatus;
 import com.skillsprint.enums.marketplace.WalletTransactionDirection;
 import com.skillsprint.enums.marketplace.WalletTransactionReferenceType;
+import com.skillsprint.enums.log.BusinessActionType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.CreatorEarningEntryRepository;
@@ -34,6 +39,8 @@ import com.skillsprint.repository.WalletTransactionRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -68,6 +75,8 @@ public class MarketplaceDisputeService {
     UserWalletRepository walletRepository;
     WalletTransactionRepository walletTransactionRepository;
     UserRepository userRepository;
+    PlatformTreasuryService platformTreasuryService;
+    MarketplaceDisputeAuditService disputeAuditService;
 
     // ----- Buyer -----
 
@@ -131,6 +140,7 @@ public class MarketplaceDisputeService {
         dispute.setStatus(MarketplaceDisputeStatus.OPEN);
         try {
             MarketplaceRefundDispute saved = disputeRepository.saveAndFlush(dispute);
+            disputeAuditService.record(sale.getBuyer(), saved, BusinessActionType.MARKETPLACE_DISPUTE_OPENED, "Người mua gửi yêu cầu hoàn tiền");
             return toResponse(saved, false);
         } catch (DataIntegrityViolationException ex) {
             // The partial unique index closed a race with a concurrent create/retry.
@@ -177,20 +187,31 @@ public class MarketplaceDisputeService {
             throw new AppException(ErrorCode.MARKETPLACE_DISPUTE_STATE_INVALID);
         }
 
+        User admin;
         if (next == MarketplaceDisputeStatus.UNDER_REVIEW) {
+            admin = requireUser(adminUserId);
             dispute.setStatus(next);
+            dispute.setAdminActor(admin);
         } else {
             String note = normalize(request.getDecisionNote());
             if (note == null) {
                 throw new AppException(ErrorCode.MARKETPLACE_DISPUTE_DECISION_NOTE_REQUIRED);
             }
+            admin = requireUser(adminUserId);
             dispute.setStatus(next);
-            dispute.setAdminActor(requireUser(adminUserId));
+            dispute.setAdminActor(admin);
             dispute.setDecisionNote(note);
             dispute.setDecidedAt(Instant.now());
         }
 
-        return toResponse(disputeRepository.saveAndFlush(dispute), true);
+        MarketplaceRefundDispute decided = disputeRepository.saveAndFlush(dispute);
+        disputeAuditService.record(admin, decided, switch (next) {
+            case UNDER_REVIEW -> BusinessActionType.MARKETPLACE_DISPUTE_UNDER_REVIEW;
+            case APPROVED -> BusinessActionType.MARKETPLACE_DISPUTE_APPROVED;
+            case REJECTED -> BusinessActionType.MARKETPLACE_DISPUTE_REJECTED;
+            default -> throw new IllegalStateException("Unsupported dispute decision");
+        }, "Admin cập nhật trạng thái yêu cầu hoàn tiền");
+        return toResponse(decided, true);
     }
 
     /**
@@ -274,7 +295,25 @@ public class MarketplaceDisputeService {
         dispute.setRefundedAt(Instant.now());
         dispute.setRefundCoinAmount(refundAmount);
         dispute.setRefundWalletTransactionId(walletTransactionId);
-        return toResponse(disputeRepository.saveAndFlush(dispute), true);
+        dispute.setAdminActor(requireUser(adminUserId));
+        MarketplaceRefundDispute completed = disputeRepository.saveAndFlush(dispute);
+        platformTreasuryService.record(
+                PlatformTreasuryAsset.COIN,
+                PlatformTreasuryDirection.DEBIT,
+                PlatformTreasuryEntryType.MARKETPLACE_COMMISSION_REVERSED,
+                PlatformTreasuryReferenceType.DISPUTE,
+                completed.getDisputeId(),
+                BigDecimal.valueOf(settlement.getPlatformAmount()),
+                completed.getAdminActor(),
+                sale.getBuyer(),
+                null,
+                "Marketplace commission reversal after Coin refund",
+                Map.of("saleId", sale.getSaleId(), "refundCoinAmount", refundAmount),
+                completed.getRefundedAt()
+        );
+        disputeAuditService.record(completed.getAdminActor(), completed, BusinessActionType.MARKETPLACE_REFUND_COMPLETED,
+                "Admin hoàn Coin cho người mua");
+        return toResponse(completed, true);
     }
 
     // ----- helpers -----

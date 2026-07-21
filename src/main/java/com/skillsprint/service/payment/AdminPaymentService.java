@@ -13,6 +13,11 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.PaymentMapper;
 import com.skillsprint.repository.PaymentTransactionRepository;
 import com.skillsprint.service.subscription.SubscriptionService;
+import com.skillsprint.service.marketplace.PlatformTreasuryService;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +41,7 @@ public class AdminPaymentService {
     PaymentTransactionRepository paymentTransactionRepository;
     SubscriptionService subscriptionService;
     CoinTopUpService coinTopUpService;
+    PlatformTreasuryService platformTreasuryService;
     PaymentMapper paymentMapper;
     ObjectMapper objectMapper;
 
@@ -102,14 +108,22 @@ public class AdminPaymentService {
     private void fulfil(PaymentTransaction payment) {
         switch (payment.getPurpose()) {
             case SUBSCRIPTION -> subscriptionService.activatePaidPlan(
-                    payment.getUser().getUserId(),
-                    payment.getPlan()
-            );
+                    payment.getUser().getUserId(), payment.getPlan());
             case COIN_TOP_UP -> coinTopUpService.creditVerifiedTopUp(payment);
             // A purpose nobody taught this method to fulfil must fail loudly rather than
             // leave the buyer paid but empty-handed.
             default -> throw new AppException(ErrorCode.PAYMENT_PURPOSE_MISMATCH);
         }
+        if (payment.getPurpose() == com.skillsprint.enums.payment.PaymentPurpose.SUBSCRIPTION) {
+            recordSubscriptionReceipt(payment);
+        }
+    }
+
+    private void recordSubscriptionReceipt(PaymentTransaction payment) {
+        platformTreasuryService.record(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.CREDIT,
+                PlatformTreasuryEntryType.SUBSCRIPTION_PAYMENT_RECEIVED, PlatformTreasuryReferenceType.PAYMENT,
+                payment.getPaymentId(), payment.getAmount(), null, payment.getUser(), payment.getProviderTransactionId(),
+                "Subscription payment received", Map.of("planId", payment.getPlan().getPlanId().toString()), payment.getPaidAt());
     }
 
     private int normalizeSize(int size) {

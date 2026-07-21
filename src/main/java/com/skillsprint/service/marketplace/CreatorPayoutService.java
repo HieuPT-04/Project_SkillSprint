@@ -19,6 +19,10 @@ import com.skillsprint.enums.log.BusinessActionType;
 import com.skillsprint.enums.marketplace.CreatorEarningState;
 import com.skillsprint.enums.marketplace.CreatorPayoutAllocationState;
 import com.skillsprint.enums.marketplace.CreatorPayoutStatus;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
+import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
+import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.CreatorEarningEntryRepository;
@@ -34,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -52,6 +57,7 @@ public class CreatorPayoutService {
     CreatorPayoutRepository payoutRepository;
     S3PresignedUrlService s3PresignedUrlService;
     MarketplacePayoutAuditService payoutAuditService;
+    PlatformTreasuryService platformTreasuryService;
 
     @Transactional(readOnly = true)
     public CreatorEarningsResponse getEarnings(String creatorId) {
@@ -211,10 +217,25 @@ public class CreatorPayoutService {
         payout.setStatus(CreatorPayoutStatus.COMPLETED);
         payout.setAdminActor(admin);
         payout.setExternalTransferReference(request.getExternalTransferReference().trim());
+        payout.setPaidVndAmount(request.getPaidVndAmount());
         payout.setNotes(normalizeBlank(request.getNotes()));
         payout = payoutRepository.save(payout);
         payoutAuditService.record(admin, payout, BusinessActionType.MARKETPLACE_PAYOUT_COMPLETED,
                 "Admin xác nhận chuyển khoản hoàn tất");
+        platformTreasuryService.record(
+                PlatformTreasuryAsset.VND,
+                PlatformTreasuryDirection.DEBIT,
+                PlatformTreasuryEntryType.CREATOR_PAYOUT_COMPLETED,
+                PlatformTreasuryReferenceType.CREATOR_PAYOUT,
+                payout.getPayoutId(),
+                request.getPaidVndAmount(),
+                admin,
+                payout.getCreator(),
+                payout.getExternalTransferReference(),
+                payout.getNotes(),
+                Map.of("requestedCoinAmount", payout.getRequestedAmount()),
+                java.time.Instant.now()
+        );
         return toPayoutResponse(payout, true);
     }
 
@@ -409,6 +430,7 @@ public class CreatorPayoutService {
                 .creatorName(payout.getCreator().getFullName())
                 .creatorEmail(payout.getCreator().getEmail())
                 .requestedAmount(payout.getRequestedAmount())
+                .paidVndAmount(payout.getPaidVndAmount())
                 .status(payout.getStatus())
                 .bankName(payout.getDestinationBankName())
                 .bankCode(payout.getDestinationBankCode())

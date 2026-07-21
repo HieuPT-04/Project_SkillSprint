@@ -1,6 +1,7 @@
 package com.skillsprint.dto.response.marketplace;
 
 import com.skillsprint.enums.marketplace.CreatorPayoutStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -17,6 +18,7 @@ public class CreatorPayoutResponse {
     String creatorName;
     String creatorEmail;
     Integer requestedAmount;
+    BigDecimal paidVndAmount;
     CreatorPayoutStatus status;
     String bankName;
     String bankCode;
