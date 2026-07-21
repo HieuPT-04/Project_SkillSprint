@@ -17,6 +17,7 @@ import com.skillsprint.mapper.PaymentMapper;
 import com.skillsprint.repository.CalendarTaskRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.PaymentTransactionRepository;
+import com.skillsprint.repository.PlatformRevenueEntryRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.repository.SubscriptionRepository;
@@ -48,6 +49,7 @@ public class AdminDashboardService {
      * Coin top-up reporting is a separate metric that does not exist yet.
      */
     static PaymentPurpose REVENUE_PURPOSE = PaymentPurpose.SUBSCRIPTION;
+    static PaymentPurpose COIN_TOP_UP_PURPOSE = PaymentPurpose.COIN_TOP_UP;
 
     UserRepository userRepository;
     StudyWorkspaceRepository workspaceRepository;
@@ -57,6 +59,7 @@ public class AdminDashboardService {
     StudySessionRepository studySessionRepository;
     SubscriptionRepository subscriptionRepository;
     PaymentTransactionRepository paymentTransactionRepository;
+    PlatformRevenueEntryRepository platformRevenueEntryRepository;
     PaymentMapper paymentMapper;
 
     @Transactional(readOnly = true)
@@ -147,6 +150,20 @@ public class AdminDashboardService {
                         PaymentStatus.PAID,
                         monthStart
                 )))
+                .coinTopUpTotal(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatus(
+                        COIN_TOP_UP_PURPOSE,
+                        PaymentStatus.PAID
+                )))
+                .coinTopUpToday(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtAfter(
+                        COIN_TOP_UP_PURPOSE,
+                        PaymentStatus.PAID,
+                        todayStart
+                )))
+                .coinTopUpThisMonth(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtAfter(
+                        COIN_TOP_UP_PURPOSE,
+                        PaymentStatus.PAID,
+                        monthStart
+                )))
                 .build();
     }
 
@@ -200,6 +217,8 @@ public class AdminDashboardService {
 
     private AdminDashboardResponse.ChartStats buildChartStats(DateRange dateRange) {
         List<AdminDashboardResponse.RevenuePoint> revenueByDay = new ArrayList<>();
+        List<AdminDashboardResponse.RevenuePoint> coinTopUpByDay = new ArrayList<>();
+        List<AdminDashboardResponse.MarketplaceCommissionPoint> marketplaceCommissionByDay = new ArrayList<>();
         List<AdminDashboardResponse.CountPoint> newUsersByDay = new ArrayList<>();
 
         LocalDate current = dateRange.from();
@@ -217,6 +236,31 @@ public class AdminDashboardService {
                     )))
                     .build());
 
+            coinTopUpByDay.add(AdminDashboardResponse.RevenuePoint.builder()
+                    .date(current)
+                    .amount(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                            COIN_TOP_UP_PURPOSE,
+                            PaymentStatus.PAID,
+                            dayStart,
+                            nextDayStart
+                    )))
+                    .build());
+
+            long grossCommissionCoin = platformRevenueEntryRepository.sumGrossCommissionCoinCreatedBetween(
+                    dayStart,
+                    nextDayStart
+            );
+            long refundedCommissionCoin = platformRevenueEntryRepository.sumRefundedCommissionCoinBetween(
+                    dayStart,
+                    nextDayStart
+            );
+            marketplaceCommissionByDay.add(AdminDashboardResponse.MarketplaceCommissionPoint.builder()
+                    .date(current)
+                    .grossCommissionCoin(grossCommissionCoin)
+                    .refundedCommissionCoin(refundedCommissionCoin)
+                    .netCommissionCoin(grossCommissionCoin - refundedCommissionCoin)
+                    .build());
+
             newUsersByDay.add(AdminDashboardResponse.CountPoint.builder()
                     .date(current)
                     .count(userRepository.countByCreatedAtBetween(dayStart, nextDayStart))
@@ -227,6 +271,8 @@ public class AdminDashboardService {
 
         return AdminDashboardResponse.ChartStats.builder()
                 .revenueByDay(revenueByDay)
+                .coinTopUpByDay(coinTopUpByDay)
+                .marketplaceCommissionByDay(marketplaceCommissionByDay)
                 .newUsersByDay(newUsersByDay)
                 .build();
     }

@@ -100,6 +100,9 @@ public class AdminDashboardResponse {
         BigDecimal revenueTotal;
         BigDecimal revenueToday;
         BigDecimal revenueThisMonth;
+        BigDecimal coinTopUpTotal;
+        BigDecimal coinTopUpToday;
+        BigDecimal coinTopUpThisMonth;
     }
 
     @Getter
@@ -159,6 +162,8 @@ public class AdminDashboardResponse {
     @FieldDefaults(level = AccessLevel.PRIVATE)
     public static class ChartStats {
         List<RevenuePoint> revenueByDay;
+        List<RevenuePoint> coinTopUpByDay;
+        List<MarketplaceCommissionPoint> marketplaceCommissionByDay;
         List<CountPoint> newUsersByDay;
     }
 
@@ -168,6 +173,16 @@ public class AdminDashboardResponse {
     public static class RevenuePoint {
         LocalDate date;
         BigDecimal amount;
+    }
+
+    @Getter
+    @Builder
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    public static class MarketplaceCommissionPoint {
+        LocalDate date;
+        long grossCommissionCoin;
+        long refundedCommissionCoin;
+        long netCommissionCoin;
     }
 
     @Getter
