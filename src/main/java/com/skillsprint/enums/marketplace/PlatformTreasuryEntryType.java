@@ -1,0 +1,9 @@
+package com.skillsprint.enums.marketplace;
+
+public enum PlatformTreasuryEntryType {
+    COIN_TOP_UP_RECEIVED,
+    SUBSCRIPTION_PAYMENT_RECEIVED,
+    MARKETPLACE_COMMISSION_EARNED,
+    MARKETPLACE_COMMISSION_REVERSED,
+    CREATOR_PAYOUT_COMPLETED
+}
