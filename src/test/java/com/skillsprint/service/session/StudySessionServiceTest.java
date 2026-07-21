@@ -3,6 +3,7 @@ package com.skillsprint.service.session;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -553,6 +554,197 @@ class StudySessionServiceTest {
         );
 
         assertEquals(ErrorCode.STUDY_SESSION_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void skipPomodoroPhaseDuringFocusCreditsElapsedNotFullFocusDuration() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 3 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.skipPomodoroPhase("user-1", session.getSessionId());
+
+        assertEquals(3, pomodoro.getCompletedFocusMinutes());
+        assertTrue(
+                pomodoro.getCompletedFocusMinutes() < pomodoro.getFocusMinutes(),
+                "Manual skip must not credit the full focus duration");
+        assertEquals(PomodoroPhase.SHORT_BREAK, pomodoro.getCurrentPhase());
+        assertEquals(PomodoroSessionStatus.IN_PROGRESS, pomodoro.getStatus());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+    }
+
+    @Test
+    void nextPomodoroPhaseAfterPhaseEndCreditsExactlyOneFullFocusCycle() {
+        StudySession session = studySession(task);
+        // phaseEndAt is 60s in the past → the focus phase has genuinely expired.
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 26 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.nextPomodoroPhase("user-1", session.getSessionId());
+
+        assertEquals(25, pomodoro.getCompletedFocusMinutes());
+        assertEquals(PomodoroPhase.SHORT_BREAK, pomodoro.getCurrentPhase());
+        assertEquals(PomodoroSessionStatus.IN_PROGRESS, pomodoro.getStatus());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+    }
+
+    @Test
+    void repeatedNextPomodoroPhaseDoesNotDoubleAdvanceTheSamePhase() {
+        StudySession session = studySession(task);
+        // phaseEndAt is 60s in the past → the focus phase has genuinely expired.
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 26 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        // First (legitimate) natural-expiry call advances FOCUS → SHORT_BREAK once.
+        studySessionService.nextPomodoroPhase("user-1", session.getSessionId());
+        assertEquals(25, pomodoro.getCompletedFocusMinutes());
+        assertEquals(PomodoroPhase.SHORT_BREAK, pomodoro.getCurrentPhase());
+
+        // A duplicate call (retry / second tab / racing signal) now sees the fresh,
+        // not-yet-expired break phase and is rejected — no second transition, no
+        // extra focus credit. The server clock is the single source of truth.
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> studySessionService.nextPomodoroPhase("user-1", session.getSessionId())
+        );
+        assertEquals(ErrorCode.POMODORO_PHASE_NOT_EXPIRED, exception.getErrorCode());
+        assertEquals(25, pomodoro.getCompletedFocusMinutes());
+        assertEquals(PomodoroPhase.SHORT_BREAK, pomodoro.getCurrentPhase());
+        assertEquals(1, pomodoro.getCurrentCycle());
+    }
+
+    @Test
+    void nextPomodoroPhaseBeforePhaseEndRejectsAndLeavesStateUnchanged() {
+        StudySession session = studySession(task);
+        // 22 minutes still remaining → an early natural-expiry call must be rejected.
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 4, 3 * 60);
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.of(pomodoro));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> studySessionService.nextPomodoroPhase("user-1", session.getSessionId())
+        );
+
+        assertEquals(ErrorCode.POMODORO_PHASE_NOT_EXPIRED, exception.getErrorCode());
+        assertEquals(0, pomodoro.getCompletedFocusMinutes());
+        assertEquals(PomodoroPhase.FOCUS, pomodoro.getCurrentPhase());
+        assertEquals(PomodoroSessionStatus.IN_PROGRESS, pomodoro.getStatus());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+        verify(pomodoroSessionRepository, never()).save(any());
+        verify(studySessionRepository, never()).save(any());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void getSessionReturnsLatestCompletedPomodoroForOpenStudySession() {
+        StudySession session = studySession(task);
+        PomodoroSession completed = pomodoro(session, PomodoroSessionStatus.COMPLETED);
+        completed.setCompletedFocusMinutes(25);
+        StudySessionResponse expected = StudySessionResponse.builder().sessionId(session.getSessionId()).build();
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.empty());
+        when(pomodoroSessionRepository.findByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.COMPLETED, PomodoroSessionStatus.INTERRUPTED)
+        )).thenReturn(List.of(completed));
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                any(PomodoroSession.class),
+                org.mockito.Mockito.<Integer>any()
+        )).thenReturn(expected);
+
+        StudySessionResponse result = studySessionService.getSession("user-1", session.getSessionId());
+
+        assertSame(expected, result);
+        ArgumentCaptor<PomodoroSession> captor = ArgumentCaptor.forClass(PomodoroSession.class);
+        verify(studySessionMapper).toResponse(any(StudySession.class), captor.capture(), org.mockito.Mockito.<Integer>any());
+        assertSame(completed, captor.getValue());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+    }
+
+    @Test
+    void finalManualSkipCompletesPomodoroButKeepsStudySessionInProgress() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 4, 4, 2 * 60);
+        stubActivePomodoro(session, pomodoro);
+
+        studySessionService.skipPomodoroPhase("user-1", session.getSessionId());
+
+        assertEquals(PomodoroSessionStatus.COMPLETED, pomodoro.getStatus());
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+        assertTrue(
+                pomodoro.getCompletedFocusMinutes() < pomodoro.getFocusMinutes(),
+                "Final skipped cycle must not credit the full focus duration");
+        verify(studySessionRepository, never()).save(any());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    @Test
+    void repeatedInstantSkipsDoNotAccumulateValidStudyMinutes() {
+        StudySession session = studySession(task);
+        PomodoroSession pomodoro = runningFocusPomodoro(session, 1, 8, 0);
+        stubActivePomodoro(session, pomodoro);
+
+        // Emulate a learner mashing "Bỏ qua": before every FOCUS skip, reset the
+        // phase clock to "just started" so each skip credits ~0 studied minutes.
+        for (int i = 0; i < 6; i++) {
+            if (pomodoro.getStatus() == PomodoroSessionStatus.COMPLETED) {
+                break;
+            }
+            if (pomodoro.getCurrentPhase() == PomodoroPhase.FOCUS) {
+                Instant now = Instant.now();
+                pomodoro.setPhaseStartedAt(now);
+                pomodoro.setPhaseEndAt(now.plusSeconds(25L * 60));
+            }
+            studySessionService.skipPomodoroPhase("user-1", session.getSessionId());
+        }
+
+        assertTrue(
+                pomodoro.getCompletedFocusMinutes() < StudySessionService.MIN_VALID_STUDY_MINUTES,
+                "Repeated instant skips must never reach the minimum valid study threshold");
+        assertEquals(StudySessionStatus.IN_PROGRESS, session.getStatus());
+        verify(calendarService, never()).completeTask(any(), any());
+    }
+
+    private PomodoroSession runningFocusPomodoro(
+            StudySession session,
+            int currentCycle,
+            int totalCycles,
+            int elapsedSeconds
+    ) {
+        PomodoroSession pomodoro = pomodoro(session, PomodoroSessionStatus.IN_PROGRESS);
+        pomodoro.setFocusMinutes(25);
+        pomodoro.setShortBreakMinutes(5);
+        pomodoro.setLongBreakMinutes(15);
+        pomodoro.setCurrentCycle(currentCycle);
+        pomodoro.setTotalCycles(totalCycles);
+        pomodoro.setCurrentPhase(PomodoroPhase.FOCUS);
+        pomodoro.setCompletedFocusMinutes(0);
+        Instant now = Instant.now();
+        pomodoro.setPhaseStartedAt(now.minusSeconds(elapsedSeconds));
+        pomodoro.setPhaseEndAt(now.plusSeconds(25L * 60 - elapsedSeconds));
+        return pomodoro;
+    }
+
+    private void stubActivePomodoro(StudySession session, PomodoroSession pomodoro) {
+        when(studySessionRepository.findById(session.getSessionId())).thenReturn(Optional.of(session));
+        when(pomodoroSessionRepository.findFirstByStudySessionSessionIdAndStatusInOrderByStartedAtDesc(
+                session.getSessionId(),
+                EnumSet.of(PomodoroSessionStatus.IN_PROGRESS, PomodoroSessionStatus.PAUSED)
+        )).thenReturn(Optional.of(pomodoro));
+        when(pomodoroSessionRepository.save(pomodoro)).thenReturn(pomodoro);
+        when(studySessionMapper.toResponse(
+                any(StudySession.class),
+                any(PomodoroSession.class),
+                org.mockito.Mockito.<Integer>any()
+        )).thenReturn(StudySessionResponse.builder().sessionId(session.getSessionId()).build());
     }
 
     private StudySessionResponse stubFinishSession(StudySession session, long accumulatedValidMinutes, int requiredMinutes) {
