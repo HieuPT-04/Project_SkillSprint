@@ -4,8 +4,10 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.request.marketplace.DecideMarketplaceDisputeRequest;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.marketplace.MarketplaceDisputeResponse;
+import com.skillsprint.dto.response.marketplace.MarketplaceAuditTimelineEventResponse;
 import com.skillsprint.enums.marketplace.MarketplaceDisputeStatus;
 import com.skillsprint.service.marketplace.MarketplaceDisputeService;
+import com.skillsprint.service.marketplace.MarketplaceDisputeAuditService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminMarketplaceDisputeController {
 
     MarketplaceDisputeService disputeService;
+    MarketplaceDisputeAuditService disputeAuditService;
 
     @GetMapping("/disputes")
     @PreAuthorize("hasRole('ADMIN')")
@@ -46,6 +49,13 @@ public class AdminMarketplaceDisputeController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<MarketplaceDisputeResponse>> detail(@PathVariable UUID disputeId) {
         return ResponseEntity.ok(ApiResponse.success(disputeService.getAdminDispute(disputeId)));
+    }
+
+    @GetMapping("/disputes/{disputeId}/timeline")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<java.util.List<MarketplaceAuditTimelineEventResponse>>> timeline(
+            @PathVariable UUID disputeId) {
+        return ResponseEntity.ok(ApiResponse.success(disputeAuditService.getTimeline(disputeId)));
     }
 
     @PatchMapping("/disputes/{disputeId}/decision")
