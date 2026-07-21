@@ -180,7 +180,21 @@ class MarketplaceQualityServiceTest {
         assertThat(queued.getStatus()).isEqualTo(MarketplaceQualityJobStatus.QUEUED);
         assertThat(queued.getRetryCount()).isEqualTo(1);
         assertThat(queued.getNextRetryAt()).isNotNull();
-        assertThat(queued.getErrorCode()).isEqualTo("QUALITY_VALIDATION_ERROR");
+        assertThat(queued.getErrorCode()).isEqualTo(MarketplaceQualityService.VALIDATION_ERROR_CODE);
+    }
+
+    @Test
+    void exhaustedFailureReturnsAUserSafeErrorReport() {
+        MarketplaceQualityJob running = job("hash", MarketplaceQualityJobStatus.RUNNING);
+        running.setRetryCount(2);
+        when(qualityJobRepository.findByJobIdForUpdate(running.getJobId())).thenReturn(Optional.of(running));
+        when(fingerprint.of(version)).thenReturn("hash");
+
+        service.recordJobFailure(running.getJobId(), new IllegalStateException("broken draft"));
+
+        assertThat(running.getStatus()).isEqualTo(MarketplaceQualityJobStatus.ERROR);
+        assertThat(running.getReport().path("issues").get(0).path("code").asText())
+                .isEqualTo(MarketplaceQualityService.VALIDATION_ERROR_CODE);
     }
 
     @Test
@@ -219,6 +233,7 @@ class MarketplaceQualityServiceTest {
         issue.put("questionId", "legacy-question-id");
         issue.put("message", "Mã câu hỏi không hợp lệ.");
         failed.setReport(report);
+        failed.setErrorCode(MarketplaceQualityService.VALIDATION_ERROR_CODE);
         when(qualityJobRepository.findTopByPackVersionVersionIdOrderByCreatedAtDesc(version.getVersionId()))
                 .thenReturn(Optional.of(failed));
         when(fingerprint.of(version)).thenReturn("hash");
@@ -228,6 +243,7 @@ class MarketplaceQualityServiceTest {
         assertThat(response.getReport().getIssues()).singleElement()
                 .extracting(MarketplaceQualityJobResponse.QualityIssueResponse::getQuestionId)
                 .isNull();
+        assertThat(response.getErrorCode()).isEqualTo(MarketplaceQualityService.VALIDATION_ERROR_CODE);
     }
 
     private MarketplaceQualityJob job(String hash, MarketplaceQualityJobStatus status) {
