@@ -24,7 +24,7 @@ class MarketplaceQualityValidatorTest {
     }
 
     @Test
-    void duplicateQuestionAndMissingEvidenceAreBlocking() {
+    void duplicateQuestionAndMissingEvidenceDoNotBlockValidation() {
         MarketplacePackVersion version = validVersion();
         ArrayNode chapters = (ArrayNode) version.getContent().path("chapters");
         ObjectNode firstQuestion = (ObjectNode) chapters.get(0).path("quiz").path("questions").get(0);
@@ -34,9 +34,8 @@ class MarketplaceQualityValidatorTest {
 
         MarketplaceQualityValidator.ValidationResult result = validator.validate(version);
 
-        assertThat(result.passed()).isFalse();
-        assertThat(result.report().path("issues").findValuesAsText("code"))
-                .contains("QUESTION_DUPLICATE", "QUESTION_EVIDENCE_MISSING");
+        assertThat(result.passed()).isTrue();
+        assertThat(result.report().path("issues")).isEmpty();
     }
 
     @Test
@@ -54,7 +53,7 @@ class MarketplaceQualityValidatorTest {
     }
 
     @Test
-    void malformedIdentifiersAndEvidenceWithoutSourceAreBlocking() {
+    void malformedIdentifiersRemainBlockingWithoutEvidenceRequirement() {
         MarketplacePackVersion version = validVersion();
         ObjectNode firstQuestion = (ObjectNode) version.getContent().path("chapters").get(0)
                 .path("quiz").path("questions").get(0);
@@ -68,7 +67,8 @@ class MarketplaceQualityValidatorTest {
 
         assertThat(result.passed()).isFalse();
         assertThat(result.report().path("issues").findValuesAsText("code"))
-                .contains("QUESTION_ID_INVALID", "OPTION_ID_INVALID", "QUESTION_EVIDENCE_MISSING");
+                .contains("QUESTION_ID_INVALID", "OPTION_ID_INVALID")
+                .doesNotContain("QUESTION_EVIDENCE_MISSING");
     }
 
     @Test
