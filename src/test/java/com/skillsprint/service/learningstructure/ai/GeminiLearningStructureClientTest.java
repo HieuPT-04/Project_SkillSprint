@@ -1,7 +1,12 @@
 package com.skillsprint.service.learningstructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillsprint.configuration.ai.GeminiProperties;
 import com.skillsprint.entity.MaterialChunk;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentAnalysis;
@@ -16,7 +21,7 @@ class GeminiLearningStructureClientTest {
 
     private final GeminiLearningStructureClient client = new GeminiLearningStructureClient(
             new GeminiProperties(true, "test-key", "gemini-test", "https://example.com", 18000),
-            null,
+            new ObjectMapper(),
             null
     );
 
@@ -82,6 +87,16 @@ class GeminiLearningStructureClientTest {
         assertThat(prompt).contains("\"Bước 1\"");
     }
 
+    @Test
+    void promptSeparatesIndependentWorkflowStagesIntoTopics() {
+        String prompt = client.buildPrompt(List.of(chunk("Some content")), null);
+
+        assertThat(prompt).contains("Create one topic for one primary learning objective.");
+        assertThat(prompt).contains("Do not combine independent workflow stages");
+        assertThat(prompt).contains("automated validation");
+        assertThat(prompt).contains("admin review and version approval");
+    }
+
     @ParameterizedTest
     @EnumSource(DocumentKind.class)
     void everyDocumentKindPromptKeepsCoreRules(DocumentKind kind) {
@@ -132,6 +147,18 @@ class GeminiLearningStructureClientTest {
         assertThat(prompt(DocumentKind.ASSIGNMENT)).contains("The input document is an assignment / exercise.");
     }
 
+    @Test
+    void parseResponseRejectsBlockedOrTruncatedCandidates() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode blocked = mapper.createObjectNode();
+        blocked.putObject("promptFeedback").put("blockReason", "SAFETY");
+        blocked.set("candidates", candidatesNode(mapper, "STOP", validDraftJson()));
+
+        assertNull(client.parseResponse(mapper.writeValueAsString(blocked)));
+        assertNull(client.parseResponse(geminiResponse(mapper, "MAX_TOKENS", validDraftJson())));
+        assertNotNull(client.parseResponse(geminiResponse(mapper, "STOP", validDraftJson())));
+    }
+
     private String prompt(DocumentKind kind) {
         return client.buildPrompt(
                 List.of(chunk("Some content")),
@@ -144,5 +171,22 @@ class GeminiLearningStructureClientTest {
         chunk.setChunkId(UUID.randomUUID());
         chunk.setContent(content);
         return chunk;
+    }
+
+    private String validDraftJson() {
+        return "{\"confidenceScore\":0.8,\"warnings\":[],\"chapters\":[]}";
+    }
+
+    private String geminiResponse(ObjectMapper mapper, String finishReason, String draftJson) throws Exception {
+        ObjectNode root = mapper.createObjectNode();
+        root.set("candidates", candidatesNode(mapper, finishReason, draftJson));
+        return mapper.writeValueAsString(root);
+    }
+
+    private ArrayNode candidatesNode(ObjectMapper mapper, String finishReason, String draftJson) {
+        ArrayNode candidates = mapper.createArrayNode();
+        ObjectNode candidate = candidates.addObject().put("finishReason", finishReason);
+        candidate.putObject("content").putArray("parts").addObject().put("text", draftJson);
+        return candidates;
     }
 }
