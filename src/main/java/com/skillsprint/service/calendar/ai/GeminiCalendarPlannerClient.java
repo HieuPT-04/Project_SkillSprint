@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.configuration.ai.GeminiProperties;
+import com.skillsprint.configuration.ai.GeminiResponseMetrics;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -53,6 +54,7 @@ public class GeminiCalendarPlannerClient {
         }
 
         try {
+            long startedAtNanos = System.nanoTime();
             String responseText = restClientBuilder.clone()
                     .baseUrl(properties.baseUrl())
                     .build()
@@ -65,6 +67,8 @@ public class GeminiCalendarPlannerClient {
                     .retrieve()
                     .body(String.class);
 
+            GeminiResponseMetrics.logCompletion(
+                    log, objectMapper, "calendar-planning", properties.model(), startedAtNanos, responseText);
             return parseResponse(responseText, tasks);
         } catch (RestClientException | JsonProcessingException ex) {
             log.warn("[AI] Gemini calendar planning failed: {}", ex.getMessage());
@@ -78,14 +82,11 @@ public class GeminiCalendarPlannerClient {
                 List.of(Map.of("parts", List.of(Map.of("text", buildPrompt(tasks))))),
                 "generationConfig",
                 Map.of(
-                        "temperature", 0.1,
                         "candidateCount", 1,
                         "maxOutputTokens", 8192,
                         "responseMimeType", "application/json",
                         "responseSchema", buildResponseSchema(),
-                        // gemini-2.5-flash is a thinking model; disable thinking so the
-                        // output-token budget is not spent before the JSON is produced.
-                        "thinkingConfig", Map.of("thinkingBudget", 0)
+                        "thinkingConfig", Map.of("thinkingLevel", "MEDIUM")
                 )
         );
     }
@@ -194,7 +195,7 @@ public class GeminiCalendarPlannerClient {
             return null;
         }
 
-        String json = cleanJson(textNode.asText());
+        String json = textNode.asText().trim();
         if (json.isBlank()) {
             return null;
         }
@@ -315,22 +316,4 @@ public class GeminiCalendarPlannerClient {
         return true;
     }
 
-    private String cleanJson(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "";
-        }
-
-        String value = raw.trim();
-        if (value.startsWith("```")) {
-            value = value.replaceFirst("(?s)^```(?:json)?\\s*", "").trim();
-            value = value.replaceFirst("(?s)\\s*```$", "").trim();
-        }
-
-        int firstBrace = value.indexOf('{');
-        int lastBrace = value.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return value.substring(firstBrace, lastBrace + 1).trim();
-        }
-        return value;
-    }
 }

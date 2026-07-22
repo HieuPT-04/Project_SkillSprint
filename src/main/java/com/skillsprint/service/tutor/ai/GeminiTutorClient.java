@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.configuration.ai.GeminiProperties;
+import com.skillsprint.configuration.ai.GeminiResponseMetrics;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,6 +44,7 @@ public class GeminiTutorClient {
         }
 
         try {
+            long startedAtNanos = System.nanoTime();
             String responseText = restClientBuilder.clone()
                     .baseUrl(properties.baseUrl())
                     .build()
@@ -55,6 +57,8 @@ public class GeminiTutorClient {
                     .retrieve()
                     .body(String.class);
 
+            GeminiResponseMetrics.logCompletion(
+                    log, objectMapper, "tutor", properties.model(), startedAtNanos, responseText);
             return parseResponse(responseText);
         } catch (RestClientException | JsonProcessingException ex) {
             // Never log the question/context (may be sensitive) or the API key.
@@ -65,16 +69,11 @@ public class GeminiTutorClient {
 
     private Map<String, Object> buildRequestBody(String question, String context) {
         Map<String, Object> generationConfig = new LinkedHashMap<>();
-        generationConfig.put("temperature", 0.2);
         generationConfig.put("candidateCount", 1);
         generationConfig.put("maxOutputTokens", 1024);
         generationConfig.put("responseMimeType", "application/json");
         generationConfig.put("responseSchema", responseSchema());
-        if (isThinkingModel()) {
-            // gemini-2.5-flash defaults to dynamic thinking; disable it so the
-            // limited token budget is spent on the answer, not hidden reasoning.
-            generationConfig.put("thinkingConfig", Map.of("thinkingBudget", 0));
-        }
+        generationConfig.put("thinkingConfig", Map.of("thinkingLevel", "LOW"));
 
         return Map.of(
                 "contents",
@@ -82,15 +81,6 @@ public class GeminiTutorClient {
                 "generationConfig",
                 generationConfig
         );
-    }
-
-    private boolean isThinkingModel() {
-        String model = properties.model();
-        if (model == null) {
-            return false;
-        }
-        String value = model.toLowerCase(Locale.ROOT);
-        return value.contains("2.5") && value.contains("flash");
     }
 
     private Map<String, Object> responseSchema() {
@@ -196,7 +186,7 @@ public class GeminiTutorClient {
             return null;
         }
 
-        String json = cleanJson(textNode.asText());
+        String json = textNode.asText().trim();
         if (json.isBlank()) {
             return null;
         }
@@ -253,22 +243,4 @@ public class GeminiTutorClient {
         return null;
     }
 
-    private String cleanJson(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "";
-        }
-
-        String value = raw.trim();
-        if (value.startsWith("```")) {
-            value = value.replaceFirst("(?s)^```(?:json)?\\s*", "").trim();
-            value = value.replaceFirst("(?s)\\s*```$", "").trim();
-        }
-
-        int firstBrace = value.indexOf('{');
-        int lastBrace = value.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return value.substring(firstBrace, lastBrace + 1).trim();
-        }
-        return value;
-    }
 }
