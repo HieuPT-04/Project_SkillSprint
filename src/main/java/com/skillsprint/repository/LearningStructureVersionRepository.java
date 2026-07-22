@@ -23,6 +23,8 @@ public interface LearningStructureVersionRepository extends JpaRepository<Learni
 
     Optional<LearningStructureVersion> findTopByWorkspaceWorkspaceIdOrderByVersionNoDesc(UUID workspaceId);
 
+    boolean existsByWorkspaceWorkspaceId(UUID workspaceId);
+
     @Query("""
         select count(v)
         from LearningStructureVersion v

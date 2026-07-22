@@ -271,6 +271,31 @@ class QuotaServiceTest {
     }
 
     @Test
+    void validateFeatureBlocksFreeLearningStructureRegenerationWhenFeatureIsNotSeeded() {
+        when(subscriptionService.getCurrentPlan("free-user")).thenReturn(freePlan);
+        when(subscriptionService.getCurrentPlan("paid-user")).thenReturn(builderPlan);
+        when(planFeatureRepository.findByPlanPlanIdAndFeatureFeatureKey(
+                freePlan.getPlanId(),
+                PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION
+        )).thenReturn(Optional.empty());
+        when(planFeatureRepository.findByPlanPlanIdAndFeatureFeatureKey(
+                builderPlan.getPlanId(),
+                PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION
+        )).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> quotaService.validateFeature("free-user", PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION)
+        );
+
+        assertEquals(ErrorCode.PREMIUM_FEATURE_REQUIRED, exception.getErrorCode());
+        assertDoesNotThrow(() -> quotaService.validateFeature(
+                "paid-user",
+                PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION
+        ));
+    }
+
+    @Test
     void getUnlockedRoadmapStepLimitFallsBackToLegacyRulesWhenFeatureIsMissing() {
         when(subscriptionService.getCurrentPlan("free-user")).thenReturn(freePlan);
         when(subscriptionService.getCurrentPlan("paid-user")).thenReturn(builderPlan);

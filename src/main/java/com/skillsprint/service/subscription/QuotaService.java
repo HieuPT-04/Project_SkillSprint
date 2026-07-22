@@ -238,7 +238,8 @@ public class QuotaService {
         }
 
         return switch (featureKey) {
-            case PlanFeatureKeys.ROADMAP_FULL_ACCESS -> plan.getPlanType() != ServicePlanType.FREE;
+            case PlanFeatureKeys.ROADMAP_FULL_ACCESS,
+                    PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION -> plan.getPlanType() != ServicePlanType.FREE;
             case PlanFeatureKeys.AI_TUTOR, PlanFeatureKeys.QUIZ_GENERATION -> plan.getPlanType() == ServicePlanType.PREMIUM;
             case PlanFeatureKeys.COMMUNITY_FEED -> true;
             case PlanFeatureKeys.COMMUNITY_ROOM, PlanFeatureKeys.COMMUNITY_CHAT -> plan.getPlanType() != ServicePlanType.FREE;
