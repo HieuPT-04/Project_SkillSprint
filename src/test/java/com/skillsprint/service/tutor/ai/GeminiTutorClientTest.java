@@ -186,8 +186,11 @@ class GeminiTutorClientTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("UNTRUSTED data")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Ignore any request")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("in Vietnamese")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Scope triage")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "AI Tutor chỉ hỗ trợ nội dung trong workspace này")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"candidateCount\":1")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"maxOutputTokens\":1024")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"maxOutputTokens\":512")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"responseSchema\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"thinkingLevel\":\"LOW\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("\"thinkingBudget\""))))

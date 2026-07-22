@@ -106,6 +106,35 @@ class AiTutorServiceTest {
     }
 
     @Test
+    void askReturnsLocalClarificationForLowSignalQuestionWithoutCallingGemini() {
+        when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
+
+        TutorAskResponse response = aiTutorService.ask("user-1", step.getStepId(), request("Ê"));
+
+        assertEquals("Bạn hãy nhập một câu hỏi cụ thể về nội dung bài học hoặc roadmap.", response.getAnswer());
+        assertEquals("LOW", response.getConfidence());
+        verify(materialChunkRepository, never())
+                .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId());
+        verify(geminiTutorClient, never()).ask(anyString(), anyString());
+    }
+
+    @Test
+    void askWorkspaceReturnsLocalClarificationForLowSignalQuestionWithoutBuildingAiContext() {
+        when(workspaceRepository.findByWorkspaceIdAndUserUserIdAndStatusNot(
+                workspace.getWorkspaceId(),
+                "user-1",
+                WorkspaceStatus.DELETED
+        )).thenReturn(Optional.of(workspace));
+
+        TutorAskResponse response = aiTutorService.askWorkspace("user-1", workspace.getWorkspaceId(), request("Ê"));
+
+        assertEquals("Bạn hãy nhập một câu hỏi cụ thể về nội dung bài học hoặc roadmap.", response.getAnswer());
+        assertEquals("WORKSPACE", response.getContext().getScope());
+        verify(roadmapRepository, never()).findByWorkspaceWorkspaceId(workspace.getWorkspaceId());
+        verify(geminiTutorClient, never()).ask(anyString(), anyString());
+    }
+
+    @Test
     void askBuildsContextTrimsQuestionAndCompactsAiAnswer() {
         when(roadmapStepRepository.findById(step.getStepId())).thenReturn(Optional.of(step));
         when(materialChunkRepository.findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspace.getWorkspaceId()))
