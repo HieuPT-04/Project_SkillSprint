@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.configuration.ai.GeminiProperties;
+import com.skillsprint.configuration.ai.GeminiResponseMetrics;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
@@ -87,6 +88,7 @@ public class GeminiQuizClient {
 
         String responseText;
         try {
+            long startedAtNanos = System.nanoTime();
             responseText = restClientBuilder.clone()
                     .baseUrl(properties.baseUrl())
                     .requestFactory(ClientHttpRequestFactories.get(
@@ -102,6 +104,8 @@ public class GeminiQuizClient {
                     .body(buildRequestBody(input))
                     .retrieve()
                     .body(String.class);
+            GeminiResponseMetrics.logCompletion(
+                    log, objectMapper, "quiz-generation", properties.model(), startedAtNanos, responseText);
         } catch (RestClientException ex) {
             // Do not log or wrap ex: its message can contain the upstream response
             // body and the request, which must never reach the logs.
@@ -168,9 +172,44 @@ public class GeminiQuizClient {
                 List.of(Map.of("parts", List.of(Map.of("text", buildPrompt(input))))),
                 "generationConfig",
                 Map.of(
-                        "temperature", 0.2,
-                        "responseMimeType", "application/json"
+                        "maxOutputTokens", 4096,
+                        "responseMimeType", "application/json",
+                        "responseSchema", responseSchema(),
+                        "thinkingConfig", Map.of("thinkingLevel", "LOW")
                 )
+        );
+    }
+
+    private Map<String, Object> responseSchema() {
+        Map<String, Object> optionSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "label", Map.of("type", "STRING"),
+                        "text", Map.of("type", "STRING")
+                ),
+                "required", List.of("label", "text"),
+                "propertyOrdering", List.of("label", "text")
+        );
+        Map<String, Object> questionSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "type", Map.of("type", "STRING", "enum", List.of("SINGLE_CHOICE")),
+                        "question", Map.of("type", "STRING"),
+                        "options", Map.of("type", "ARRAY", "items", optionSchema),
+                        "correctLabel", Map.of("type", "STRING", "enum", List.of("A", "B", "C", "D")),
+                        "explanation", Map.of("type", "STRING")
+                ),
+                "required", List.of("type", "question", "options", "correctLabel", "explanation"),
+                "propertyOrdering", List.of("type", "question", "options", "correctLabel", "explanation")
+        );
+
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "questions", Map.of("type", "ARRAY", "items", questionSchema)
+                ),
+                "required", List.of("questions"),
+                "propertyOrdering", List.of("questions")
         );
     }
 
@@ -290,32 +329,13 @@ public class GeminiQuizClient {
             return null;
         }
 
-        String json = cleanJson(textNode.asText());
+        String json = textNode.asText().trim();
         if (json.isBlank()) {
             return null;
         }
 
         AiQuizDraft draft = objectMapper.readValue(json, AiQuizDraft.class);
         return validateDraft(draft);
-    }
-
-    String cleanJson(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "";
-        }
-
-        String value = raw.trim();
-        if (value.startsWith("```")) {
-            value = value.replaceFirst("(?s)^```(?:json)?\\s*", "").trim();
-            value = value.replaceFirst("(?s)\\s*```$", "").trim();
-        }
-
-        int firstBrace = value.indexOf('{');
-        int lastBrace = value.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return value.substring(firstBrace, lastBrace + 1).trim();
-        }
-        return value;
     }
 
     AiQuizDraft validateDraft(AiQuizDraft draft) {

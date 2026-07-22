@@ -241,13 +241,6 @@ class GeminiQuizClientTest {
     }
 
     @Test
-    void cleanJsonParsesJsonWrappedInMarkdownFence() {
-        String cleaned = client.cleanJson("```json\n{\"questions\": []}\n```");
-
-        assertEquals("{\"questions\": []}", cleaned);
-    }
-
-    @Test
     void generateThrowsNotReadyWhenGeminiIsDisabled() {
         GeminiQuizClient disabledClient = new GeminiQuizClient(
                 new GeminiProperties(false, "key", "model", "http://localhost", 18000),

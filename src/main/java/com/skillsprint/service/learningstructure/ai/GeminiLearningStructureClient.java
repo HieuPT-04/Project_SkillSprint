@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillsprint.configuration.ai.GeminiProperties;
+import com.skillsprint.configuration.ai.GeminiResponseMetrics;
 import com.skillsprint.entity.MaterialChunk;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentAnalysis;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentSection;
@@ -42,6 +43,7 @@ public class GeminiLearningStructureClient {
         }
 
         try {
+            long startedAtNanos = System.nanoTime();
             String responseText = restClientBuilder.clone()
                     .baseUrl(properties.baseUrl())
                     .build()
@@ -54,6 +56,8 @@ public class GeminiLearningStructureClient {
                     .retrieve()
                     .body(String.class);
 
+            GeminiResponseMetrics.logCompletion(
+                    log, objectMapper, "learning-structure", properties.model(), startedAtNanos, responseText);
             return parseResponse(responseText);
         } catch (RestClientException | JsonProcessingException ex) {
             log.warn("[AI] Gemini learning structure generation failed: {}", ex.getMessage());
@@ -67,8 +71,10 @@ public class GeminiLearningStructureClient {
                 List.of(Map.of("parts", List.of(Map.of("text", buildPrompt(chunks, analysis))))),
                 "generationConfig",
                 Map.of(
-                        "temperature", 0.2,
-                        "responseMimeType", "application/json"
+                        "maxOutputTokens", 8192,
+                        "responseMimeType", "application/json",
+                        "responseSchema", responseSchema(),
+                        "thinkingConfig", Map.of("thinkingLevel", "MEDIUM")
                 )
         );
     }
@@ -109,7 +115,7 @@ public class GeminiLearningStructureClient {
 
                 Material chunks:
                 %s
-                """.formatted(responseSchema(), commonRules(), buildAnalysisText(analysis), buildChunkText(chunks));
+                """.formatted(promptSchema(), commonRules(), buildAnalysisText(analysis), buildChunkText(chunks));
     }
 
     private String buildSyllabusPrompt(List<MaterialChunk> chunks, DocumentAnalysis analysis) {
@@ -140,7 +146,7 @@ public class GeminiLearningStructureClient {
 
                 Material chunks:
                 %s
-                """.formatted(responseSchema(), commonRules(), buildSyllabusScheduleText(analysis.syllabusSlots()), buildChunkText(chunks));
+                """.formatted(promptSchema(), commonRules(), buildSyllabusScheduleText(analysis.syllabusSlots()), buildChunkText(chunks));
     }
 
     private String buildLectureNotePrompt(List<MaterialChunk> chunks, DocumentAnalysis analysis) {
@@ -167,7 +173,7 @@ public class GeminiLearningStructureClient {
 
                 Material chunks:
                 %s
-                """.formatted(responseSchema(), commonRules(), buildSectionText(analysis.sections()), buildChunkText(chunks));
+                """.formatted(promptSchema(), commonRules(), buildSectionText(analysis.sections()), buildChunkText(chunks));
     }
 
     private String buildSlideDeckPrompt(List<MaterialChunk> chunks, DocumentAnalysis analysis) {
@@ -193,7 +199,7 @@ public class GeminiLearningStructureClient {
 
                 Material chunks:
                 %s
-                """.formatted(responseSchema(), commonRules(), buildSectionText(analysis.sections()), buildChunkText(chunks));
+                """.formatted(promptSchema(), commonRules(), buildSectionText(analysis.sections()), buildChunkText(chunks));
     }
 
     private String buildAssignmentPrompt(List<MaterialChunk> chunks, DocumentAnalysis analysis) {
@@ -220,7 +226,7 @@ public class GeminiLearningStructureClient {
 
                 Material chunks:
                 %s
-                """.formatted(responseSchema(), commonRules(), buildAnalysisText(analysis), buildChunkText(chunks));
+                """.formatted(promptSchema(), commonRules(), buildAnalysisText(analysis), buildChunkText(chunks));
     }
 
     // Shared model-facing rules applied to every document kind. Kept in one place so the
@@ -287,7 +293,7 @@ public class GeminiLearningStructureClient {
                 """;
     }
 
-    private String responseSchema() {
+    private String promptSchema() {
         return """
                 {
                   "confidenceScore": 0.85,
@@ -319,6 +325,54 @@ public class GeminiLearningStructureClient {
                   ]
                 }
                 """;
+    }
+
+    private Map<String, Object> responseSchema() {
+        Map<String, Object> stringArray = Map.of("type", "ARRAY", "items", Map.of("type", "STRING"));
+        Map<String, Object> topicSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "title", Map.of("type", "STRING"),
+                        "summaryContent", Map.of("type", "STRING"),
+                        "whatToLearn", stringArray,
+                        "keyConcepts", stringArray,
+                        "learningOutcomes", stringArray,
+                        "recommendedFocus", stringArray,
+                        "difficulty", Map.of("type", "STRING", "enum", List.of("EASY", "MEDIUM", "HARD")),
+                        "estimatedMinutes", Map.of("type", "INTEGER"),
+                        "sourceChunkIds", stringArray
+                ),
+                "required", List.of(
+                        "title", "summaryContent", "whatToLearn", "keyConcepts", "learningOutcomes",
+                        "recommendedFocus", "difficulty", "estimatedMinutes", "sourceChunkIds")
+        );
+        Map<String, Object> chapterSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "title", Map.of("type", "STRING"),
+                        "summary", Map.of("type", "STRING"),
+                        "whatToLearn", stringArray,
+                        "keyConcepts", stringArray,
+                        "learningOutcomes", stringArray,
+                        "recommendedFocus", stringArray,
+                        "difficulty", Map.of("type", "STRING", "enum", List.of("EASY", "MEDIUM", "HARD")),
+                        "estimatedMinutes", Map.of("type", "INTEGER"),
+                        "topics", Map.of("type", "ARRAY", "items", topicSchema)
+                ),
+                "required", List.of(
+                        "title", "summary", "whatToLearn", "keyConcepts", "learningOutcomes",
+                        "recommendedFocus", "difficulty", "estimatedMinutes", "topics")
+        );
+
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "confidenceScore", Map.of("type", "NUMBER"),
+                        "warnings", stringArray,
+                        "chapters", Map.of("type", "ARRAY", "items", chapterSchema)
+                ),
+                "required", List.of("confidenceScore", "warnings", "chapters")
+        );
     }
 
     private String buildAnalysisText(DocumentAnalysis analysis) {
@@ -422,7 +476,7 @@ public class GeminiLearningStructureClient {
             return null;
         }
 
-        String json = cleanJson(textNode.asText());
+        String json = textNode.asText().trim();
         if (json.isBlank()) {
             return null;
         }
@@ -430,23 +484,4 @@ public class GeminiLearningStructureClient {
         return objectMapper.readValue(json, AiLearningStructureDraft.class);
     }
 
-    private String cleanJson(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "";
-        }
-
-        String value = raw.trim();
-        if (value.startsWith("```")) {
-            value = value.replaceFirst("(?s)^```(?:json)?\\s*", "").trim();
-            value = value.replaceFirst("(?s)\\s*```$", "").trim();
-        }
-
-        int firstBrace = value.indexOf('{');
-        int lastBrace = value.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return value.substring(firstBrace, lastBrace + 1).trim();
-        }
-
-        return value;
-    }
 }
