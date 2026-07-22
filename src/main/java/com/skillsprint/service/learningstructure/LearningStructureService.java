@@ -25,6 +25,7 @@ import com.skillsprint.service.learningstructure.ai.GeminiLearningStructureClien
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentAnalysis;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.DocumentKind;
 import com.skillsprint.service.learningstructure.LearningDocumentAnalyzer.SyllabusSlot;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
@@ -89,6 +90,9 @@ public class LearningStructureService {
     @Transactional
     public LearningStructureResponse generate(String userId, UUID workspaceId) {
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        if (structureVersionRepository.existsByWorkspaceWorkspaceId(workspaceId)) {
+            quotaService.validateFeature(userId, PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION);
+        }
         quotaService.validateCanGenerateAi(userId);
         List<MaterialChunk> chunks = materialChunkRepository
                 .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspaceId);

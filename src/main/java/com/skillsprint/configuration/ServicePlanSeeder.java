@@ -100,6 +100,10 @@ public class ServicePlanSeeder implements ApplicationRunner {
                                 PlanFeatureKeys.QUIZ_GENERATION,
                                 "Quiz generation",
                                 "Cho phép tạo và làm quiz từ roadmap step");
+                Feature learningStructureRegeneration = ensureFeature(
+                                PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION,
+                                "Tạo lại cấu trúc học tập",
+                                "Cho phép tạo lại cấu trúc học tập bằng AI từ tài liệu workspace");
                 Feature communityFeed = ensureFeature(
                                 PlanFeatureKeys.COMMUNITY_FEED,
                                 "Community feed",
@@ -120,6 +124,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ensurePlanFeature(free, roadmapFullAccess, false);
                 ensurePlanFeature(free, aiTutor, false);
                 ensurePlanFeature(free, quizGeneration, false);
+                ensurePlanFeature(free, learningStructureRegeneration, false);
                 ensurePlanFeature(free, communityFeed, true);
                 ensurePlanFeature(free, communityRoom, false);
                 ensurePlanFeature(free, communityChat, false);
@@ -128,6 +133,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ensurePlanFeature(basic, roadmapFullAccess, true);
                 ensurePlanFeature(basic, aiTutor, false);
                 ensurePlanFeature(basic, quizGeneration, false);
+                ensurePlanFeature(basic, learningStructureRegeneration, true);
                 ensurePlanFeature(basic, communityFeed, true);
                 ensurePlanFeature(basic, communityRoom, true);
                 ensurePlanFeature(basic, communityChat, true);
@@ -136,6 +142,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ensurePlanFeature(premium, roadmapFullAccess, true);
                 ensurePlanFeature(premium, aiTutor, true);
                 ensurePlanFeature(premium, quizGeneration, true);
+                ensurePlanFeature(premium, learningStructureRegeneration, true);
                 ensurePlanFeature(premium, communityFeed, true);
                 ensurePlanFeature(premium, communityRoom, true);
                 ensurePlanFeature(premium, communityChat, true);
@@ -168,6 +175,7 @@ public class ServicePlanSeeder implements ApplicationRunner {
                 ensurePlanFeature(adminPlan, roadmapFullAccess, true);
                 ensurePlanFeature(adminPlan, aiTutor, true);
                 ensurePlanFeature(adminPlan, quizGeneration, true);
+                ensurePlanFeature(adminPlan, learningStructureRegeneration, true);
                 ensurePlanFeature(adminPlan, communityFeed, true);
                 ensurePlanFeature(adminPlan, communityRoom, true);
                 ensurePlanFeature(adminPlan, communityChat, true);

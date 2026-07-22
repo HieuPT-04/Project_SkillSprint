@@ -1,9 +1,12 @@
 package com.skillsprint.service.learningstructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +16,8 @@ import com.skillsprint.entity.MaterialChunk;
 import com.skillsprint.entity.StudyWorkspace;
 import com.skillsprint.entity.Topic;
 import com.skillsprint.enums.learningstructure.GeneratedBy;
+import com.skillsprint.exception.AppException;
+import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.LearningStructureMapper;
 import com.skillsprint.repository.ChapterRepository;
 import com.skillsprint.repository.LearningStructureVersionRepository;
@@ -24,6 +29,7 @@ import com.skillsprint.service.learningstructure.ai.AiChapterDraft;
 import com.skillsprint.service.learningstructure.ai.AiLearningStructureDraft;
 import com.skillsprint.service.learningstructure.ai.AiTopicDraft;
 import com.skillsprint.service.learningstructure.ai.GeminiLearningStructureClient;
+import com.skillsprint.service.subscription.PlanFeatureKeys;
 import com.skillsprint.service.subscription.QuotaService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -38,6 +44,44 @@ import org.mockito.ArgumentCaptor;
 class LearningStructureServiceTest {
 
     private static final int MAX_LENGTH = 90;
+
+    @Test
+    void generateRequiresPaidFeatureWhenWorkspaceAlreadyHasLearningStructure() {
+        StudyWorkspaceRepository workspaceRepository = mock(StudyWorkspaceRepository.class);
+        MaterialChunkRepository materialChunkRepository = mock(MaterialChunkRepository.class);
+        LearningStructureVersionRepository structureVersionRepository = mock(LearningStructureVersionRepository.class);
+        ChapterRepository chapterRepository = mock(ChapterRepository.class);
+        TopicRepository topicRepository = mock(TopicRepository.class);
+        LearningStructureMapper mapper = mock(LearningStructureMapper.class);
+        GeminiLearningStructureClient geminiClient = mock(GeminiLearningStructureClient.class);
+        QuotaService quotaService = mock(QuotaService.class);
+        LearningStructureService service = new LearningStructureService(
+                workspaceRepository,
+                materialChunkRepository,
+                structureVersionRepository,
+                chapterRepository,
+                topicRepository,
+                mapper,
+                geminiClient,
+                quotaService
+        );
+        UUID workspaceId = UUID.randomUUID();
+
+        when(workspaceRepository.findByWorkspaceIdAndUserUserIdAndStatusNot(any(), any(), any()))
+                .thenReturn(Optional.of(new StudyWorkspace()));
+        when(structureVersionRepository.existsByWorkspaceWorkspaceId(workspaceId)).thenReturn(true);
+        doThrow(new AppException(ErrorCode.PREMIUM_FEATURE_REQUIRED))
+                .when(quotaService)
+                .validateFeature("user-1", PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION);
+
+        assertThatThrownBy(() -> service.generate("user-1", workspaceId))
+                .isInstanceOfSatisfying(AppException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.PREMIUM_FEATURE_REQUIRED));
+
+        verify(quotaService).validateFeature("user-1", PlanFeatureKeys.LEARNING_STRUCTURE_REGENERATION);
+        verify(quotaService, never()).validateCanGenerateAi("user-1");
+        verify(materialChunkRepository, never()).findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(workspaceId);
+    }
 
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
