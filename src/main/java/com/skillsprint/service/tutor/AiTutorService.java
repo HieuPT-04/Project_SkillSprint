@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AiTutorService {
 
     private static final int MAX_QUESTION_LENGTH = 1000;
+    private static final int MIN_MEANINGFUL_QUESTION_CHARACTERS = 3;
     private static final int MAX_CHUNKS = 8;
     private static final int MAX_STEPS_IN_CONTEXT = 12;
     private static final int MAX_TODAY_TASKS = 8;
@@ -62,6 +63,10 @@ public class AiTutorService {
         validateQuestion(question);
 
         StudyWorkspace workspace = findOwnedWorkspace(userId, workspaceId);
+        if (!hasMeaningfulQuestion(question)) {
+            return buildLowSignalWorkspaceResponse(workspace);
+        }
+
         List<Roadmap> roadmaps = roadmapRepository.findByWorkspaceWorkspaceId(workspaceId);
         Roadmap activeRoadmap = pickActiveRoadmap(roadmaps);
         List<RoadmapStep> accessibleSteps = findAccessibleSteps(userId, workspaceId, activeRoadmap);
@@ -97,6 +102,9 @@ public class AiTutorService {
 
         RoadmapStep step = findOwnedStep(userId, stepId);
         quotaService.validateCanAccessRoadmapStep(userId, step);
+        if (!hasMeaningfulQuestion(question)) {
+            return buildLowSignalResponse(step);
+        }
 
         List<MaterialChunk> chunks = materialChunkRepository
                 .findByWorkspaceWorkspaceIdOrderByCreatedAtAscChunkIndexAsc(step.getWorkspace().getWorkspaceId());
@@ -120,6 +128,16 @@ public class AiTutorService {
         if (question.trim().length() > MAX_QUESTION_LENGTH) {
             throw new AppException(ErrorCode.TUTOR_QUESTION_TOO_LONG);
         }
+    }
+
+    private boolean hasMeaningfulQuestion(String question) {
+        if (question == null) {
+            return false;
+        }
+        long meaningfulCharacters = question.codePoints()
+                .filter(codePoint -> Character.isLetterOrDigit(codePoint))
+                .count();
+        return meaningfulCharacters >= MIN_MEANINGFUL_QUESTION_CHARACTERS;
     }
 
     private RoadmapStep findOwnedStep(String userId, UUID stepId) {
@@ -409,6 +427,24 @@ public class AiTutorService {
                 .suggestedQuestions(defaultWorkspaceSuggestions(matchedStep))
                 .confidence("LOW")
                 .context(toContext(matchedStep, workspace, "WORKSPACE"))
+                .build();
+    }
+
+    private TutorAskResponse buildLowSignalResponse(RoadmapStep step) {
+        return TutorAskResponse.builder()
+                .answer("Bạn hãy nhập một câu hỏi cụ thể về nội dung bài học hoặc roadmap.")
+                .suggestedQuestions(defaultSuggestions(step))
+                .confidence("LOW")
+                .context(toContext(step, step.getWorkspace(), "ROADMAP_STEP"))
+                .build();
+    }
+
+    private TutorAskResponse buildLowSignalWorkspaceResponse(StudyWorkspace workspace) {
+        return TutorAskResponse.builder()
+                .answer("Bạn hãy nhập một câu hỏi cụ thể về nội dung bài học hoặc roadmap.")
+                .suggestedQuestions(defaultWorkspaceSuggestions(null))
+                .confidence("LOW")
+                .context(toContext(null, workspace, "WORKSPACE"))
                 .build();
     }
 

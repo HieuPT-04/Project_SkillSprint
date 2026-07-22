@@ -70,7 +70,7 @@ public class GeminiTutorClient {
     private Map<String, Object> buildRequestBody(String question, String context) {
         Map<String, Object> generationConfig = new LinkedHashMap<>();
         generationConfig.put("candidateCount", 1);
-        generationConfig.put("maxOutputTokens", 1024);
+        generationConfig.put("maxOutputTokens", 512);
         generationConfig.put("responseMimeType", "application/json");
         generationConfig.put("responseSchema", responseSchema());
         generationConfig.put("thinkingConfig", Map.of("thinkingLevel", "LOW"));
@@ -115,6 +115,13 @@ public class GeminiTutorClient {
 
                 Task: Answer the learner's question using ONLY the content inside <lesson_context>.
 
+                Scope triage (do this first):
+                - The question is in scope only when it asks to learn, explain, compare, apply, review, or plan
+                  something about the supplied lesson, workspace, roadmap, or study tasks.
+                - If the question is outside that scope, do not explain, summarize, or quote the lesson context.
+                  Set "answer" exactly to: "AI Tutor chỉ hỗ trợ nội dung trong workspace này. Hãy hỏi cụ thể về bài học hoặc roadmap."
+                  Set "confidence" to LOW and provide 3 short, in-scope suggested questions.
+
                 Required rules:
                 - Return valid JSON only; no markdown; no text outside the JSON.
                 - Write the "answer" and every "suggestedQuestions" item in Vietnamese.
@@ -122,9 +129,9 @@ public class GeminiTutorClient {
                 - Use ONLY information supported by <lesson_context>. Do not use outside knowledge. Do not guess or fabricate.
                 - If <lesson_context> does not contain enough information, briefly say in Vietnamese that the
                   current lesson material does not have enough information, and suggest asking a more specific question.
-                - "answer" must be 2-4 short Vietnamese sentences, at most 450 characters.
+                - For an in-scope question, "answer" must be 1-3 short Vietnamese sentences, at most 450 characters.
                 - "suggestedQuestions" must contain EXACTLY 3 useful, non-duplicate Vietnamese learning questions,
-                  each at most 80 characters. Do not mechanically repeat workspace or file names.
+                  each at most 60 characters. Do not mechanically repeat workspace or file names.
                 - "confidence" is HIGH only when <lesson_context> directly answers the question;
                   MEDIUM when the context only partially supports the answer; LOW when the context is insufficient.
 
