@@ -157,6 +157,8 @@ public class GeminiCalendarPlannerClient {
                   Do not combine independent modules with "and", "/", commas, or equivalent phrasing unless the
                   input itself defines them as one inseparable objective. Reuse an already clear input title.
                 - Keep title, description, reason, and warnings in the same language as the input task.
+                - category and priority are server-owned classification fields. Copy both values exactly from the
+                  matching input task; never reclassify or change either value.
                 - taskDate format YYYY-MM-DD, startTime format HH:mm:ss. category and priority must be valid enums.
                 - warnings is always an array (empty if there are none).
 

@@ -651,6 +651,62 @@ class CalendarServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void generateKeepsBackendOwnedCategoryAndPriorityWhenAiDrifts() {
+        List<String> slots = List.of("08:00-10:00");
+        prepareGenerateMocks(slots);
+        when(scheduleRunRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarTaskRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> new ArrayList<>((List<CalendarTask>) invocation.getArgument(0)));
+        when(geminiCalendarPlannerClient.isReady()).thenReturn(true);
+        when(geminiCalendarPlannerClient.generate(any())).thenReturn(categoryDriftDraft());
+
+        calendarService.generate("user-1", workspace.getWorkspaceId(), generateRequest(1));
+
+        ArgumentCaptor<List<CalendarTask>> captor = ArgumentCaptor.forClass(List.class);
+        verify(calendarTaskRepository).saveAllAndFlush(captor.capture());
+        captor.getValue().forEach(task -> {
+            assertEquals(CalendarTaskCategory.DEEP_STUDY, task.getCategory());
+            assertEquals(CalendarTaskPriority.MEDIUM, task.getPriority());
+        });
+    }
+
+    @Test
+    void ruleBasedLearningTaskIsScheduledUntilItsDueDateRegardlessOfDifficulty() {
+        RoadmapStep step = roadmapStep(roadmap(1), 60, RoadmapStepStatus.CURRENT);
+        step.setDifficulty(DifficultyLevel.EASY);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        task.setTaskDate(LocalDate.now().plusDays(1));
+        task.setClassifiedBy(ClassifiedBy.RULE_BASED);
+        task.setEisenhowerQuadrant(EisenhowerQuadrant.DELAY_OR_DELEGATE);
+
+        assertEquals(EisenhowerQuadrant.SCHEDULE, calendarService.resolveEisenhowerQuadrant(task));
+    }
+
+    @Test
+    void dueLearningTaskIsClassifiedAsDoNow() {
+        RoadmapStep step = roadmapStep(roadmap(1), 60, RoadmapStepStatus.CURRENT);
+        step.setDifficulty(DifficultyLevel.HARD);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        task.setTaskDate(LocalDate.now());
+        task.setClassifiedBy(ClassifiedBy.RULE_BASED);
+
+        assertEquals(EisenhowerQuadrant.DO_NOW, calendarService.resolveEisenhowerQuadrant(task));
+    }
+
+    @Test
+    void userSelectedQuadrantTakesPrecedenceOverRuleBasedLearningClassification() {
+        RoadmapStep step = roadmapStep(roadmap(1), 60, RoadmapStepStatus.CURRENT);
+        CalendarTask task = roadmapTask(step, CalendarTaskStatus.TODO);
+        task.setTaskDate(LocalDate.now());
+        task.setClassifiedBy(ClassifiedBy.USER);
+        task.setEisenhowerQuadrant(EisenhowerQuadrant.DELAY_OR_DELEGATE);
+
+        assertEquals(EisenhowerQuadrant.DELAY_OR_DELEGATE, calendarService.resolveEisenhowerQuadrant(task));
+        assertEquals("Ủy quyền", calendarService.resolveQuadrantTitle(EisenhowerQuadrant.DELAY_OR_DELEGATE));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void generateRejectsAiDraftScheduledOutsideAllowedTimeWindows() {
         List<String> slots = List.of("08:00-10:00");
         prepareGenerateMocks(slots);
@@ -785,6 +841,25 @@ class CalendarServiceTest {
                     CalendarTaskCategory.DEEP_STUDY,
                     CalendarTaskPriority.MEDIUM,
                     "Odd duration"
+            ));
+        }
+        return new AiCalendarPlanDraft(List.of(), suggestions);
+    }
+
+    private AiCalendarPlanDraft categoryDriftDraft() {
+        List<String> dates = List.of("2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25");
+        List<AiCalendarTaskSuggestion> suggestions = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            suggestions.add(new AiCalendarTaskSuggestion(
+                    i,
+                    "Study session " + (i + 1),
+                    "Focus block",
+                    LocalDate.parse(dates.get(i)),
+                    LocalTime.parse("08:00:00"),
+                    60,
+                    CalendarTaskCategory.PERSONAL,
+                    CalendarTaskPriority.LOW,
+                    "Reclassified by AI"
             ));
         }
         return new AiCalendarPlanDraft(List.of(), suggestions);

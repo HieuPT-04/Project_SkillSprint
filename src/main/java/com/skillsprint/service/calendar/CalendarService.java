@@ -472,8 +472,8 @@ public class CalendarService {
                     currentDraft.step(),
                     cleanCalendarTaskTitle(defaultText(suggestion.title(), currentDraft.title()), TITLE_LENGTH),
                     truncate(defaultText(suggestion.description(), currentDraft.description()), SAFE_VARCHAR_LENGTH),
-                    suggestion.category() == null ? currentDraft.category() : suggestion.category(),
-                    suggestion.priority() == null ? currentDraft.priority() : suggestion.priority(),
+                    currentDraft.category(),
+                    currentDraft.priority(),
                     currentDraft.xpReward()
             );
             int duration = defaultPositive(suggestion.durationMinutes(), currentPlan.durationMinutes());
@@ -817,20 +817,23 @@ public class CalendarService {
         task.setClassifiedAt(Instant.now());
     }
 
-    private EisenhowerQuadrant resolveEisenhowerQuadrant(CalendarTask task) {
-        if (task.getEisenhowerQuadrant() != null) {
+    EisenhowerQuadrant resolveEisenhowerQuadrant(CalendarTask task) {
+        if (task.getClassifiedBy() != ClassifiedBy.RULE_BASED && task.getEisenhowerQuadrant() != null) {
             return task.getEisenhowerQuadrant();
         }
 
         Boolean important = task.getImportant();
         Boolean urgent = task.getUrgent();
-        if (important != null || urgent != null) {
+        if (task.getClassifiedBy() != ClassifiedBy.RULE_BASED && (important != null || urgent != null)) {
             return resolveQuadrant(Boolean.TRUE.equals(important), Boolean.TRUE.equals(urgent));
         }
 
         CalendarTaskCategory category = task.getCategory();
-        DifficultyLevel difficulty = resolveTaskDifficulty(task);
         CalendarTaskPriority priority = task.getPriority() == null ? CalendarTaskPriority.MEDIUM : task.getPriority();
+
+        if (isLearningCategory(category) || category == CalendarTaskCategory.REVIEW) {
+            return isDueOrOverdue(task) ? EisenhowerQuadrant.DO_NOW : EisenhowerQuadrant.SCHEDULE;
+        }
 
         if (category == CalendarTaskCategory.PERSONAL) {
             return priority == CalendarTaskPriority.HIGH
@@ -838,25 +841,22 @@ public class CalendarService {
                     : EisenhowerQuadrant.ELIMINATE;
         }
 
-        if (category == CalendarTaskCategory.REVIEW) {
-            return EisenhowerQuadrant.SCHEDULE;
-        }
+        return isDueOrOverdue(task) ? EisenhowerQuadrant.DELAY_OR_DELEGATE : EisenhowerQuadrant.ELIMINATE;
+    }
 
-        if (priority == CalendarTaskPriority.HIGH || difficulty == DifficultyLevel.HARD) {
-            return EisenhowerQuadrant.DO_NOW;
-        }
+    private boolean isLearningCategory(CalendarTaskCategory category) {
+        return category == CalendarTaskCategory.DEEP_STUDY
+                || category == CalendarTaskCategory.PRACTICE
+                || category == CalendarTaskCategory.PROJECT;
+    }
 
-        if (priority == CalendarTaskPriority.LOW || difficulty == DifficultyLevel.EASY) {
-            return EisenhowerQuadrant.DELAY_OR_DELEGATE;
+    private boolean isDueOrOverdue(CalendarTask task) {
+        if (task.getTaskDate() == null
+                || task.getStatus() == CalendarTaskStatus.COMPLETED
+                || task.getStatus() == CalendarTaskStatus.CANCELLED) {
+            return false;
         }
-
-        return switch (priority) {
-            case HIGH -> EisenhowerQuadrant.DO_NOW;
-            case MEDIUM -> EisenhowerQuadrant.SCHEDULE;
-            case LOW -> task.getCategory() == CalendarTaskCategory.PERSONAL
-                    ? EisenhowerQuadrant.ELIMINATE
-                    : EisenhowerQuadrant.DELAY_OR_DELEGATE;
-        };
+        return !task.getTaskDate().isAfter(LocalDate.now());
     }
 
     private EisenhowerQuadrant resolveQuadrant(boolean important, boolean urgent) {
@@ -898,11 +898,11 @@ public class CalendarService {
         };
     }
 
-    private String resolveQuadrantTitle(EisenhowerQuadrant quadrant) {
+    String resolveQuadrantTitle(EisenhowerQuadrant quadrant) {
         return switch (quadrant) {
             case DO_NOW -> "Làm ngay";
             case SCHEDULE -> "Lên lịch";
-            case DELAY_OR_DELEGATE -> "Để sau";
+            case DELAY_OR_DELEGATE -> "Ủy quyền";
             case ELIMINATE -> "Loại bỏ";
         };
     }
@@ -918,34 +918,27 @@ public class CalendarService {
 
     private String resolveDefaultClassificationReason(CalendarTask task, EisenhowerQuadrant quadrant) {
         CalendarTaskCategory category = task.getCategory();
-        DifficultyLevel difficulty = resolveTaskDifficulty(task);
 
         if (category == CalendarTaskCategory.REVIEW) {
-            return "Task ôn tập quan trọng nhưng nên làm theo lịch đã xếp.";
+            return isDueOrOverdue(task)
+                    ? "Task ôn tập đã đến hạn hoặc quá hạn nên cần xử lý ngay."
+                    : "Task ôn tập quan trọng nhưng nên làm theo lịch đã xếp.";
+        }
+        if (isLearningCategory(category)) {
+            return isDueOrOverdue(task)
+                    ? "Task học tập đã đến hạn hoặc quá hạn nên cần xử lý ngay."
+                    : "Task học tập quan trọng và nên được làm theo lịch.";
         }
         if (category == CalendarTaskCategory.PERSONAL) {
             return "Task cá nhân không ảnh hưởng trực tiếp đến tiến độ học.";
-        }
-        if (difficulty == DifficultyLevel.HARD) {
-            return "Nội dung khó nên được ưu tiên xử lý trong buổi học.";
-        }
-        if (difficulty == DifficultyLevel.EASY) {
-            return "Nội dung dễ hơn, có thể xử lý sau các task quan trọng.";
         }
 
         return switch (quadrant) {
             case DO_NOW -> "Task có độ ưu tiên cao nên cần xử lý trước.";
             case SCHEDULE -> "Task học tập quan trọng và nên được làm theo lịch.";
-            case DELAY_OR_DELEGATE -> "Task ít quan trọng hơn, có thể xử lý sau.";
+            case DELAY_OR_DELEGATE -> "Task khẩn cấp nhưng ít quan trọng, có thể ủy quyền.";
             case ELIMINATE -> "Task không ảnh hưởng trực tiếp đến tiến độ học.";
         };
-    }
-
-    private DifficultyLevel resolveTaskDifficulty(CalendarTask task) {
-        if (task.getRoadmapStep() == null || task.getRoadmapStep().getDifficulty() == null) {
-            return null;
-        }
-        return task.getRoadmapStep().getDifficulty();
     }
 
     private CalendarTaskStatus resolveStatus(String raw) {
