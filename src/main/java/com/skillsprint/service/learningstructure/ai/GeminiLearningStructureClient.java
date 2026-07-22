@@ -240,6 +240,12 @@ public class GeminiLearningStructureClient {
                 - Reorganize content by learning theme when the source is a report, changelog, bug report,
                   implementation note, post-mortem, or technical summary.
                 - Prefer meaningful conceptual grouping over raw heading preservation.
+                - Create one topic for one primary learning objective. Do not combine independent workflow stages
+                  into one topic when they have their own rules, states, or outputs. Combine content only when it
+                  is inseparable and fits one study session.
+                - For example, keep "automated validation" separate from "admin review and version approval"
+                  when both are present in the material; they must be distinct topics that the calendar can schedule
+                  as separate study sessions.
 
                 Technical-report grouping (bug reports, fix summaries, implementation reports, postmortems):
                 - Group the content into learning phases such as: overview/context; affected area or flow;
@@ -263,6 +269,8 @@ public class GeminiLearningStructureClient {
                 - Chapter titles describe learning themes, not raw document sections.
                 - Topic titles describe teachable concepts or skills.
                 - Titles must be concise and natural.
+                - Topic titles must name their single primary objective and must not broaden or merge independent
+                  modules with conjunctions or slash-separated labels.
                 - Do not invent content beyond the material.
                 - Keep each array item under 120 characters.
                 - summary/summaryContent: 1-2 short sentences. whatToLearn: 2-4 items. keyConcepts: 3-6 items.
@@ -455,24 +463,38 @@ public class GeminiLearningStructureClient {
         return builder.toString();
     }
 
-    private AiLearningStructureDraft parseResponse(String responseText) throws JsonProcessingException {
+    AiLearningStructureDraft parseResponse(String responseText) throws JsonProcessingException {
         if (responseText == null || responseText.isBlank()) {
             return null;
         }
 
         JsonNode root = objectMapper.readTree(responseText);
+        JsonNode blockReason = root.path("promptFeedback").path("blockReason");
+        if (!blockReason.isMissingNode() && !blockReason.asText().isBlank()) {
+            log.warn("[AI] Gemini learning structure generation blocked by promptFeedback");
+            return null;
+        }
+
         JsonNode candidates = root.path("candidates");
         if (!candidates.isArray() || candidates.isEmpty()) {
             return null;
         }
 
-        JsonNode textNode = candidates.path(0)
+        JsonNode candidate = candidates.path(0);
+        JsonNode textNode = candidate
                 .path("content")
                 .path("parts")
                 .path(0)
                 .path("text");
 
-        if (textNode.isMissingNode() || textNode.asText().isBlank()) {
+        boolean hasText = !textNode.isMissingNode() && !textNode.asText().isBlank();
+        String finishReason = candidate.path("finishReason").asText("");
+        boolean acceptableFinish = "STOP".equals(finishReason) || (finishReason.isBlank() && hasText);
+        if (!acceptableFinish) {
+            log.warn("[AI] Gemini learning structure generation rejected by finishReason: {}", finishReason);
+            return null;
+        }
+        if (!hasText) {
             return null;
         }
 
