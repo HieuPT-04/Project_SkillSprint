@@ -89,7 +89,7 @@ app:
     gemini:
       enabled: ${GEMINI_ENABLED:true}
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      model: ${GEMINI_MODEL:gemini-3.5-flash}
       base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
       max-input-chars: ${GEMINI_MAX_INPUT_CHARS:18000}
   payment:
