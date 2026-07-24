@@ -63,18 +63,18 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query("""
             select user
             from User user
-            where (:search is null
+            where (:hasSearch = false
                     or lower(user.userId) like lower(concat('%', :search, '%'))
                     or lower(user.email) like lower(concat('%', :search, '%'))
                     or lower(user.fullName) like lower(concat('%', :search, '%')))
-              and (:role is null or exists (
+              and (:hasRole = false or exists (
                     select 1
                     from UserRole userRole
                     where userRole.user = user
                       and userRole.workspace is null
                       and userRole.role.roleName = :role
               ))
-              and (:planType is null or exists (
+              and (:hasPlanType = false or exists (
                     select 1
                     from Subscription subscription
                     where subscription.user = user
@@ -87,8 +87,11 @@ public interface UserRepository extends JpaRepository<User, String> {
               ))
             """)
     Page<User> findAdminUsers(
+            @Param("hasSearch") boolean hasSearch,
             @Param("search") String search,
+            @Param("hasRole") boolean hasRole,
             @Param("role") RoleName role,
+            @Param("hasPlanType") boolean hasPlanType,
             @Param("planType") ServicePlanType planType,
             Pageable pageable
     );
