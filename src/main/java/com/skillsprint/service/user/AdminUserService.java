@@ -74,7 +74,15 @@ public class AdminUserService {
         );
 
         String normalizedSearch = normalizeSearch(search);
-        Page<User> users = userRepository.findAdminUsers(normalizedSearch, role, planType, pageable);
+        Page<User> users = userRepository.findAdminUsers(
+                normalizedSearch != null,
+                normalizedSearch == null ? "" : normalizedSearch,
+                role != null,
+                role == null ? RoleName.LEARNER : role,
+                planType != null,
+                planType == null ? ServicePlanType.FREE : planType,
+                pageable
+        );
         
         Map<String, List<String>> rolesByUserId = getRolesByUserId(users.getContent());
 
