@@ -12,6 +12,7 @@ import com.skillsprint.entity.UserRole;
 import com.skillsprint.entity.Subscription;
 import com.skillsprint.enums.auth.RoleName;
 import com.skillsprint.enums.auth.UserStatus;
+import com.skillsprint.enums.plan.ServicePlanType;
 import com.skillsprint.exception.AppException;
 import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.mapper.UserMapper;
@@ -57,15 +58,23 @@ public class AdminUserService {
     CognitoProperties cognitoProperties;
 
     @Transactional(readOnly = true)
-    public PageResponse<AdminUserResponse> getUsers(String search, int page, int size, RoleName role) {
+    public PageResponse<AdminUserResponse> getUsers(
+            String search,
+            int page,
+            int size,
+            RoleName role,
+            ServicePlanType planType,
+            String sortBy,
+            Sort.Direction sortDirection
+    ) {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizeSize(size),
-                Sort.by(Sort.Direction.DESC, "createdAt")
+                Sort.by(sortDirection, resolveSortProperty(sortBy))
         );
 
         String normalizedSearch = normalizeSearch(search);
-        Page<User> users = findUsers(normalizedSearch, role, pageable);
+        Page<User> users = userRepository.findAdminUsers(normalizedSearch, role, planType, pageable);
         
         Map<String, List<String>> rolesByUserId = getRolesByUserId(users.getContent());
 
@@ -191,16 +200,8 @@ public class AdminUserService {
         return Math.min(size, MAX_PAGE_SIZE);
     }
 
-    private Page<User> findUsers(String search, RoleName role, Pageable pageable) {
-        if (role == null) {
-            return search == null
-                    ? userRepository.findAll(pageable)
-                    : userRepository.searchAdminUsers(search, pageable);
-        }
-
-        return search == null
-                ? userRepository.findAdminUsersByRole(role, pageable)
-                : userRepository.searchAdminUsersByRole(search, role, pageable);
+    private String resolveSortProperty(String sortBy) {
+        return "fullName".equals(sortBy) ? "fullName" : "createdAt";
     }
 
     private String normalizeSearch(String search) {
