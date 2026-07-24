@@ -40,6 +40,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -102,7 +103,7 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard"));
 
-        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any());
+        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any(), any(), any(), any());
         verify(adminDashboardService, never()).getDashboard(any(), any());
     }
 
@@ -127,14 +128,14 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
-        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any());
+        verify(adminUserService, never()).getUsers(any(), any(Integer.class), any(Integer.class), any(), any(), any(), any());
         verify(adminUserService, never()).updateUserStatus(any(), any());
         verify(adminDashboardService, never()).getDashboard(any(), any());
     }
 
     @Test
     void adminCanListAndReadUsers() throws Exception {
-        when(adminUserService.getUsers("learner", 1, 20, null))
+        when(adminUserService.getUsers("learner", 1, 20, null, null, "createdAt", Sort.Direction.DESC))
                 .thenReturn(PageResponse.<AdminUserResponse>builder()
                         .items(List.of(adminUserResponse(TARGET_ID, "target-user-dashboard-flow@example.com",
                                 "Target Learner", UserStatus.ACTIVE, List.of("LEARNER"))))
@@ -188,9 +189,37 @@ class AdminUserDashboardApiFlowTest {
                 .andExpect(jsonPath("$.data.currentSubscription.planName").value("Premium"))
                 .andExpect(jsonPath("$.data.currentSubscription.status").value("ACTIVE"));
 
-        verify(adminUserService).getUsers("learner", 1, 20, null);
+        verify(adminUserService).getUsers("learner", 1, 20, null, null, "createdAt", Sort.Direction.DESC);
         verify(adminUserService).getUserSummary(null);
         verify(adminUserService).getUser(TARGET_ID);
+    }
+
+    @Test
+    void adminCanFilterUsersByPlanAndSortByName() throws Exception {
+        when(adminUserService.getUsers(
+                null, 0, 10, RoleName.LEARNER, ServicePlanType.PREMIUM, "fullName", Sort.Direction.ASC
+        )).thenReturn(PageResponse.<AdminUserResponse>builder()
+                .items(List.of())
+                .page(0)
+                .size(10)
+                .totalItems(0)
+                .totalPages(0)
+                .first(true)
+                .last(true)
+                .build());
+
+        mockMvc.perform(get("/api/admin/users")
+                        .with(adminJwt())
+                        .param("role", "LEARNER")
+                        .param("planType", "PREMIUM")
+                        .param("sortBy", "fullName")
+                        .param("sortDirection", "ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(adminUserService).getUsers(
+                null, 0, 10, RoleName.LEARNER, ServicePlanType.PREMIUM, "fullName", Sort.Direction.ASC
+        );
     }
 
     @Test

@@ -33,6 +33,7 @@ public class AdminUserResponse {
     public static class SubscriptionAdminResponse {
         String subscriptionId;
         String planName;
+        String planType;
         LocalDate startDate;
         LocalDate endDate;
         String status;

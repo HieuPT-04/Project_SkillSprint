@@ -58,6 +58,9 @@ public class UserMapper {
         return AdminUserResponse.SubscriptionAdminResponse.builder()
                 .subscriptionId(subscription.getSubscriptionId() != null ? subscription.getSubscriptionId().toString() : null)
                 .planName(subscription.getPlan() != null ? subscription.getPlan().getPlanName() : null)
+                .planType(subscription.getPlan() != null && subscription.getPlan().getPlanType() != null
+                        ? subscription.getPlan().getPlanType().name()
+                        : null)
                 .startDate(subscription.getStartDate())
                 .endDate(subscription.getEndDate())
                 .status(subscription.getStatus() != null ? subscription.getStatus().name() : null)

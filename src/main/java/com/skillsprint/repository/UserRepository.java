@@ -7,6 +7,7 @@ import java.time.Instant;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.enums.auth.RoleName;
+import com.skillsprint.enums.plan.ServicePlanType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -62,44 +63,33 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query("""
             select user
             from User user
-            where lower(user.userId) like lower(concat('%', :search, '%'))
-               or lower(user.email) like lower(concat('%', :search, '%'))
-               or lower(user.fullName) like lower(concat('%', :search, '%'))
+            where (:search is null
+                    or lower(user.userId) like lower(concat('%', :search, '%'))
+                    or lower(user.email) like lower(concat('%', :search, '%'))
+                    or lower(user.fullName) like lower(concat('%', :search, '%')))
+              and (:role is null or exists (
+                    select 1
+                    from UserRole userRole
+                    where userRole.user = user
+                      and userRole.workspace is null
+                      and userRole.role.roleName = :role
+              ))
+              and (:planType is null or exists (
+                    select 1
+                    from Subscription subscription
+                    where subscription.user = user
+                      and subscription.plan.planType = :planType
+                      and subscription.createdAt = (
+                            select max(currentSubscription.createdAt)
+                            from Subscription currentSubscription
+                            where currentSubscription.user = user
+                      )
+              ))
             """)
-    Page<User> searchAdminUsers(@Param("search") String search, Pageable pageable);
-
-    @Query("""
-            select user
-            from User user
-            where exists (
-                select 1
-                from UserRole userRole
-                where userRole.user = user
-                  and userRole.workspace is null
-                  and userRole.role.roleName = :role
-            )
-            """)
-    Page<User> findAdminUsersByRole(@Param("role") RoleName role, Pageable pageable);
-
-    @Query("""
-            select user
-            from User user
-            where exists (
-                select 1
-                from UserRole userRole
-                where userRole.user = user
-                  and userRole.workspace is null
-                  and userRole.role.roleName = :role
-            )
-              and (
-                    lower(user.userId) like lower(concat('%', :search, '%'))
-                 or lower(user.email) like lower(concat('%', :search, '%'))
-                 or lower(user.fullName) like lower(concat('%', :search, '%'))
-              )
-            """)
-    Page<User> searchAdminUsersByRole(
+    Page<User> findAdminUsers(
             @Param("search") String search,
             @Param("role") RoleName role,
+            @Param("planType") ServicePlanType planType,
             Pageable pageable
     );
 }
