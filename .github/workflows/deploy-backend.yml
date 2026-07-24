@@ -61,8 +61,10 @@ jobs:
             done
 
             echo "Backend failed to become ready"
-            sudo systemctl status skillsprint --no-pager
-            sudo journalctl -u skillsprint -n 120 --no-pager
+            # `systemctl status` returns a non-zero exit code for a failed service.
+            # Do not let `set -e` hide the application logs we need to diagnose it.
+            sudo systemctl status skillsprint --no-pager || true
+            sudo journalctl -u skillsprint -n 120 --no-pager || true
             exit 1
           EOF
 
