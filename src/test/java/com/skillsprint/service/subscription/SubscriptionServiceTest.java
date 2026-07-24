@@ -230,11 +230,11 @@ class SubscriptionServiceTest {
 
     @Test
     void activatePaidPlanExtendsSamePaidPlanByOneMonth() {
-        Instant originalEndAt = Instant.parse("2026-07-23T08:00:00Z");
+        Instant originalEndAt = Instant.now().plus(Duration.ofDays(20));
         Subscription current = subscription(
                 user,
                 builderPlan,
-                Instant.parse("2026-06-23T08:00:00Z"),
+                originalEndAt.minus(Duration.ofDays(30)),
                 originalEndAt
         );
         stubCurrentSubscription(current);
