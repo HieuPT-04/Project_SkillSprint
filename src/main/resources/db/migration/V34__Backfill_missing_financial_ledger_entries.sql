@@ -85,7 +85,8 @@ SELECT
 FROM platform_revenue_entries revenue
 JOIN marketplace_sales sale ON sale.sale_id = revenue.sale_id
 JOIN users buyer ON buyer.user_id = sale.buyer_id
-WHERE NOT EXISTS (
+WHERE revenue.amount > 0
+  AND NOT EXISTS (
     SELECT 1
     FROM platform_treasury_entries treasury
     WHERE treasury.reference_type = 'SALE'
@@ -120,7 +121,8 @@ BEGIN
     IF EXISTS (
         SELECT 1
         FROM platform_revenue_entries revenue
-        WHERE revenue.amount <> COALESCE((
+        WHERE revenue.amount > 0
+          AND revenue.amount <> COALESCE((
             SELECT sum(treasury.amount)
             FROM platform_treasury_entries treasury
             WHERE treasury.reference_type = 'SALE'
