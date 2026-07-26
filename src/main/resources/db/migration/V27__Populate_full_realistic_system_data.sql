@@ -1,5 +1,231 @@
 -- Migration V27: Populate full realistic revenue, leaderboard, marketplace, community & feedback data
 
+-- The realistic dataset was generated from a database snapshot. Production can
+-- legitimately have fewer users/workspaces than that snapshot, so skip only the
+-- rows whose required parent records are absent instead of failing the migration.
+-- These guards exist only while V27 runs and are removed at the end.
+CREATE FUNCTION v27_require_existing_references()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    CASE TG_TABLE_NAME
+        WHEN 'payment_transactions' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) OR (
+                NEW.plan_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM service_plans WHERE plan_id = NEW.plan_id
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'platform_treasury_entries' THEN
+            IF NEW.reference_type = 'PAYMENT'
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM payment_transactions
+                   WHERE payment_id = NEW.reference_id
+               ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'community_posts' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'post_comments' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) OR NOT EXISTS (
+                SELECT 1 FROM community_posts WHERE post_id = NEW.post_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'post_likes' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) OR NOT EXISTS (
+                SELECT 1 FROM community_posts WHERE post_id = NEW.post_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'community_rooms' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.owner_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'community_room_members' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) OR NOT EXISTS (
+                SELECT 1 FROM community_rooms WHERE room_id = NEW.room_id
+            ) OR (
+                NEW.removed_by IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM users WHERE user_id = NEW.removed_by
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'community_chat_messages' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.sender_id
+            ) OR NOT EXISTS (
+                SELECT 1 FROM community_rooms WHERE room_id = NEW.room_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'marketplace_items' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.creator_id
+            ) OR NOT EXISTS (
+                SELECT 1
+                FROM study_workspaces
+                WHERE workspace_id = NEW.source_workspace_id
+            ) OR (
+                NEW.reviewed_by IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM users WHERE user_id = NEW.reviewed_by
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'marketplace_packs' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.creator_id
+            ) OR NOT EXISTS (
+                SELECT 1
+                FROM study_workspaces
+                WHERE workspace_id = NEW.source_workspace_id
+            ) OR (
+                NEW.legacy_item_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM marketplace_items
+                    WHERE item_id = NEW.legacy_item_id
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'marketplace_pack_versions' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM marketplace_packs WHERE pack_id = NEW.pack_id
+            ) OR (
+                NEW.legacy_item_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM marketplace_items
+                    WHERE item_id = NEW.legacy_item_id
+                )
+            ) OR (
+                NEW.reviewed_by IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM users WHERE user_id = NEW.reviewed_by
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'marketplace_ranked_quiz_definitions' THEN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM marketplace_pack_versions
+                WHERE version_id = NEW.pack_version_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'marketplace_ranked_attempts' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.buyer_id
+            ) OR NOT EXISTS (
+                SELECT 1
+                FROM marketplace_pack_versions
+                WHERE version_id = NEW.pack_version_id
+            ) OR NOT EXISTS (
+                SELECT 1
+                FROM marketplace_ranked_quiz_definitions
+                WHERE definition_id = NEW.definition_id
+            ) THEN
+                RETURN NULL;
+            END IF;
+
+        WHEN 'feedbacks' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE user_id = NEW.user_id
+            ) OR (
+                NEW.replied_by_user_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM users
+                    WHERE user_id = NEW.replied_by_user_id
+                )
+            ) THEN
+                RETURN NULL;
+            END IF;
+    END CASE;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON payment_transactions
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON platform_treasury_entries
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON community_posts
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON post_comments
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON post_likes
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON community_rooms
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON community_room_members
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON community_chat_messages
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON marketplace_items
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON marketplace_packs
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON marketplace_pack_versions
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON marketplace_ranked_quiz_definitions
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON marketplace_ranked_attempts
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+CREATE TRIGGER v27_require_existing_references
+BEFORE INSERT ON feedbacks
+FOR EACH ROW EXECUTE FUNCTION v27_require_existing_references();
+
 -- 1. Seed payment transactions (SePay)
 -- Resolve plans by their stable business key because plan UUIDs differ between environments.
 INSERT INTO payment_transactions (payment_id, created_at, updated_at, amount, currency, expire_at, paid_at, provider, raw_callback_data, status, subscription_months, txn_ref, plan_id, user_id, bank_account_name, bank_account_number, bank_code, provider_reference_code, provider_transaction_id, transfer_content, purpose) VALUES ('219cd318-0450-4a37-82bc-cc7e640a05c1', '2026-05-01T21:15:57.142Z', '2026-05-01T21:36:57.142Z', 199000.00, 'VND', '2026-05-01T21:30:57.142Z', '2026-05-01T21:36:57.142Z', 'SEPAY', '{"id":4544801,"gateway":"MSB","transactionDate":"2026-05-01 21:36:57","accountNumber":"96886693013827","code":"DH1785044362403P14SX","content":"DH1785044362403P14SX","transferType":"in","transferAmount":199000,"accumulated":19834938,"referenceCode":"SEPAY101744639","description":"GD SEPAY: DH1785044362403P14SX"}', 'PAID', 1, 'DH1785044362403P14SX', (SELECT plan_id FROM service_plans WHERE plan_type = 'PREMIUM'), '029f2848-748f-4311-b117-80b80a5c911a', 'PHAM TAN HIEU', '96886693013827', 'MSB', '73393903', 'SEPAY101744639', 'DH1785044362403P14SX', 'SUBSCRIPTION') ON CONFLICT (payment_id) DO NOTHING;
@@ -1705,3 +1931,19 @@ INSERT INTO feedbacks (feedback_id, created_at, updated_at, title, type, content
 INSERT INTO feedbacks (feedback_id, created_at, updated_at, title, type, content, status, user_id, admin_reply, replied_at, replied_by_user_id) VALUES ('fb30afcd-acfb-4cf4-9b8d-ab19acf08abf', '2026-05-16T14:45:31.027Z', '2026-05-16T14:45:31.027Z', 'Tính năng AI Tutor giải thích bài tập rất thông minh', 'OTHER', 'AI giải thích phần kiến thức Hibernate & JPA rất dễ hiểu, giúp mình tiết kiệm 50% thời gian tra cứu Google.', 'RESOLVED', '76ad6d6f-2ea2-4836-af00-c521e5e0c390', 'Rất vui vì tính năng AI Tutor đã hỗ trợ tốt cho trải nghiệm học tập của bạn!', '2026-05-17T14:45:31.027Z', '02e36a78-0ad6-4777-b173-778aa984022c') ON CONFLICT (feedback_id) DO NOTHING;
 INSERT INTO feedbacks (feedback_id, created_at, updated_at, title, type, content, status, user_id, admin_reply, replied_at, replied_by_user_id) VALUES ('70455adc-132c-4a45-9678-b0a236ede299', '2026-06-13T08:49:04.244Z', '2026-06-13T08:49:04.244Z', 'Báo lỗi nhỏ khi hiển thị lịch sử Pomodoro trên điện thoại', 'BUG', 'Khi xem biểu đồ thống kê Pomodoro trên màn hình nhỏ bị lệch dòng nhẹ.', 'RESOLVED', '5b2e66f0-204f-4356-86a5-a87122ea84c3', 'Đã khắc phục lỗi hiển thị responsive trên thiết bị di động. Cảm ơn bạn đã phản hồi!', '2026-06-15T08:49:04.244Z', '02e36a78-0ad6-4777-b173-778aa984022c') ON CONFLICT (feedback_id) DO NOTHING;
 INSERT INTO feedbacks (feedback_id, created_at, updated_at, title, type, content, status, user_id, admin_reply, replied_at, replied_by_user_id) VALUES ('d16d92d8-15a4-4719-a208-7daa7d413151', '2026-06-16T11:04:14.584Z', '2026-06-16T11:04:14.584Z', 'Đề xuất thêm cổng thanh toán SePay tự động', 'IMPROVEMENT', 'Thanh toán gói Premium qua SePay QR Code chuyển khoản nhanh chóng và tiện lợi cực kỳ.', 'RESOLVED', '5bdee4d8-6354-4faf-aada-870d639fc2dc', 'Cảm ơn bạn! Cổng SePay hiện đã hoạt động mượt mà 24/7.', '2026-06-17T11:04:14.584Z', '02e36a78-0ad6-4777-b173-778aa984022c') ON CONFLICT (feedback_id) DO NOTHING;
+
+DROP TRIGGER v27_require_existing_references ON feedbacks;
+DROP TRIGGER v27_require_existing_references ON marketplace_ranked_attempts;
+DROP TRIGGER v27_require_existing_references ON marketplace_ranked_quiz_definitions;
+DROP TRIGGER v27_require_existing_references ON marketplace_pack_versions;
+DROP TRIGGER v27_require_existing_references ON marketplace_packs;
+DROP TRIGGER v27_require_existing_references ON marketplace_items;
+DROP TRIGGER v27_require_existing_references ON community_chat_messages;
+DROP TRIGGER v27_require_existing_references ON community_room_members;
+DROP TRIGGER v27_require_existing_references ON community_rooms;
+DROP TRIGGER v27_require_existing_references ON post_likes;
+DROP TRIGGER v27_require_existing_references ON post_comments;
+DROP TRIGGER v27_require_existing_references ON community_posts;
+DROP TRIGGER v27_require_existing_references ON platform_treasury_entries;
+DROP TRIGGER v27_require_existing_references ON payment_transactions;
+DROP FUNCTION v27_require_existing_references();
