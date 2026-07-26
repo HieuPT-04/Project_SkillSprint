@@ -403,7 +403,7 @@ BEGIN
         VALUES (v28_seed_uuid('feedback:' || v_row), v28_seed_uuid('user:' || v_row)::text,
             (ARRAY['IMPROVEMENT', 'OTHER', 'BUG', 'IMPROVEMENT'])[v_row],
             (ARRAY['Đề xuất Dark Mode', 'Khen AI Tutor', 'Báo lỗi Pomodoro mobile', 'Phản hồi về thanh toán SePay'])[v_row],
-            'Phản hồi demo V28 để kiểm tra màn quản trị.', 'RESOLVED',
+            'Phản hồi demo V28 để kiểm tra màn quản trị.', 'CLOSED',
             'Cảm ơn bạn. Đội ngũ đã ghi nhận và xử lý phản hồi này.', v_now - INTERVAL '2 days', v_admin_id,
             v_now - INTERVAL '5 days', v_now - INTERVAL '2 days');
     END LOOP;
