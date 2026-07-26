@@ -67,7 +67,10 @@ SELECT sale.sale_id,
        sale.buyer_id,
        sale.gross_coin_amount,
        sale.created_at AS sale_at,
-       row_number() OVER (ORDER BY sale.idempotency_key)::integer AS ordinal
+       row_number() OVER (
+           ORDER BY split_part(sale.idempotency_key, '-', 3)::integer,
+                    split_part(sale.idempotency_key, '-', 4)::integer
+       )::integer AS ordinal
 FROM marketplace_sales sale
 WHERE sale.idempotency_key LIKE 'v28-sale-%'
   AND sale.gross_coin_amount > 0;
