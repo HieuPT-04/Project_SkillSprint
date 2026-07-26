@@ -46,7 +46,6 @@ DECLARE
     v_questions JSONB;
     v_answers JSONB;
     v_submitted_answers JSONB;
-    v_fingerprint CHAR(64);
     v_title TEXT;
     v_subject TEXT;
     v_price INTEGER;
@@ -69,9 +68,6 @@ BEGIN
     SELECT plan_id INTO v_builder_plan FROM service_plans WHERE plan_type = 'SKILL_BUILDER' LIMIT 1;
     IF v_premium_plan IS NULL OR v_builder_plan IS NULL THEN
         RAISE EXCEPTION 'V28 requires PREMIUM and SKILL_BUILDER rows in service_plans';
-    END IF;
-    IF to_regprocedure('digest(text,text)') IS NULL THEN
-        RAISE EXCEPTION 'V28 requires pgcrypto digest(text,text) to persist the Marketplace quality fingerprint';
     END IF;
 
     IF EXISTS (SELECT 1 FROM users WHERE email LIKE 'v28-demo-%@example.invalid') THEN
@@ -224,8 +220,6 @@ BEGIN
             ) AS chapter
             FROM generate_series(1, 4) AS s(step_no)
         ) chapters;
-        v_fingerprint := encode(digest('4' || E'\n' || '4' || E'\n' || '20' || E'\n' ||
-            replace(replace(v_content::text, ', ', ','), ': ', ':'), 'sha256'), 'hex');
         v_item_id := v28_seed_uuid('item:' || v_product);
         v_pack_id := v28_seed_uuid('pack:' || v_product);
         v_version_id := v28_seed_uuid('version:' || v_product);
@@ -244,19 +238,11 @@ BEGIN
         INSERT INTO marketplace_pack_versions (
             version_id, pack_id, version_no, status, update_type, legacy_item_id, title, description, subject,
             price_coins, creator_validation_score, reviewed_by, review_note, reviewed_at, chapter_count, quiz_count,
-            question_count, content_json, saleable, published_at, quality_status, quality_score,
-            quality_snapshot_fingerprint, quality_validated_at, created_at, updated_at
+            question_count, content_json, saleable, published_at, created_at, updated_at
         ) VALUES (v_version_id, v_pack_id, 1, 'PUBLISHED', 'MAJOR', v_item_id, v_title,
             'Phiên bản V1 đã được kiểm định.', v_subject, v_price, 100, v_admin_id,
             'Chất lượng đạt 100/100.', v_now - INTERVAL '10 days', 4, 4, 20, v_content, TRUE,
-            v_now - INTERVAL '10 days', 'PASSED', 100, v_fingerprint, v_now - INTERVAL '10 days',
-            v_now - INTERVAL '10 days', v_now - INTERVAL '10 days');
-        INSERT INTO marketplace_quality_jobs (
-            job_id, pack_version_id, requested_by, status, snapshot_fingerprint, score, report_json,
-            retry_count, max_retries, completed_at, created_at, updated_at
-        ) VALUES (v28_seed_uuid('quality-job:' || v_product), v_version_id, v_creator_id, 'PASSED', v_fingerprint,
-            100, jsonb_build_object('chapterCount', 4, 'quizCount', 4, 'questionCount', 20, 'valid', true),
-            0, 2, v_now - INTERVAL '10 days', v_now - INTERVAL '10 days', v_now - INTERVAL '10 days');
+            v_now - INTERVAL '10 days', v_now - INTERVAL '10 days', v_now - INTERVAL '10 days');
         INSERT INTO marketplace_ranked_quiz_definitions (definition_id, pack_version_id, questions_per_step, total_question_count, daily_attempt_limit, created_at, updated_at)
         VALUES (v_definition_id, v_version_id, 5, 20, 3, v_now - INTERVAL '10 days', v_now - INTERVAL '10 days');
         FOR v_step IN 1..4 LOOP
