@@ -174,7 +174,7 @@ BEGIN
                 v_step_id, v_roadmap_id, v_workspace_id, v_subject || ' - Chương ' || v_step,
                 'Nền tảng và thực hành', 'Nội dung thực hành có quiz kiểm tra.', '["Nắm chắc lý thuyết"]'::jsonb,
                 '["Khái niệm chính"]'::jsonb, '["Hoàn thành quiz"]'::jsonb, '["Làm đủ 5 câu"]'::jsonb,
-                'INTERMEDIATE', '45 phút', 45, v_step, 'COMPLETED', v_now - ((5 - v_step) * INTERVAL '7 days'),
+                'MEDIUM', '45 phút', 45, v_step, 'COMPLETED', v_now - ((5 - v_step) * INTERVAL '7 days'),
                 v_now - INTERVAL '42 days', v_now - INTERVAL '20 days'
             );
             INSERT INTO quizzes (quiz_id, user_id, workspace_id, roadmap_step_id, title, passing_score, question_count, status, created_at, updated_at)
