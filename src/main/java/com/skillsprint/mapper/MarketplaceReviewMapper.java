@@ -3,10 +3,15 @@ package com.skillsprint.mapper;
 import com.skillsprint.dto.response.marketplace.MarketplaceReviewResponse;
 import com.skillsprint.entity.MarketplaceReview;
 import com.skillsprint.service.marketplace.MarketplacePackVersionIdentity;
+import com.skillsprint.service.storage.S3PresignedUrlService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class MarketplaceReviewMapper {
+
+    private final S3PresignedUrlService s3PresignedUrlService;
 
     public MarketplaceReviewResponse toResponse(
             MarketplaceReview review,
@@ -21,6 +26,7 @@ public class MarketplaceReviewMapper {
                 .versionNo(identity.versionNo())
                 .userName(reviewerName)
                 .reviewerName(reviewerName)
+                .avatarUrl(s3PresignedUrlService.createViewUrl(review.getUser().getAvatarObjectKey()))
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .createdAt(review.getCreatedAt())
