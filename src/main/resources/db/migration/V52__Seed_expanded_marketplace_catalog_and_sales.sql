@@ -466,7 +466,7 @@ INSERT INTO marketplace_ranked_attempts (
 )
 SELECT v52_uuid(format('ranked-attempt:%s:%s', ranked.pack_no, ranked.rank_no)), ranked.buyer_id,
        v52_uuid('version:' || ranked.pack_no), v52_uuid('definition:' || ranked.pack_no),
-       DATE '2026-07-22' - ((ranked.rank_no - 1) / 2), 100 + ranked.rank_no, 'COMPLETED',
+       DATE '2026-07-22' - (((ranked.rank_no - 1) / 2)::integer), 100 + ranked.rank_no, 'COMPLETED',
        TIMESTAMPTZ '2026-07-22 20:00:00+07' - ((ranked.pack_no - 1) * INTERVAL '7 hours') - ((ranked.rank_no - 1) * INTERVAL '5 hours 20 minutes'),
        TIMESTAMPTZ '2026-07-22 21:00:00+07' - ((ranked.pack_no - 1) * INTERVAL '7 hours') - ((ranked.rank_no - 1) * INTERVAL '5 hours 20 minutes'),
        TIMESTAMPTZ '2026-07-22 20:00:00+07' - ((ranked.pack_no - 1) * INTERVAL '7 hours') - ((ranked.rank_no - 1) * INTERVAL '5 hours 20 minutes')
