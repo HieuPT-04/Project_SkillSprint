@@ -17,6 +17,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.RoleRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserRoleRepository;
+import com.skillsprint.service.storage.DefaultIdenticon;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,7 @@ class UserSyncServiceTest {
         assertEquals("user-1", result.getUserId());
         assertEquals("learner@example.com", result.getEmail());
         assertEquals("Learner", result.getFullName());
+        assertEquals(DefaultIdenticon.objectKeyFor("user-1"), result.getAvatarObjectKey());
         assertNotNull(result.getLastLoginAt());
         verify(userRoleRepository).deleteByUserUserIdAndWorkspaceIsNull("user-1");
 
