@@ -3,8 +3,10 @@
 -- correction is intentionally limited to reserved .invalid accounts plus the
 -- nineteen legacy Gmail seed accounts verified from the production report.
 --
--- Result: 384 learner subscriptions -> 269 Free, 70 Skill Builder, 45 Premium
--- (115 paid = 29.95%) and 20.018M VND total subscription revenue.
+-- The database also contains five real paid accounts (one Builder and four
+-- Premium).  The seed cohort is therefore 69 Builder / 41 Premium; together
+-- with those real accounts the dashboard becomes 269 Free / 70 Builder /
+-- 45 Premium (115 paid = 29.95%) and 20.018M VND subscription revenue.
 
 CREATE FUNCTION v54_uuid(seed TEXT)
 RETURNS UUID LANGUAGE SQL IMMUTABLE AS $$
@@ -208,9 +210,9 @@ BEGIN
       )
     ORDER BY subscription.user_id, subscription.created_at DESC, subscription.subscription_id;
 
-    IF (SELECT count(*) FROM v54_paid_seed_subscriptions WHERE plan_type = 'SKILL_BUILDER') <> 70
-       OR (SELECT count(*) FROM v54_paid_seed_subscriptions WHERE plan_type = 'PREMIUM') <> 45 THEN
-        RAISE EXCEPTION 'V54 expected final paid seed mix of 70 Builder and 45 Premium users';
+    IF (SELECT count(*) FROM v54_paid_seed_subscriptions WHERE plan_type = 'SKILL_BUILDER') <> 69
+       OR (SELECT count(*) FROM v54_paid_seed_subscriptions WHERE plan_type = 'PREMIUM') <> 41 THEN
+        RAISE EXCEPTION 'V54 expected final paid seed mix of 69 Builder and 41 Premium users';
     END IF;
 
     CREATE TEMP TABLE v54_history_targets ON COMMIT DROP AS
