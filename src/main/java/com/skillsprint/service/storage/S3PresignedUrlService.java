@@ -268,6 +268,9 @@ public class S3PresignedUrlService {
         if (objectKey == null || objectKey.isBlank()) {
             return null;
         }
+        if (DefaultIdenticon.isDefaultObjectKey(objectKey)) {
+            return DefaultIdenticon.dataUrl(objectKey);
+        }
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(properties.bucket())

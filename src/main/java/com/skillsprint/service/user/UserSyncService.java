@@ -9,6 +9,7 @@ import com.skillsprint.exception.ErrorCode;
 import com.skillsprint.repository.RoleRepository;
 import com.skillsprint.repository.UserRepository;
 import com.skillsprint.repository.UserRoleRepository;
+import com.skillsprint.service.storage.DefaultIdenticon;
 import java.time.Instant;
 import java.util.Optional;
 import lombok.AccessLevel;
@@ -47,6 +48,7 @@ public class UserSyncService {
         user.setEmailVerified(emailVerified);
         if (existingUser.isEmpty()) {
             user.setFullName(fullName);
+            user.setAvatarObjectKey(DefaultIdenticon.objectKeyFor(userId));
         }
         user.setLastLoginAt(Instant.now());
 
