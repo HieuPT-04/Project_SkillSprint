@@ -102,6 +102,7 @@ class MarketplaceReviewApiFlowTest {
                 .andExpect(jsonPath("$.data.averageRating").value(4.5D))
                 .andExpect(jsonPath("$.data.reviewCount").value(2))
                 .andExpect(jsonPath("$.data.reviews[0].reviewerName").value("Review Buyer"))
+                .andExpect(jsonPath("$.data.reviews[0].avatarUrl").value("https://example.com/review-avatar.png"))
                 .andExpect(jsonPath("$.data.reviews[0].mine").value(true));
 
         mockMvc.perform(get("/api/marketplace/versions/{versionId}/reviews/me", versionId)
@@ -245,6 +246,7 @@ class MarketplaceReviewApiFlowTest {
                 .versionNo(2)
                 .userName("Review Buyer")
                 .reviewerName("Review Buyer")
+                .avatarUrl("https://example.com/review-avatar.png")
                 .rating(5)
                 .comment("Excellent version")
                 .createdAt(Instant.parse("2026-07-19T10:00:00Z"))

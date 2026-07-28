@@ -26,6 +26,7 @@ import com.skillsprint.repository.MarketplaceItemRepository;
 import com.skillsprint.repository.MarketplacePackVersionRepository;
 import com.skillsprint.repository.MarketplaceReviewRepository;
 import com.skillsprint.repository.UserRepository;
+import com.skillsprint.service.storage.S3PresignedUrlService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +48,7 @@ class MarketplaceReviewServiceTest {
     @Mock MarketplaceOwnershipService marketplaceOwnershipService;
     @Mock MarketplaceVersionAccessService versionAccessService;
     @Mock MarketplaceLearningEligibilityService learningEligibilityService;
+    @Mock S3PresignedUrlService s3PresignedUrlService;
 
     MarketplaceReviewService service;
     UUID itemId;
@@ -65,13 +67,14 @@ class MarketplaceReviewServiceTest {
                 marketplaceOwnershipService,
                 versionAccessService,
                 learningEligibilityService,
-                new MarketplaceReviewMapper()
+                new MarketplaceReviewMapper(s3PresignedUrlService)
         );
         itemId = UUID.randomUUID();
         item = new MarketplaceItem();
         item.setItemId(itemId);
         version = version(itemId);
         buyer = user("buyer", "Buyer");
+        buyer.setAvatarObjectKey("default-identicon:buyer");
     }
 
     @Test
@@ -94,6 +97,7 @@ class MarketplaceReviewServiceTest {
         assertThat(response.getReviewId()).isNotNull();
         assertThat(response.getVersionId()).isEqualTo(version.getVersionId());
         assertThat(response.getReviewerName()).isEqualTo("Buyer");
+        assertThat(response.getAvatarUrl()).isNull();
         assertThat(response.getCreatedAt()).isNotNull();
         assertThat(response.isMine()).isTrue();
         verify(learningEligibilityService).requireCompletedQuiz("buyer", version.getVersionId());
@@ -203,6 +207,17 @@ class MarketplaceReviewServiceTest {
             assertThat(value.getReviewerName()).isEqualTo("Other");
             assertThat(value.isMine()).isFalse();
         });
+    }
+
+    @Test
+    void reviewResponseIncludesReviewerAvatarUrl() {
+        String avatarUrl = "data:image/svg+xml;base64,identicon";
+        when(s3PresignedUrlService.createViewUrl("default-identicon:buyer")).thenReturn(avatarUrl);
+
+        MarketplaceReviewResponse response = new MarketplaceReviewMapper(s3PresignedUrlService)
+                .toResponse(review(version, buyer, 5, "Great"), MarketplacePackVersionIdentity.of(version), "buyer");
+
+        assertThat(response.getAvatarUrl()).isEqualTo(avatarUrl);
     }
 
     @Test

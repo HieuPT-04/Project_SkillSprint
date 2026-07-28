@@ -15,6 +15,7 @@ public class MarketplaceReviewResponse {
     /** Kept during the item-endpoint compatibility period. */
     String userName;
     String reviewerName;
+    String avatarUrl;
     Integer rating;
     String comment;
     Instant createdAt;
