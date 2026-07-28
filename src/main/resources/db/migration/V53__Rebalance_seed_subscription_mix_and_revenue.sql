@@ -257,7 +257,7 @@ BEGIN
         target.plan_type,
         target.current_start_at,
         target.current_start_at
-            - (CEIL(seed.renewal_no::numeric / v_builder_users) * INTERVAL '1 month') AS paid_at,
+            - make_interval(months => CEIL(seed.renewal_no::numeric / v_builder_users)::integer) AS paid_at,
         seed.renewal_no::integer AS ordinal
     FROM generate_series(1, v_history_builder) AS seed(renewal_no)
     JOIN LATERAL (
@@ -277,7 +277,7 @@ BEGIN
         target.plan_type,
         target.current_start_at,
         target.current_start_at
-            - (CEIL(seed.renewal_no::numeric / v_premium_users) * INTERVAL '1 month') AS paid_at,
+            - make_interval(months => CEIL(seed.renewal_no::numeric / v_premium_users)::integer) AS paid_at,
         (v_history_builder + seed.renewal_no)::integer AS ordinal
     FROM generate_series(1, v_history_premium) AS seed(renewal_no)
     JOIN LATERAL (
