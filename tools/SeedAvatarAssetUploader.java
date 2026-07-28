@@ -18,7 +18,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.core.sync.RequestBody;
 
 /**
- * Generates and uploads four deterministic 5x5 identicons used by V42.
+ * Generates and uploads one deterministic 5x5 identicon for every V28/V36 seed user.
  *
  * <p>Run from the repository root after compiling with the application's Maven classpath.
  * Values in .env are read without printing credentials. Assets remain private and are served
@@ -26,9 +26,8 @@ import software.amazon.awssdk.core.sync.RequestBody;
  */
 public final class SeedAvatarAssetUploader {
 
-    private static final String[] ASSET_NAMES = {
-            "avatar-01.png", "avatar-02.png", "avatar-03.png", "avatar-04.png"
-    };
+    private static final int V28_USER_COUNT = 184;
+    private static final int V36_USER_COUNT = 100;
 
     private SeedAvatarAssetUploader() {
     }
@@ -49,20 +48,24 @@ public final class SeedAvatarAssetUploader {
                         AwsBasicCredentials.create(accessKeyId, secretAccessKey)
                 ))
                 .build()) {
-            for (int index = 0; index < ASSET_NAMES.length; index++) {
-                String assetName = ASSET_NAMES[index];
-                String objectKey = "seed-assets/avatars/" + assetName;
-                s3.putObject(
-                        PutObjectRequest.builder()
-                                .bucket(bucket)
-                                .key(objectKey)
-                                .contentType("image/png")
-                                .cacheControl("public, max-age=31536000, immutable")
-                                .build(),
-                        RequestBody.fromBytes(generateIdenticon("skillsprint-seed-identicon-v1-" + (index + 1)))
-                );
-                System.out.println("Uploaded " + objectKey);
-            }
+            uploadCohort(s3, bucket, "v28", V28_USER_COUNT);
+            uploadCohort(s3, bucket, "v36", V36_USER_COUNT);
+        }
+    }
+
+    private static void uploadCohort(S3Client s3, String bucket, String cohort, int count) throws IOException {
+        for (int ordinal = 1; ordinal <= count; ordinal++) {
+            String objectKey = "seed-assets/avatars/identicon-v1/" + cohort + "-" + String.format("%03d", ordinal) + ".png";
+            s3.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(objectKey)
+                            .contentType("image/png")
+                            .cacheControl("public, max-age=31536000, immutable")
+                            .build(),
+                    RequestBody.fromBytes(generateIdenticon("skillsprint-seed-identicon-v1:" + cohort + ":" + ordinal))
+            );
+            System.out.println("Uploaded " + objectKey);
         }
     }
 
