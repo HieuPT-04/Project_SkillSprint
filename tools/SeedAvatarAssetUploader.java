@@ -1,6 +1,13 @@
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -8,9 +15,10 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
 
 /**
- * Uploads the four generated seed-avatar assets used by V42.
+ * Generates and uploads four deterministic 5x5 identicons used by V42.
  *
  * <p>Run from the repository root after compiling with the application's Maven classpath.
  * Values in .env are read without printing credentials. Assets remain private and are served
@@ -18,7 +26,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  */
 public final class SeedAvatarAssetUploader {
 
-    private static final Path ASSET_DIRECTORY = Path.of("src/main/resources/seed-assets/avatars");
     private static final String[] ASSET_NAMES = {
             "avatar-01.png", "avatar-02.png", "avatar-03.png", "avatar-04.png"
     };
@@ -27,6 +34,7 @@ public final class SeedAvatarAssetUploader {
     }
 
     public static void main(String[] args) throws IOException {
+        System.setProperty("java.awt.headless", "true");
         Map<String, String> settings = new HashMap<>(System.getenv());
         loadDotEnv(settings, Path.of(".env"));
 
@@ -41,12 +49,8 @@ public final class SeedAvatarAssetUploader {
                         AwsBasicCredentials.create(accessKeyId, secretAccessKey)
                 ))
                 .build()) {
-            for (String assetName : ASSET_NAMES) {
-                Path asset = ASSET_DIRECTORY.resolve(assetName);
-                if (!Files.isRegularFile(asset)) {
-                    throw new IllegalStateException("Missing seed avatar asset: " + asset);
-                }
-
+            for (int index = 0; index < ASSET_NAMES.length; index++) {
+                String assetName = ASSET_NAMES[index];
                 String objectKey = "seed-assets/avatars/" + assetName;
                 s3.putObject(
                         PutObjectRequest.builder()
@@ -55,11 +59,74 @@ public final class SeedAvatarAssetUploader {
                                 .contentType("image/png")
                                 .cacheControl("public, max-age=31536000, immutable")
                                 .build(),
-                        asset
+                        RequestBody.fromBytes(generateIdenticon("skillsprint-seed-identicon-v1-" + (index + 1)))
                 );
                 System.out.println("Uploaded " + objectKey);
             }
         }
+    }
+
+    /** Creates an original GitHub-style mirrored 5x5 identicon from a stable hash. */
+    private static byte[] generateIdenticon(String seed) throws IOException {
+        byte[] hash = sha256(seed);
+        int canvas = 512;
+        int padding = 56;
+        int cell = 80;
+        BufferedImage image = new BufferedImage(canvas, canvas, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            float hue = unsigned(hash[0]) / 255.0f;
+            Color background = Color.getHSBColor(hue, 0.13f, 0.98f);
+            Color foreground = Color.getHSBColor(hue, 0.58f, 0.57f);
+            Color accent = Color.getHSBColor((hue + 0.08f) % 1.0f, 0.72f, 0.72f);
+
+            graphics.setColor(background);
+            graphics.fillRect(0, 0, canvas, canvas);
+
+            for (int row = 0; row < 5; row++) {
+                for (int column = 0; column < 3; column++) {
+                    int bit = row * 3 + column;
+                    if (!isSet(hash, bit)) {
+                        continue;
+                    }
+                    graphics.setColor(bit % 4 == 0 ? accent : foreground);
+                    drawTile(graphics, padding + column * cell, padding + row * cell, cell);
+                    if (column < 2) {
+                        drawTile(graphics, padding + (4 - column) * cell, padding + row * cell, cell);
+                    }
+                }
+            }
+        } finally {
+            graphics.dispose();
+        }
+
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            if (!javax.imageio.ImageIO.write(image, "png", output)) {
+                throw new IOException("PNG writer is unavailable");
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private static void drawTile(Graphics2D graphics, int x, int y, int size) {
+        graphics.fillRoundRect(x + 4, y + 4, size - 8, size - 8, 16, 16);
+    }
+
+    private static byte[] sha256(String value) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private static boolean isSet(byte[] hash, int bit) {
+        return (unsigned(hash[bit / 8]) & (1 << (bit % 8))) != 0;
+    }
+
+    private static int unsigned(byte value) {
+        return Byte.toUnsignedInt(value);
     }
 
     private static void loadDotEnv(Map<String, String> settings, Path envFile) throws IOException {
