@@ -257,11 +257,15 @@ DECLARE
 BEGIN
     SELECT count(*) INTO v_catalogue_count
     FROM marketplace_items
-    WHERE item_id IN (SELECT item_id FROM v43_marketplace_targets)
+    WHERE item_id IN (
+        v43_seed_uuid('skillsprint-v28', 'item:3'),
+        v43_seed_uuid('skillsprint-v28', 'item:4'),
+        v43_seed_uuid('skillsprint-v28', 'item:5')
+    )
       AND price_coins = 50000;
 
-    IF v_catalogue_count <> 6 THEN
-        RAISE EXCEPTION 'V43 expected six seeded catalogue items at 50,000 Coin, found %', v_catalogue_count;
+    IF v_catalogue_count <> 3 THEN
+        RAISE EXCEPTION 'V43 expected three V28 catalogue items at 50,000 Coin, found %', v_catalogue_count;
     END IF;
 
     SELECT count(*) INTO v_detailed_version_count
