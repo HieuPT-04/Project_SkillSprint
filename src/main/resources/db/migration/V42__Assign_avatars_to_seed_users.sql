@@ -46,8 +46,15 @@ DECLARE
 BEGIN
     SELECT count(*)
     INTO v_seeded_avatar_count
-    FROM users
-    WHERE avatar_object_key LIKE 'seed-assets/avatars/avatar-%.png';
+    FROM users u
+    WHERE u.avatar_object_key LIKE 'seed-assets/avatars/avatar-%.png'
+      AND u.user_id IN (
+          SELECT v42_seed_uuid('skillsprint-v28', 'user:' || row_number)::text
+          FROM generate_series(1, 184) AS row_number
+          UNION ALL
+          SELECT v42_seed_uuid('skillsprint-v36', 'user:' || row_number)::text
+          FROM generate_series(1, 100) AS row_number
+      );
 
     IF v_seeded_avatar_count <> 284 THEN
         RAISE EXCEPTION 'V42 expected avatars for exactly 284 seed users, found %', v_seeded_avatar_count;
@@ -55,10 +62,15 @@ BEGIN
 
     SELECT count(*)
     INTO v_real_user_touched_count
-    FROM users
-    WHERE avatar_object_key LIKE 'seed-assets/avatars/avatar-%.png'
-      AND email NOT LIKE 'v28-demo-%@example.invalid'
-      AND email NOT LIKE 'seed36.%@skillsprint.invalid';
+    FROM users u
+    WHERE u.avatar_object_key LIKE 'seed-assets/avatars/avatar-%.png'
+      AND u.user_id NOT IN (
+          SELECT v42_seed_uuid('skillsprint-v28', 'user:' || row_number)::text
+          FROM generate_series(1, 184) AS row_number
+          UNION ALL
+          SELECT v42_seed_uuid('skillsprint-v36', 'user:' || row_number)::text
+          FROM generate_series(1, 100) AS row_number
+      );
 
     IF v_real_user_touched_count <> 0 THEN
         RAISE EXCEPTION 'V42 assigned a seed avatar to % non-seed users', v_real_user_touched_count;
