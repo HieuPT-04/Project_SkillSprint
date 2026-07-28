@@ -18,7 +18,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.core.sync.RequestBody;
 
 /**
- * Generates and uploads one deterministic 5x5 identicon for every V28/V36 seed user.
+ * Generates and uploads one deterministic 5x5 identicon for every legacy/V28/V36 seed user.
  *
  * <p>Run from the repository root after compiling with the application's Maven classpath.
  * Values in .env are read without printing credentials. Assets remain private and are served
@@ -26,6 +26,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
  */
 public final class SeedAvatarAssetUploader {
 
+    private static final int V27_LEGACY_USER_COUNT = 184;
     private static final int V28_USER_COUNT = 184;
     private static final int V36_USER_COUNT = 100;
 
@@ -48,6 +49,7 @@ public final class SeedAvatarAssetUploader {
                         AwsBasicCredentials.create(accessKeyId, secretAccessKey)
                 ))
                 .build()) {
+            uploadCohort(s3, bucket, "v27-legacy", V27_LEGACY_USER_COUNT);
             uploadCohort(s3, bucket, "v28", V28_USER_COUNT);
             uploadCohort(s3, bucket, "v36", V36_USER_COUNT);
         }
