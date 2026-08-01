@@ -173,6 +173,37 @@ WHERE treasury.entry_type = 'MARKETPLACE_COMMISSION_EARNED'
   AND settlement.sale_id = sale.sale_id
   AND sale.idempotency_key LIKE 'v28-sale-%';
 
+-- V34 correctly skipped the two original free V28 packs because their revenue
+-- was zero at the time. They are paid after the V55 price normalization, so
+-- create their missing commission credits before reconciling the ledger.
+INSERT INTO platform_treasury_entries (
+    treasury_entry_id, asset, direction, entry_type, reference_type, reference_id, amount,
+    actor_name_snapshot, counterparty_user_id, counterparty_name_snapshot,
+    note, metadata, occurred_at, idempotency_key, created_at, updated_at
+)
+SELECT v55_uuid('normalized-v28-commission:' || revenue.sale_id),
+       'COIN', 'CREDIT', 'MARKETPLACE_COMMISSION_EARNED', 'SALE', revenue.sale_id, revenue.amount,
+       'SYSTEM', sale.buyer_id, buyer.full_name,
+       'Marketplace commission from normalized V28 demo sale',
+       jsonb_build_object('settlementId', revenue.settlement_id, 'source', 'V55 price normalization'),
+       revenue.created_at,
+       'v55-normalized-v28-commission:' || revenue.sale_id,
+       revenue.created_at, CURRENT_TIMESTAMP
+FROM platform_revenue_entries revenue
+JOIN marketplace_sales sale ON sale.sale_id = revenue.sale_id
+JOIN users buyer ON buyer.user_id = sale.buyer_id
+WHERE sale.idempotency_key LIKE 'v28-sale-%'
+  AND revenue.amount > 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM platform_treasury_entries treasury
+      WHERE treasury.entry_type = 'MARKETPLACE_COMMISSION_EARNED'
+        AND treasury.reference_type = 'SALE'
+        AND treasury.reference_id = revenue.sale_id
+        AND treasury.asset = 'COIN'
+        AND treasury.direction = 'CREDIT'
+  );
+
 -- The public item page uses marketplace_quiz_attempts, not the newer ranked
 -- attempt table. Seed ten credible completed attempts for every visible demo
 -- item so its public leaderboard is never empty.
