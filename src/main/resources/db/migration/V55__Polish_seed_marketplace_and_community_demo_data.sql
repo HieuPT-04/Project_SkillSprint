@@ -337,6 +337,146 @@ SET raw_content = format(
 FROM generate_series(1, 150) AS seed(ordinal)
 WHERE message.message_id = v55_v28_uuid('message:' || seed.ordinal);
 
+-- Replace the first pass above with subject-specific conversations. Each room
+-- has its own discussion flow; the second sentence rotates independently so a
+-- scroll never reads like the same template with a different sequence number.
+UPDATE post_comments comment
+SET content = (
+        (ARRAY[
+            'Mình từng bị kẹt ở bước này, sau đó tách yêu cầu thành từng điều kiện nhỏ thì dễ kiểm tra hơn.',
+            'Điểm mình thích là bạn nêu rõ bối cảnh trước khi chọn cách làm; như vậy người đọc dễ áp dụng hơn.',
+            'Với phần Java, mình thường viết một test tái hiện lỗi trước rồi mới sửa implementation.',
+            'Nếu là truy vấn SQL, mình sẽ kiểm tra dữ liệu trung gian sau từng JOIN để biết sai từ đâu.',
+            'Khi học React, mình hay phác state transition ra giấy trước khi sửa component.',
+            'Cách chia phiên học ngắn này hợp với mình, đặc biệt vào những ngày nhiều việc.',
+            'Bạn có thể lưu ví dụ này cùng phần giải thích vì lúc ôn lại sẽ nhớ nhanh hơn nhiều.',
+            'Mình đã thử cùng hướng với một bài khác và thấy kết quả ổn hơn khi có checklist.',
+            'Phần khó nhất thường là xác định giả định ban đầu; làm rõ nó giúp tránh sửa sai chỗ.',
+            'Mình đồng ý, có một ví dụ chạy được sẽ thuyết phục hơn là chỉ ghi lại kết luận.',
+            'Nếu còn thời gian, bạn thử thêm case biên để xem cách làm có bền vững không.',
+            'Mình lưu ý thêm phần tên biến và thông báo lỗi vì đó là thứ đồng đội hay đọc đầu tiên.',
+            'Cảm ơn bạn đã chia sẻ tiến độ thật; những ghi chú kiểu này giúp mình có động lực học tiếp.'
+        ])[((seed.ordinal - 1) % 13) + 1]
+        || ' ' ||
+        (ARRAY[
+            'Mình sẽ thử áp dụng vào bài đang làm tối nay.',
+            'Có kết quả mình sẽ quay lại cập nhật cho mọi người.',
+            'Nhờ vậy mình biết nên ôn lại phần nào trước.',
+            'Cách này cũng giúp trao đổi với bạn cùng nhóm nhanh hơn.',
+            'Mình đã ghi lại để dùng cho lần review tiếp theo.',
+            'Hy vọng sẽ có thêm ví dụ thực tế theo chủ đề này.',
+            'Mình thấy nên giữ lại cả lý do chọn đáp án.',
+            'Cuối tuần mình sẽ thử so sánh với cách cũ.',
+            'Điều này nhắc mình đừng bỏ qua bước kiểm chứng.',
+            'Mình sẽ đưa ý này vào kế hoạch ôn tập tuần sau.',
+            'Cảm ơn bạn, đoạn giải thích này rất đúng lúc.'
+        ])[((seed.ordinal - 1) % 11) + 1]
+    ),
+    updated_at = CURRENT_TIMESTAMP
+FROM generate_series(1, 100) AS seed(ordinal)
+WHERE comment.comment_id = v55_v28_uuid('comment:' || seed.ordinal);
+
+UPDATE community_chat_messages message
+SET raw_content = seed.content,
+    masked_content = seed.content
+FROM (
+    SELECT ordinal,
+           (
+               CASE ((ordinal - 1) % 6) + 1
+                   WHEN 1 THEN (ARRAY[
+                       'Mình vừa tách validation ra service riêng nên controller nhẹ hơn hẳn.',
+                       'Có ai có kinh nghiệm xử lý transaction khi vừa ghi đơn hàng vừa cập nhật tồn kho không?',
+                       'Mình đang rà lại exception handler để client nhận lỗi nhất quán.',
+                       'Phần mapping DTO của mình bị dài, mọi người thường tách mapper ở mức nào?',
+                       'Hôm nay mình thử viết integration test cho luồng đăng nhập và phát hiện một case null.',
+                       'Mình đang so sánh cách dùng fetch join với EntityGraph cho màn danh sách.',
+                       'Ai đã dùng Testcontainers cho Postgres local rồi cho mình xin vài lưu ý?',
+                       'Mình vừa sửa lỗi N+1 bằng cách xem SQL log, hóa ra relation được load quá sớm.',
+                       'Có nên trả lỗi validation theo field hay gom thành một message tổng quát nhỉ?',
+                       'Mình đang refactor package theo feature thay vì controller-service-repository.'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+                   WHEN 2 THEN (ARRAY[
+                       'Mình đang gom từ vựng theo chủ đề công việc để ôn TOEIC dễ hơn.',
+                       'Mọi người luyện nghe Part 3 bằng transcript trước hay nghe thẳng luôn?',
+                       'Hôm nay mình thử shadowing 10 phút và thấy phát âm nối âm đỡ vấp hơn.',
+                       'Có bạn nào có mẹo nhớ collocation trong email công sở không?',
+                       'Mình vừa sai vài câu đọc hiểu vì đọc quá nhanh phần điều kiện.',
+                       'Mình định lập bảng từ mới có ví dụ riêng thay vì chỉ ghi nghĩa tiếng Việt.',
+                       'Ai đang ôn VSTEP có nguồn luyện viết task 1 đáng tin không?',
+                       'Mình thấy nghe lại cùng một đoạn ngắn hiệu quả hơn mở nhiều bài mới.',
+                       'Hôm nay mình tập phân biệt thì trong câu điều kiện bằng cách tự đặt ví dụ.',
+                       'Mình vừa hoàn thành một mini test và muốn đổi đáp án để cùng đối chiếu.'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+                   WHEN 3 THEN (ARRAY[
+                       'Mình vừa đổi state form phức tạp sang useReducer, flow submit dễ theo dõi hơn.',
+                       'Ở danh sách dài, mọi người memo component ở đâu để không tối ưu quá tay?',
+                       'Mình đang rà dependency của useEffect khi route param thay đổi.',
+                       'Có ai có ví dụ phân tách server state và UI state trong Next.js không?',
+                       'Mình vừa xử lý loading skeleton cho trang tìm kiếm, cảm giác đỡ giật hơn nhiều.',
+                       'Hôm nay mình thử dùng React Hook Form với schema validation và thấy lỗi hiển thị rõ hơn.',
+                       'Mình đang cân nhắc đặt logic fetch ở server component hay custom hook.',
+                       'Ai từng gặp hydration mismatch vì đọc localStorage sớm chưa?',
+                       'Mình vừa tách bảng thành component nhỏ, test trạng thái empty dễ hơn hẳn.',
+                       'Có nên dùng query param để giữ bộ lọc khi quay lại trang danh sách không nhỉ?'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+                   WHEN 4 THEN (ARRAY[
+                       'Mình vừa giải xong bài mảng bằng two pointers, viết lại invariant nên dễ hiểu hơn.',
+                       'Có ai có cách hình dung BFS và DFS khi gặp đồ thị không liên thông không?',
+                       'Mình đang ôn Big-O bằng cách so sánh số vòng lặp thật trên input nhỏ.',
+                       'Bài cây nhị phân hôm nay làm mình nhận ra cần vẽ recursion tree trước.',
+                       'Mọi người thường chọn hash map hay sort trước cho bài tìm cặp phần tử?',
+                       'Mình vừa debug lỗi off-by-one bằng cách tự tạo ba test case rất nhỏ.',
+                       'Có mẹo nào nhận ra lúc nên dùng dynamic programming sớm hơn không?',
+                       'Mình đang ghi lại template cho stack monotonic để lần sau đỡ bắt đầu từ đầu.',
+                       'Bài này có nhiều edge case hơn mình nghĩ, đặc biệt là input rỗng.',
+                       'Mình muốn so sánh hai cách giải để hiểu trade-off về bộ nhớ.'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+                   WHEN 5 THEN (ARRAY[
+                       'Mình vừa hoàn thành bốn phiên Pomodoro nên nghỉ năm phút trước khi làm tiếp.',
+                       'Hôm nay mình thử để điện thoại ngoài bàn và tập trung được lâu hơn.',
+                       'Có ai dùng checklist đầu ngày để chọn đúng ba việc quan trọng không?',
+                       'Mình đang chia một bài lớn thành việc 25 phút để đỡ ngại bắt đầu.',
+                       'Buổi chiều dễ mất tập trung nên mình chuyển sang đọc lại ghi chú thay vì học mới.',
+                       'Mình vừa tổng kết số giờ tuần này, chưa nhiều nhưng đều hơn tuần trước.',
+                       'Mọi người thường nghỉ giữa hai phiên bằng hoạt động gì để không bị cuốn vào mạng xã hội?',
+                       'Mình đang thử đặt mục tiêu theo đầu ra thay vì chỉ đếm số giờ ngồi học.',
+                       'Hôm nay mình bỏ một phiên bị gián đoạn và bắt đầu lại bằng task nhỏ hơn.',
+                       'Mình thấy ghi ba dòng cuối ngày giúp nhìn rõ phần nào đang bị kẹt.'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+                   ELSE (ARRAY[
+                       'Mình vừa hoàn thiện mục tiêu tuần và muốn tìm bạn cùng nhắc tiến độ.',
+                       'Có ai đang chuẩn bị thực tập muốn trao đổi cách sắp xếp portfolio không?',
+                       'Mình vừa tham gia buổi review đồ án, ghi chú được vài lỗi hay gặp.',
+                       'Hôm nay mình thử lên kế hoạch học theo milestone thay vì theo cảm hứng.',
+                       'Mình đang tìm một cách giới thiệu dự án ngắn gọn khi phỏng vấn.',
+                       'Có bạn nào đã dùng SkillSprint để theo dõi roadmap trong nhóm chưa?',
+                       'Mình vừa cập nhật CV, phần mô tả dự án vẫn hơi dài nên đang rút gọn.',
+                       'Mọi người thường xin feedback code từ bạn cùng lớp theo checklist nào?',
+                       'Mình muốn lập nhóm nhỏ cùng ôn phỏng vấn kỹ thuật vào cuối tuần.',
+                       'Hôm nay mình hoàn thành một mục tiêu nhỏ và thấy có động lực tiếp tục hơn.'
+                   ])[((ordinal - 1) / 6 % 10) + 1]
+               END
+               || ' ' ||
+               (ARRAY[
+                   'Nếu ai có tài liệu hoặc ví dụ thì gửi mình tham khảo nhé.',
+                   'Mình sẽ thử lại với một case nhỏ rồi cập nhật kết quả.',
+                   'Cảm ơn mọi người trước nếu có góc nhìn khác.',
+                   'Mình muốn nghe thêm kinh nghiệm thực tế trước khi chốt cách làm.',
+                   'Đoạn này làm xong mình sẽ ghi lại thành checklist.',
+                   'Hy vọng trao đổi này giúp những bạn đang ở phần tương tự.',
+                   'Mình đang ưu tiên hiểu lý do thay vì chỉ làm cho chạy.',
+                   'Có kết quả mình sẽ chia lại để cả phòng cùng đối chiếu.',
+                   'Mình sẽ dành thêm một phiên ngắn để thử phương án này.',
+                   'Nếu có lỗi mới mình sẽ ghi rõ bước tái hiện.',
+                   'Mình thấy trao đổi cùng phòng giúp đỡ bị kẹt lâu hơn.',
+                   'Mình sẽ đọc lại góp ý trước khi làm tiếp phần sau.',
+                   'Ai rảnh cùng xem nhanh một ví dụ thì tốt quá.'
+               ])[((ordinal - 1) % 13) + 1]
+           ) AS content
+    FROM generate_series(1, 150) AS sequence(ordinal)
+) seed
+WHERE message.message_id = v55_v28_uuid('message:' || seed.ordinal);
+
 UPDATE community_posts post
 SET comment_count = (
         SELECT count(*) FROM post_comments comment WHERE comment.post_id = post.post_id
