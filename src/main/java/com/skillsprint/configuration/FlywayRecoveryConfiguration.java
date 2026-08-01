@@ -36,7 +36,7 @@ public class FlywayRecoveryConfiguration {
             List<MigrationInfo> failedMigrations = Arrays.stream(migrations)
                     .filter(migration -> migration.getState() == MigrationState.FAILED)
                     .toList();
-            boolean hasApprovedV55ChecksumMismatch = hasApprovedV55ChecksumMismatch(flyway, migrations);
+            boolean hasApprovedV55ChecksumMismatch = hasApprovedV55ChecksumMismatch(flyway);
 
             if (failedMigrations.isEmpty() && !hasApprovedV55ChecksumMismatch) {
                 flyway.migrate();
@@ -57,22 +57,11 @@ public class FlywayRecoveryConfiguration {
         };
     }
 
-    private boolean hasApprovedV55ChecksumMismatch(Flyway flyway, MigrationInfo[] migrations) {
-        Integer resolvedChecksum = Arrays.stream(migrations)
-                .filter(migration -> migration.getVersion() != null
-                        && RECOVERABLE_VERSION.equals(migration.getVersion().getVersion()))
-                .map(MigrationInfo::getChecksum)
-                .filter(checksum -> checksum != null)
-                .findFirst()
-                .orElse(null);
-
-        if (resolvedChecksum == null || resolvedChecksum == RECOVERABLE_APPLIED_CHECKSUM) {
-            return false;
-        }
-
+    private boolean hasApprovedV55ChecksumMismatch(Flyway flyway) {
         try (Connection connection = flyway.getConfiguration().getDataSource().getConnection();
                 PreparedStatement statement = connection.prepareStatement(
-                        "SELECT checksum FROM flyway_schema_history WHERE version = ? AND success = TRUE")) {
+                        "SELECT checksum FROM flyway_schema_history "
+                                + "WHERE version = ? ORDER BY installed_rank DESC LIMIT 1")) {
             statement.setString(1, RECOVERABLE_VERSION);
             try (ResultSet result = statement.executeQuery()) {
                 return result.next() && result.getInt("checksum") == RECOVERABLE_APPLIED_CHECKSUM;
