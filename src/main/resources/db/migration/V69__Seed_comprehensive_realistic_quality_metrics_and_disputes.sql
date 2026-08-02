@@ -124,7 +124,6 @@ BEGIN
         v_review_count := 8 + (v_seed_offset * 3) % 15;
 
         FOR v_review_idx IN 1..v_review_count LOOP
-            -- Guarantee distinct users per review index for this version
             v_buyer_id := v69_v36_uuid('user:' || (1 + (v_review_idx % 70)));
             v_review_id := v69_uuid('review:' || v_rec.version_id || ':' || v_review_idx);
             v_rating := CASE WHEN v_review_idx % 5 = 0 THEN 4 ELSE 5 END;
@@ -140,7 +139,6 @@ BEGIN
                     v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
                 );
             EXCEPTION WHEN UNIQUE_VIOLATION THEN
-                -- Gracefully ignore if a review already exists for this (user_id, pack_version_id)
                 NULL;
             END;
         END LOOP;
@@ -171,11 +169,9 @@ BEGIN
 
         BEGIN
             INSERT INTO marketplace_ranked_quiz_definitions (
-                definition_id, pack_version_id, title, duration_minutes, question_count,
-                pass_score, questions_json, created_at, updated_at
+                definition_id, pack_version_id, questions_per_step, total_question_count, daily_attempt_limit, created_at, updated_at
             ) VALUES (
-                v_def_id, v_rec.version_id, 'Thử Thách Xếp Hạng Top Ranked', 30, 20, 70,
-                '[]'::jsonb, v_rec.created_at, v_rec.created_at
+                v_def_id, v_rec.version_id, 5, 20, 3, v_rec.created_at, v_rec.created_at
             );
         EXCEPTION WHEN UNIQUE_VIOLATION THEN
             NULL;
