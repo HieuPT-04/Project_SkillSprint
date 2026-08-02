@@ -89,7 +89,7 @@ BEGIN
 END $$;
 
 
--- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions with valid foreign key items
+-- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions with valid PK on conflict
 DO $$
 DECLARE
     v_rec RECORD;
@@ -131,7 +131,7 @@ BEGIN
                 v_rec.version_id, v_buyer_id, v_rating, v_comment,
                 v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days',
                 v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
-            ) ON CONFLICT (user_id, item_id) DO UPDATE
+            ) ON CONFLICT (review_id) DO UPDATE
             SET rating = EXCLUDED.rating, comment = EXCLUDED.comment, pack_version_id = EXCLUDED.pack_version_id;
         END LOOP;
     END LOOP;
