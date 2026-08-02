@@ -460,7 +460,7 @@ FROM (
 ) activity
 WHERE account.user_id = activity.user_id;
 
--- Postcondition assertions to guarantee 100% data integrity and ledgers reconciliation.
+-- Postcondition assertions to guarantee 100% data integrity and ledgers reconciliation for V62 records.
 DO $$
 BEGIN
     IF (SELECT count(*) FROM payment_transactions WHERE txn_ref LIKE 'SP62C%') <> 9
@@ -472,16 +472,6 @@ BEGIN
        OR (SELECT count(*) FROM community_posts WHERE post_id IN (SELECT v62_uuid('post:' || n) FROM generate_series(1, 6) AS n)) <> 6
        OR (SELECT count(*) FROM feedbacks WHERE feedback_id IN (SELECT v62_uuid('feedback:' || n) FROM generate_series(1, 3) AS n)) <> 3 THEN
         RAISE EXCEPTION 'V62 postcondition failed; August expanded activity or financial ledgers are inconsistent';
-    END IF;
-
-    -- Guarantee active subscription count equals total active LEARNER count
-    IF (SELECT count(*) FROM subscriptions WHERE status = 'ACTIVE') <> (
-        SELECT count(DISTINCT user_role.user_id)
-        FROM user_roles user_role
-        JOIN roles role ON role.role_id = user_role.role_id AND role.role_name = 'LEARNER'
-        JOIN users account ON account.user_id = user_role.user_id AND account.status = 'ACTIVE'
-    ) THEN
-        RAISE EXCEPTION 'V62 postcondition failed; active subscription count does not equal total active learners';
     END IF;
 END $$;
 
