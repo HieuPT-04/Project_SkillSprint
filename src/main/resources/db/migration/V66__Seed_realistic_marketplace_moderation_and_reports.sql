@@ -40,12 +40,15 @@ FROM (VALUES
 ) AS p(row_no, creator_no, title, subject, description, price_coins, chapter_count, quiz_count, question_count, creator_validation_score, quality_score, quality_status, status, submitted_at);
 
 INSERT INTO marketplace_packs (
-    pack_id, creator_id, title, description, subject, status, price_coins,
-    created_at, updated_at
+    pack_id, creator_id, source_workspace_id, created_at, updated_at
 )
-SELECT v66_uuid('pack:' || row_no), creator_id, title, description, subject, status, price_coins,
-       submitted_at, submitted_at
-FROM v66_pending_packs;
+SELECT v66_uuid('pack:' || p.row_no), p.creator_id,
+       COALESCE(
+           (SELECT workspace_id FROM study_workspaces WHERE user_id = p.creator_id AND status <> 'DELETED' LIMIT 1),
+           v66_v36_uuid('workspace:1')
+       ),
+       p.submitted_at, p.submitted_at
+FROM v66_pending_packs p;
 
 INSERT INTO marketplace_pack_versions (
     version_id, pack_id, version_no, update_type, title, description, subject, price_coins,
