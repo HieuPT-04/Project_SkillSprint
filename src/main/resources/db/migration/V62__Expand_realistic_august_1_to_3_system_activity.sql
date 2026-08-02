@@ -45,7 +45,7 @@ END $$;
 -- 1. Organic user registrations during August 1 to 3, 2026.
 INSERT INTO users (user_id, email, email_verified, full_name, timezone, status, last_login_at, created_at, updated_at)
 SELECT v62_uuid('new-user:' || n),
-       'august.user' || n || '@gmail.com',
+       (ARRAY['tuan.phamminh94@gmail.com','ha.nguyenthu96@gmail.com','long.tranhoang97@gmail.com','linh.lekhanh99@gmail.com','nam.dangbao98@gmail.com','yen.hoanghai95@gmail.com'])[n],
        TRUE,
        (ARRAY['Phạm Minh Tuấn','Nguyễn Thu Hà','Trần Hoàng Long','Lê Khánh Linh','Đặng Bảo Nam','Hoàng Hải Yến'])[n],
        'Asia/Ho_Chi_Minh', 'ACTIVE',
