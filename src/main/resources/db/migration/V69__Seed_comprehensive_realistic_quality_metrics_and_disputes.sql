@@ -82,12 +82,16 @@ BEGIN
                     v_rec.created_at + (v_learner_idx * INTERVAL '2 hours'),
                     v_rec.created_at + (v_learner_idx * INTERVAL '5 hours') + INTERVAL '1 day'
                 );
-            EXCEPTION WHEN UNIQUE_VIOLATION THEN
-                UPDATE marketplace_version_progress
-                SET completion_percent = v_percent,
-                    completed_quiz_count = CASE WHEN v_is_completed THEN v_rec.quiz_count ELSE GREATEST(1, v_rec.quiz_count / 2) END,
-                    completed_chapter_count = CASE WHEN v_is_completed THEN v_rec.chapter_count ELSE GREATEST(1, v_rec.chapter_count / 2) END
-                WHERE buyer_id = v_buyer_id AND pack_version_id = v_rec.version_id;
+            EXCEPTION WHEN OTHERS THEN
+                BEGIN
+                    UPDATE marketplace_version_progress
+                    SET completion_percent = v_percent,
+                        completed_quiz_count = CASE WHEN v_is_completed THEN v_rec.quiz_count ELSE GREATEST(1, v_rec.quiz_count / 2) END,
+                        completed_chapter_count = CASE WHEN v_is_completed THEN v_rec.chapter_count ELSE GREATEST(1, v_rec.chapter_count / 2) END
+                    WHERE buyer_id = v_buyer_id AND pack_version_id = v_rec.version_id;
+                EXCEPTION WHEN OTHERS THEN
+                    NULL;
+                END;
             END;
         END LOOP;
     END LOOP;
@@ -138,7 +142,7 @@ BEGIN
                     v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days',
                     v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
                 );
-            EXCEPTION WHEN UNIQUE_VIOLATION THEN
+            EXCEPTION WHEN OTHERS THEN
                 NULL;
             END;
         END LOOP;
@@ -165,49 +169,63 @@ BEGIN
         WHERE status = 'PUBLISHED' OR saleable = TRUE
     LOOP
         v_seed_offset := v_seed_offset + 1;
-        v_def_id := v69_uuid('ranked-def:' || v_rec.version_id);
+        
+        -- Retrieve the actual existing definition_id for this pack_version_id if it exists
+        v_def_id := NULL;
+        SELECT definition_id INTO v_def_id
+        FROM marketplace_ranked_quiz_definitions
+        WHERE pack_version_id = v_rec.version_id
+        LIMIT 1;
 
-        BEGIN
-            INSERT INTO marketplace_ranked_quiz_definitions (
-                definition_id, pack_version_id, questions_per_step, total_question_count, daily_attempt_limit, created_at, updated_at
-            ) VALUES (
-                v_def_id, v_rec.version_id, 5, 20, 3, v_rec.created_at, v_rec.created_at
-            );
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN
-            NULL;
-        END;
-
-        v_attempt_count := 20 + (v_seed_offset * 5) % 25;
-        v_suspicious_count := 1 + (v_seed_offset % 2);
-
-        FOR v_attempt_idx IN 1..v_attempt_count LOOP
-            v_buyer_id := v69_v36_uuid('user:' || (5 + ((v_seed_offset * 4 + v_attempt_idx) % 70)));
-            v_attempt_id := v69_uuid('ranked-attempt:' || v_rec.version_id || ':' || v_attempt_idx);
-            v_is_suspicious := v_attempt_idx <= v_suspicious_count;
-
+        IF v_def_id IS NULL THEN
+            v_def_id := v69_uuid('ranked-def:' || v_rec.version_id);
             BEGIN
-                INSERT INTO marketplace_ranked_attempts (
-                    attempt_id, buyer_id, pack_version_id, definition_id, attempt_date, attempt_number,
-                    status, started_at, expires_at, completed_at, question_snapshot_json, answer_snapshot_json,
-                    score, correct_count, duration_seconds, suspicious, leaderboard_eligible, created_at, updated_at
+                INSERT INTO marketplace_ranked_quiz_definitions (
+                    definition_id, pack_version_id, questions_per_step, total_question_count, daily_attempt_limit, created_at, updated_at
                 ) VALUES (
-                    v_attempt_id, v_buyer_id, v_rec.version_id, v_def_id,
-                    CURRENT_DATE - (v_attempt_idx % 10), 1, 'COMPLETED',
-                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
-                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '30 minutes',
-                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + (CASE WHEN v_is_suspicious THEN INTERVAL '15 seconds' ELSE INTERVAL '18 minutes' END),
-                    '[]'::jsonb, '[]'::jsonb,
-                    CASE WHEN v_is_suspicious THEN 100 ELSE 75 + (v_attempt_idx % 25) END,
-                    CASE WHEN v_is_suspicious THEN 20 ELSE 15 + (v_attempt_idx % 5) END,
-                    CASE WHEN v_is_suspicious THEN 15 ELSE 1080 END,
-                    v_is_suspicious, NOT v_is_suspicious,
-                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
-                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '20 minutes'
+                    v_def_id, v_rec.version_id, 5, 20, 3, v_rec.created_at, v_rec.created_at
                 );
-            EXCEPTION WHEN UNIQUE_VIOLATION THEN
-                NULL;
+            EXCEPTION WHEN OTHERS THEN
+                SELECT definition_id INTO v_def_id
+                FROM marketplace_ranked_quiz_definitions
+                WHERE pack_version_id = v_rec.version_id
+                LIMIT 1;
             END;
-        END LOOP;
+        END IF;
+
+        IF v_def_id IS NOT NULL THEN
+            v_attempt_count := 20 + (v_seed_offset * 5) % 25;
+            v_suspicious_count := 1 + (v_seed_offset % 2);
+
+            FOR v_attempt_idx IN 1..v_attempt_count LOOP
+                v_buyer_id := v69_v36_uuid('user:' || (5 + ((v_seed_offset * 4 + v_attempt_idx) % 70)));
+                v_attempt_id := v69_uuid('ranked-attempt:' || v_rec.version_id || ':' || v_attempt_idx);
+                v_is_suspicious := v_attempt_idx <= v_suspicious_count;
+
+                BEGIN
+                    INSERT INTO marketplace_ranked_attempts (
+                        attempt_id, buyer_id, pack_version_id, definition_id, attempt_date, attempt_number,
+                        status, started_at, expires_at, completed_at, question_snapshot_json, answer_snapshot_json,
+                        score, correct_count, duration_seconds, suspicious, leaderboard_eligible, created_at, updated_at
+                    ) VALUES (
+                        v_attempt_id, v_buyer_id, v_rec.version_id, v_def_id,
+                        CURRENT_DATE - (v_attempt_idx % 10), 1, 'COMPLETED',
+                        v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
+                        v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '30 minutes',
+                        v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + (CASE WHEN v_is_suspicious THEN INTERVAL '15 seconds' ELSE INTERVAL '18 minutes' END),
+                        '[]'::jsonb, '[]'::jsonb,
+                        CASE WHEN v_is_suspicious THEN 100 ELSE 75 + (v_attempt_idx % 25) END,
+                        CASE WHEN v_is_suspicious THEN 20 ELSE 15 + (v_attempt_idx % 5) END,
+                        CASE WHEN v_is_suspicious THEN 15 ELSE 1080 END,
+                        v_is_suspicious, NOT v_is_suspicious,
+                        v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
+                        v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '20 minutes'
+                    );
+                EXCEPTION WHEN OTHERS THEN
+                    NULL;
+                END;
+            END LOOP;
+        END IF;
     END LOOP;
 END $$;
 
@@ -244,7 +262,7 @@ BEGIN
                 v_rec.created_at + INTERVAL '1 day',
                 v_rec.created_at + INTERVAL '2 days'
             );
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN
+        EXCEPTION WHEN OTHERS THEN
             NULL;
         END;
     END LOOP;
@@ -324,7 +342,7 @@ BEGIN
         BEGIN
             INSERT INTO marketplace_packs (pack_id, creator_id, source_workspace_id, legacy_item_id, created_at, updated_at)
             VALUES (v_pack_id, p.creator_id, v_ws_id, v_item_id, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day');
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        EXCEPTION WHEN OTHERS THEN NULL;
         END;
 
         BEGIN
@@ -337,7 +355,7 @@ BEGIN
                 p.chapter_count, p.quiz_count, p.question_count, p.creator_validation_score, 96, 'PASSED',
                 TRUE, 'PENDING_REVIEW', v_content, NULL, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
             );
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        EXCEPTION WHEN OTHERS THEN NULL;
         END;
 
         BEGIN
@@ -348,7 +366,7 @@ BEGIN
                 v_item_id, p.creator_id, v_ws_id, p.title, p.description, p.subject, p.price_coins,
                 'PENDING_REVIEW', p.creator_validation_score, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
             );
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        EXCEPTION WHEN OTHERS THEN NULL;
         END;
 
         BEGIN
@@ -358,7 +376,7 @@ BEGIN
                 v69_uuid('snapshot:pending:' || p.row_no), v_item_id, p.chapter_count, p.quiz_count, p.question_count, v_content,
                 CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
             );
-        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        EXCEPTION WHEN OTHERS THEN NULL;
         END;
     END LOOP;
 END $$;
