@@ -68,28 +68,33 @@ BEGIN
                 v_percent := 20.00 + ((v_learner_idx * 13) % 75);
             END IF;
 
-            INSERT INTO marketplace_version_progress (
-                progress_id, buyer_id, pack_version_id, completed_quiz_count, completed_chapter_count,
-                completion_percent, first_activity_at, last_activity_at, created_at, updated_at
-            ) VALUES (
-                v_progress_id, v_buyer_id, v_rec.version_id,
-                CASE WHEN v_is_completed THEN v_rec.quiz_count ELSE GREATEST(1, v_rec.quiz_count / 2) END,
-                CASE WHEN v_is_completed THEN v_rec.chapter_count ELSE GREATEST(1, v_rec.chapter_count / 2) END,
-                v_percent,
-                v_rec.created_at + (v_learner_idx * INTERVAL '2 hours'),
-                v_rec.created_at + (v_learner_idx * INTERVAL '5 hours') + INTERVAL '1 day',
-                v_rec.created_at + (v_learner_idx * INTERVAL '2 hours'),
-                v_rec.created_at + (v_learner_idx * INTERVAL '5 hours') + INTERVAL '1 day'
-            ) ON CONFLICT (buyer_id, pack_version_id) DO UPDATE
-            SET completion_percent = EXCLUDED.completion_percent,
-                completed_quiz_count = EXCLUDED.completed_quiz_count,
-                completed_chapter_count = EXCLUDED.completed_chapter_count;
+            BEGIN
+                INSERT INTO marketplace_version_progress (
+                    progress_id, buyer_id, pack_version_id, completed_quiz_count, completed_chapter_count,
+                    completion_percent, first_activity_at, last_activity_at, created_at, updated_at
+                ) VALUES (
+                    v_progress_id, v_buyer_id, v_rec.version_id,
+                    CASE WHEN v_is_completed THEN v_rec.quiz_count ELSE GREATEST(1, v_rec.quiz_count / 2) END,
+                    CASE WHEN v_is_completed THEN v_rec.chapter_count ELSE GREATEST(1, v_rec.chapter_count / 2) END,
+                    v_percent,
+                    v_rec.created_at + (v_learner_idx * INTERVAL '2 hours'),
+                    v_rec.created_at + (v_learner_idx * INTERVAL '5 hours') + INTERVAL '1 day',
+                    v_rec.created_at + (v_learner_idx * INTERVAL '2 hours'),
+                    v_rec.created_at + (v_learner_idx * INTERVAL '5 hours') + INTERVAL '1 day'
+                );
+            EXCEPTION WHEN UNIQUE_VIOLATION THEN
+                UPDATE marketplace_version_progress
+                SET completion_percent = v_percent,
+                    completed_quiz_count = CASE WHEN v_is_completed THEN v_rec.quiz_count ELSE GREATEST(1, v_rec.quiz_count / 2) END,
+                    completed_chapter_count = CASE WHEN v_is_completed THEN v_rec.chapter_count ELSE GREATEST(1, v_rec.chapter_count / 2) END
+                WHERE buyer_id = v_buyer_id AND pack_version_id = v_rec.version_id;
+            END;
         END LOOP;
     END LOOP;
 END $$;
 
 
--- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions with valid PK on conflict
+-- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions safely
 DO $$
 DECLARE
     v_rec RECORD;
@@ -119,26 +124,31 @@ BEGIN
         v_review_count := 8 + (v_seed_offset * 3) % 15;
 
         FOR v_review_idx IN 1..v_review_count LOOP
-            v_buyer_id := v69_v36_uuid('user:' || (10 + ((v_seed_offset * 3 + v_review_idx) % 65)));
+            -- Guarantee distinct users per review index for this version
+            v_buyer_id := v69_v36_uuid('user:' || (1 + (v_review_idx % 70)));
             v_review_id := v69_uuid('review:' || v_rec.version_id || ':' || v_review_idx);
             v_rating := CASE WHEN v_review_idx % 5 = 0 THEN 4 ELSE 5 END;
             v_comment := v_comments[1 + (v_review_idx % array_length(v_comments, 1))];
 
-            INSERT INTO marketplace_reviews (
-                review_id, item_id, pack_version_id, user_id, rating, comment, created_at, updated_at
-            ) VALUES (
-                v_review_id, v_rec.item_id,
-                v_rec.version_id, v_buyer_id, v_rating, v_comment,
-                v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days',
-                v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
-            ) ON CONFLICT (review_id) DO UPDATE
-            SET rating = EXCLUDED.rating, comment = EXCLUDED.comment, pack_version_id = EXCLUDED.pack_version_id;
+            BEGIN
+                INSERT INTO marketplace_reviews (
+                    review_id, item_id, pack_version_id, user_id, rating, comment, created_at, updated_at
+                ) VALUES (
+                    v_review_id, v_rec.item_id,
+                    v_rec.version_id, v_buyer_id, v_rating, v_comment,
+                    v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days',
+                    v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
+                );
+            EXCEPTION WHEN UNIQUE_VIOLATION THEN
+                -- Gracefully ignore if a review already exists for this (user_id, pack_version_id)
+                NULL;
+            END;
         END LOOP;
     END LOOP;
 END $$;
 
 
--- 4. Seed Ranked Definitions & Ranked Attempts (marketplace_ranked_attempts) for ALL published versions
+-- 4. Seed Ranked Definitions & Ranked Attempts (marketplace_ranked_attempts) for ALL published versions safely
 DO $$
 DECLARE
     v_rec RECORD;
@@ -159,13 +169,17 @@ BEGIN
         v_seed_offset := v_seed_offset + 1;
         v_def_id := v69_uuid('ranked-def:' || v_rec.version_id);
 
-        INSERT INTO marketplace_ranked_quiz_definitions (
-            definition_id, pack_version_id, title, duration_minutes, question_count,
-            pass_score, questions_json, created_at, updated_at
-        ) VALUES (
-            v_def_id, v_rec.version_id, 'Thử Thách Xếp Hạng Top Ranked', 30, 20, 70,
-            '[]'::jsonb, v_rec.created_at, v_rec.created_at
-        ) ON CONFLICT (pack_version_id) DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_ranked_quiz_definitions (
+                definition_id, pack_version_id, title, duration_minutes, question_count,
+                pass_score, questions_json, created_at, updated_at
+            ) VALUES (
+                v_def_id, v_rec.version_id, 'Thử Thách Xếp Hạng Top Ranked', 30, 20, 70,
+                '[]'::jsonb, v_rec.created_at, v_rec.created_at
+            );
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN
+            NULL;
+        END;
 
         v_attempt_count := 20 + (v_seed_offset * 5) % 25;
         v_suspicious_count := 1 + (v_seed_offset % 2);
@@ -175,30 +189,34 @@ BEGIN
             v_attempt_id := v69_uuid('ranked-attempt:' || v_rec.version_id || ':' || v_attempt_idx);
             v_is_suspicious := v_attempt_idx <= v_suspicious_count;
 
-            INSERT INTO marketplace_ranked_attempts (
-                attempt_id, buyer_id, pack_version_id, definition_id, attempt_date, attempt_number,
-                status, started_at, expires_at, completed_at, question_snapshot_json, answer_snapshot_json,
-                score, correct_count, duration_seconds, suspicious, leaderboard_eligible, created_at, updated_at
-            ) VALUES (
-                v_attempt_id, v_buyer_id, v_rec.version_id, v_def_id,
-                CURRENT_DATE - (v_attempt_idx % 10), 1, 'COMPLETED',
-                v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
-                v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '30 minutes',
-                v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + (CASE WHEN v_is_suspicious THEN INTERVAL '15 seconds' ELSE INTERVAL '18 minutes' END),
-                '[]'::jsonb, '[]'::jsonb,
-                CASE WHEN v_is_suspicious THEN 100 ELSE 75 + (v_attempt_idx % 25) END,
-                CASE WHEN v_is_suspicious THEN 20 ELSE 15 + (v_attempt_idx % 5) END,
-                CASE WHEN v_is_suspicious THEN 15 ELSE 1080 END,
-                v_is_suspicious, NOT v_is_suspicious,
-                v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
-                v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '20 minutes'
-            ) ON CONFLICT (buyer_id, pack_version_id, attempt_date, attempt_number) DO NOTHING;
+            BEGIN
+                INSERT INTO marketplace_ranked_attempts (
+                    attempt_id, buyer_id, pack_version_id, definition_id, attempt_date, attempt_number,
+                    status, started_at, expires_at, completed_at, question_snapshot_json, answer_snapshot_json,
+                    score, correct_count, duration_seconds, suspicious, leaderboard_eligible, created_at, updated_at
+                ) VALUES (
+                    v_attempt_id, v_buyer_id, v_rec.version_id, v_def_id,
+                    CURRENT_DATE - (v_attempt_idx % 10), 1, 'COMPLETED',
+                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
+                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '30 minutes',
+                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + (CASE WHEN v_is_suspicious THEN INTERVAL '15 seconds' ELSE INTERVAL '18 minutes' END),
+                    '[]'::jsonb, '[]'::jsonb,
+                    CASE WHEN v_is_suspicious THEN 100 ELSE 75 + (v_attempt_idx % 25) END,
+                    CASE WHEN v_is_suspicious THEN 20 ELSE 15 + (v_attempt_idx % 5) END,
+                    CASE WHEN v_is_suspicious THEN 15 ELSE 1080 END,
+                    v_is_suspicious, NOT v_is_suspicious,
+                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour'),
+                    v_rec.created_at + (v_attempt_idx * INTERVAL '1 hour') + INTERVAL '20 minutes'
+                );
+            EXCEPTION WHEN UNIQUE_VIOLATION THEN
+                NULL;
+            END;
         END LOOP;
     END LOOP;
 END $$;
 
 
--- 5. Seed Content Reports (marketplace_content_reports) for published versions
+-- 5. Seed Content Reports (marketplace_content_reports) for published versions safely
 DO $$
 DECLARE
     v_rec RECORD;
@@ -215,20 +233,24 @@ BEGIN
         v_reporter_id := v69_v36_uuid('user:' || (12 + (v_seed_offset % 50)));
         v_report_id := v69_uuid('report:' || v_rec.version_id);
 
-        INSERT INTO marketplace_content_reports (
-            report_id, reporter_id, pack_version_id, target_type, target_ref, category,
-            description, status, reviewed_by, reviewed_at, resolution_note, created_at, updated_at
-        ) VALUES (
-            v_report_id, v_reporter_id, v_rec.version_id, 'QUESTION', 'Q-REF-01',
-            CASE WHEN v_seed_offset % 2 = 0 THEN 'AMBIGUOUS' ELSE 'INCORRECT_ANSWER' END,
-            'Cần làm rõ đáp án phân biệt giữa Synchronous call và Asynchronous Event-Driven trong câu #3.',
-            CASE WHEN v_seed_offset % 3 = 0 THEN 'OPEN' ELSE 'RESOLVED' END,
-            CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE v69_v36_uuid('user:5')::text END,
-            CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE v_rec.created_at + INTERVAL '2 days' END,
-            CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE 'Đã kiểm tra và điều chỉnh câu từ rõ ràng hơn.' END,
-            v_rec.created_at + INTERVAL '1 day',
-            v_rec.created_at + INTERVAL '2 days'
-        ) ON CONFLICT DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_content_reports (
+                report_id, reporter_id, pack_version_id, target_type, target_ref, category,
+                description, status, reviewed_by, reviewed_at, resolution_note, created_at, updated_at
+            ) VALUES (
+                v_report_id, v_reporter_id, v_rec.version_id, 'QUESTION', 'Q-REF-01',
+                CASE WHEN v_seed_offset % 2 = 0 THEN 'AMBIGUOUS' ELSE 'INCORRECT_ANSWER' END,
+                'Cần làm rõ đáp án phân biệt giữa Synchronous call và Asynchronous Event-Driven trong câu #3.',
+                CASE WHEN v_seed_offset % 3 = 0 THEN 'OPEN' ELSE 'RESOLVED' END,
+                CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE v69_v36_uuid('user:5')::text END,
+                CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE v_rec.created_at + INTERVAL '2 days' END,
+                CASE WHEN v_seed_offset % 3 = 0 THEN NULL ELSE 'Đã kiểm tra và điều chỉnh câu từ rõ ràng hơn.' END,
+                v_rec.created_at + INTERVAL '1 day',
+                v_rec.created_at + INTERVAL '2 days'
+            );
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN
+            NULL;
+        END;
     END LOOP;
 END $$;
 
@@ -303,34 +325,45 @@ BEGIN
             v69_v36_uuid('workspace:1')
         );
 
-        INSERT INTO marketplace_packs (pack_id, creator_id, source_workspace_id, legacy_item_id, created_at, updated_at)
-        VALUES (v_pack_id, p.creator_id, v_ws_id, v_item_id, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day')
-        ON CONFLICT (pack_id) DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_packs (pack_id, creator_id, source_workspace_id, legacy_item_id, created_at, updated_at)
+            VALUES (v_pack_id, p.creator_id, v_ws_id, v_item_id, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day');
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        END;
 
-        INSERT INTO marketplace_pack_versions (
-            version_id, pack_id, version_no, update_type, legacy_item_id, title, description, subject, price_coins,
-            chapter_count, quiz_count, question_count, creator_validation_score, quality_score, quality_status,
-            saleable, status, content_json, published_at, created_at, updated_at
-        ) VALUES (
-            v_version_id, v_pack_id, 1, 'MAJOR', v_item_id, p.title, p.description, p.subject, p.price_coins,
-            p.chapter_count, p.quiz_count, p.question_count, p.creator_validation_score, 96, 'PASSED',
-            TRUE, 'PENDING_REVIEW', v_content, NULL, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
-        ) ON CONFLICT (version_id) DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_pack_versions (
+                version_id, pack_id, version_no, update_type, legacy_item_id, title, description, subject, price_coins,
+                chapter_count, quiz_count, question_count, creator_validation_score, quality_score, quality_status,
+                saleable, status, content_json, published_at, created_at, updated_at
+            ) VALUES (
+                v_version_id, v_pack_id, 1, 'MAJOR', v_item_id, p.title, p.description, p.subject, p.price_coins,
+                p.chapter_count, p.quiz_count, p.question_count, p.creator_validation_score, 96, 'PASSED',
+                TRUE, 'PENDING_REVIEW', v_content, NULL, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
+            );
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        END;
 
-        INSERT INTO marketplace_items (
-            item_id, creator_id, source_workspace_id, title, description, subject, price_coins,
-            status, creator_validation_score, created_at, updated_at
-        ) VALUES (
-            v_item_id, p.creator_id, v_ws_id, p.title, p.description, p.subject, p.price_coins,
-            'PENDING_REVIEW', p.creator_validation_score, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
-        ) ON CONFLICT (item_id) DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_items (
+                item_id, creator_id, source_workspace_id, title, description, subject, price_coins,
+                status, creator_validation_score, created_at, updated_at
+            ) VALUES (
+                v_item_id, p.creator_id, v_ws_id, p.title, p.description, p.subject, p.price_coins,
+                'PENDING_REVIEW', p.creator_validation_score, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
+            );
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        END;
 
-        INSERT INTO marketplace_quiz_pack_snapshots (
-            snapshot_id, item_id, chapter_count, quiz_count, question_count, content_json, created_at, updated_at
-        ) VALUES (
-            v69_uuid('snapshot:pending:' || p.row_no), v_item_id, p.chapter_count, p.quiz_count, p.question_count, v_content,
-            CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
-        ) ON CONFLICT (item_id) DO NOTHING;
+        BEGIN
+            INSERT INTO marketplace_quiz_pack_snapshots (
+                snapshot_id, item_id, chapter_count, quiz_count, question_count, content_json, created_at, updated_at
+            ) VALUES (
+                v69_uuid('snapshot:pending:' || p.row_no), v_item_id, p.chapter_count, p.quiz_count, p.question_count, v_content,
+                CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '1 day'
+            );
+        EXCEPTION WHEN UNIQUE_VIOLATION THEN NULL;
+        END;
     END LOOP;
 END $$;
 
