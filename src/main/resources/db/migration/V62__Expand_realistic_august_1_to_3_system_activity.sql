@@ -45,7 +45,7 @@ END $$;
 -- 1. Organic user registrations during August 1 to 3, 2026.
 INSERT INTO users (user_id, email, email_verified, full_name, timezone, status, last_login_at, created_at, updated_at)
 SELECT v62_uuid('new-user:' || n),
-       (ARRAY['tuan.phamminh94@gmail.com','ha.nguyenthu96@gmail.com','long.tranhoang97@gmail.com','linh.lekhanh99@gmail.com','nam.dangbao98@gmail.com','yen.hoanghai95@gmail.com'])[n],
+       'august.user' || n || '@gmail.com',
        TRUE,
        (ARRAY['Phạm Minh Tuấn','Nguyễn Thu Hà','Trần Hoàng Long','Lê Khánh Linh','Đặng Bảo Nam','Hoàng Hải Yến'])[n],
        'Asia/Ho_Chi_Minh', 'ACTIVE',
@@ -75,33 +75,6 @@ SELECT v62_uuid('new-user:' || n)::text, 0, 0, DATE '2026-07-27', 0, DATE '2026-
        TIMESTAMPTZ '2026-08-01 08:30:00+07' + (n * INTERVAL '11 hours')
 FROM generate_series(1, 6) AS n
 ON CONFLICT (user_id) DO NOTHING;
-
-INSERT INTO subscriptions (subscription_id, user_id, plan_id, start_date, end_date, start_at, end_at, status, created_at)
-SELECT v62_uuid('new-user-sub:' || n), v62_uuid('new-user:' || n)::text, plan.plan_id,
-       (TIMESTAMPTZ '2026-08-01 08:30:00+07' + (n * INTERVAL '11 hours'))::date,
-       DATE '2099-12-31',
-       TIMESTAMPTZ '2026-08-01 08:30:00+07' + (n * INTERVAL '11 hours'),
-       TIMESTAMPTZ '2099-12-31 23:59:59+07',
-       'ACTIVE',
-       TIMESTAMPTZ '2026-08-01 08:30:00+07' + (n * INTERVAL '11 hours')
-FROM generate_series(1, 6) AS n
-CROSS JOIN (SELECT plan_id FROM service_plans WHERE plan_type = 'FREE' LIMIT 1) plan
-ON CONFLICT DO NOTHING;
-
--- Backfill active FREE subscription for any active LEARNER currently missing an active subscription record
-INSERT INTO subscriptions (subscription_id, user_id, plan_id, start_date, end_date, start_at, end_at, status, created_at)
-SELECT v62_uuid('backfill-sub:' || account.user_id), account.user_id, plan.plan_id,
-       account.created_at::date, DATE '2099-12-31', account.created_at, TIMESTAMPTZ '2099-12-31 23:59:59+07',
-       'ACTIVE', account.created_at
-FROM users account
-JOIN user_roles user_role ON user_role.user_id = account.user_id
-JOIN roles role ON role.role_id = user_role.role_id AND role.role_name = 'LEARNER'
-CROSS JOIN (SELECT plan_id FROM service_plans WHERE plan_type = 'FREE' LIMIT 1) plan
-WHERE account.status = 'ACTIVE'
-  AND NOT EXISTS (
-      SELECT 1 FROM subscriptions sub WHERE sub.user_id = account.user_id AND sub.status = 'ACTIVE'
-  )
-ON CONFLICT DO NOTHING;
 
 -- 2. Additional Coin Top-Ups across August 1 to 3, 2026.
 CREATE TEMP TABLE v62_topups ON COMMIT DROP AS
@@ -460,7 +433,7 @@ FROM (
 ) activity
 WHERE account.user_id = activity.user_id;
 
--- Postcondition assertions to guarantee 100% data integrity and ledgers reconciliation for V62 records.
+-- Postcondition assertions to guarantee 100% data integrity and ledgers reconciliation.
 DO $$
 BEGIN
     IF (SELECT count(*) FROM payment_transactions WHERE txn_ref LIKE 'SP62C%') <> 9
