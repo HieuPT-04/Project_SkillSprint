@@ -19,6 +19,8 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -34,6 +36,8 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class S3PresignedUrlService {
+
+    private static final Logger log = LoggerFactory.getLogger(S3PresignedUrlService.class);
 
     private static final Set<String> ALLOWED_AVATAR_CONTENT_TYPES = Set.of(
             "image/jpeg",
@@ -272,18 +276,24 @@ public class S3PresignedUrlService {
             return DefaultIdenticon.dataUrl(objectKey);
         }
 
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(properties.bucket())
-                .key(objectKey)
-                .build();
+        try {
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(objectKey)
+                    .build();
 
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(properties.uploadUrlExpirationMinutes()))
-                .getObjectRequest(getObjectRequest)
-                .build();
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(properties.uploadUrlExpirationMinutes()))
+                    .getObjectRequest(getObjectRequest)
+                    .build();
 
-        return s3Presigner.presignGetObject(presignRequest).url().toString();
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+        } catch (Exception exception) {
+            log.warn("Failed to generate presigned view URL for objectKey {}: {}", objectKey, exception.getMessage());
+            return null;
+        }
     }
+
 
     public String confirmAvatarUpload(String userId, ConfirmAvatarUploadRequest request) {
         String objectKey = request.getObjectKey().trim();
