@@ -13,6 +13,8 @@ import com.skillsprint.enums.marketplace.MarketplacePackVersionStatus;
 import com.skillsprint.enums.marketplace.MarketplaceReportCategory;
 import com.skillsprint.enums.marketplace.MarketplaceReportStatus;
 import com.skillsprint.enums.marketplace.MarketplaceReportTargetType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceUnitUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,7 @@ class MarketplaceContentReportRepositoryTest {
     @Autowired MarketplacePackRepository packRepository;
     @Autowired MarketplacePackVersionRepository versionRepository;
     @Autowired MarketplaceContentReportRepository reportRepository;
+    @Autowired EntityManager entityManager;
 
     User creator;
     User buyer;
@@ -102,6 +105,25 @@ class MarketplaceContentReportRepositoryTest {
         assertThat(reportRepository.searchAdmin(
                 null, null, null, PageRequest.of(0, 10)).getTotalElements())
                 .isEqualTo(2);
+    }
+
+    @Test
+    void adminSearchFetchesRelationshipsRequiredByTheResponseMapper() {
+        MarketplaceContentReport saved = report(buyer, MarketplaceReportStatus.RESOLVED);
+        saved.setReviewedBy(creator);
+        reportRepository.saveAndFlush(saved);
+        entityManager.clear();
+
+        MarketplaceContentReport loaded = reportRepository.searchAdmin(
+                MarketplaceReportStatus.RESOLVED, null, null, PageRequest.of(0, 10))
+                .getContent()
+                .get(0);
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(loaded, "reporter")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(loaded, "packVersion")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(loaded.getPackVersion(), "pack")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(loaded, "reviewedBy")).isTrue();
     }
 
     private MarketplaceContentReport report(User reporter, MarketplaceReportStatus status) {
