@@ -19,11 +19,11 @@ $$;
 
 -- 1. Rename any dummy titles in marketplace_pack_versions & marketplace_items to professional Vietnamese titles
 UPDATE marketplace_pack_versions
-SET title = 'Xây Dựng Đồ Án Fullstack E-Commerce Vẫn Hành Thực Tế 2026'
+SET title = 'Xây Dựng Đồ Án Fullstack E-Commerce Vận Hành Thực Tế 2026'
 WHERE title ILIKE '%ádasd%';
 
 UPDATE marketplace_items
-SET title = 'Xây Dựng Đồ Án Fullstack E-Commerce Vẫn Hành Thực Tế 2026'
+SET title = 'Xây Dựng Đồ Án Fullstack E-Commerce Vận Hành Thực Tế 2026'
 WHERE title ILIKE '%ádasd%';
 
 UPDATE marketplace_pack_versions
@@ -36,7 +36,6 @@ WHERE title = 'Đồ án' OR title = 'Đồ án 3D';
 
 
 -- 2. Seed Learner Version Progress (marketplace_version_progress) for ALL published versions
--- Ensures completionRate & learnerCount are non-zero across every single published version.
 DO $$
 DECLARE
     v_rec RECORD;
@@ -55,12 +54,10 @@ BEGIN
         WHERE status = 'PUBLISHED' OR saleable = TRUE
     LOOP
         v_seed_offset := v_seed_offset + 1;
-        -- Deterministic total learners (between 25 and 60 learners per pack)
         v_total_learners := 25 + (v_seed_offset * 7) % 36;
         v_completed_count := (v_total_learners * (70 + (v_seed_offset * 3) % 25)) / 100;
 
         FOR v_learner_idx IN 1..v_total_learners LOOP
-            -- Cycle through seeded learner users (user:1 to user:80)
             v_buyer_id := v69_v36_uuid('user:' || (1 + ((v_seed_offset * 5 + v_learner_idx) % 75)));
             v_progress_id := v69_uuid('progress:' || v_rec.version_id || ':' || v_learner_idx);
             v_is_completed := v_learner_idx <= v_completed_count;
@@ -92,7 +89,7 @@ BEGIN
 END $$;
 
 
--- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions
+-- 3. Seed Marketplace Reviews (marketplace_reviews) for ALL published versions with valid foreign key items
 DO $$
 DECLARE
     v_rec RECORD;
@@ -113,9 +110,10 @@ DECLARE
     ];
 BEGIN
     FOR v_rec IN 
-        SELECT version_id, legacy_item_id, created_at
-        FROM marketplace_pack_versions
-        WHERE status = 'PUBLISHED' OR saleable = TRUE
+        SELECT mpv.version_id, mi.item_id, mpv.created_at
+        FROM marketplace_pack_versions mpv
+        JOIN marketplace_items mi ON mi.item_id = COALESCE(mpv.legacy_item_id, (SELECT mp.legacy_item_id FROM marketplace_packs mp WHERE mp.pack_id = mpv.pack_id))
+        WHERE mpv.status = 'PUBLISHED' OR mpv.saleable = TRUE
     LOOP
         v_seed_offset := v_seed_offset + 1;
         v_review_count := 8 + (v_seed_offset * 3) % 15;
@@ -129,7 +127,7 @@ BEGIN
             INSERT INTO marketplace_reviews (
                 review_id, item_id, pack_version_id, user_id, rating, comment, created_at, updated_at
             ) VALUES (
-                v_review_id, COALESCE(v_rec.legacy_item_id, v69_uuid('item:' || v_rec.version_id)),
+                v_review_id, v_rec.item_id,
                 v_rec.version_id, v_buyer_id, v_rating, v_comment,
                 v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days',
                 v_rec.created_at + (v_review_idx * INTERVAL '4 hours') + INTERVAL '2 days'
@@ -161,7 +159,6 @@ BEGIN
         v_seed_offset := v_seed_offset + 1;
         v_def_id := v69_uuid('ranked-def:' || v_rec.version_id);
 
-        -- Ensure ranked definition exists
         INSERT INTO marketplace_ranked_quiz_definitions (
             definition_id, pack_version_id, title, duration_minutes, question_count,
             pass_score, questions_json, created_at, updated_at
@@ -237,7 +234,6 @@ END $$;
 
 
 -- 6. Seed additional Pending Moderation Quiz Packs (Duyệt Quiz Pack - PENDING_REVIEW)
--- Creating 6 new high quality packs ready for admin moderation.
 CREATE TEMP TABLE v69_new_pending ON COMMIT DROP AS
 SELECT row_no,
        v69_v36_uuid('user:' || creator_no)::text AS creator_id,
