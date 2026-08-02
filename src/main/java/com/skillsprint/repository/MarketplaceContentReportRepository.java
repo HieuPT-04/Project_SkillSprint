@@ -39,13 +39,26 @@ public interface MarketplaceContentReportRepository extends JpaRepository<Market
 
     List<MarketplaceContentReport> findByReporterUserIdOrderByCreatedAtDesc(String reporterId);
 
-    @Query("""
-            select report
-            from MarketplaceContentReport report
-            where (:status is null or report.status = :status)
-              and (:targetType is null or report.targetType = :targetType)
-              and (:category is null or report.category = :category)
-            """)
+    @Query(
+            value = """
+                    select report
+                    from MarketplaceContentReport report
+                    left join fetch report.reporter reporter
+                    left join fetch report.packVersion packVersion
+                    left join fetch packVersion.pack pack
+                    left join fetch report.reviewedBy reviewedBy
+                    where (:status is null or report.status = :status)
+                      and (:targetType is null or report.targetType = :targetType)
+                      and (:category is null or report.category = :category)
+                    """,
+            countQuery = """
+                    select count(report)
+                    from MarketplaceContentReport report
+                    where (:status is null or report.status = :status)
+                      and (:targetType is null or report.targetType = :targetType)
+                      and (:category is null or report.category = :category)
+                    """
+    )
     Page<MarketplaceContentReport> searchAdmin(
             @Param("status") MarketplaceReportStatus status,
             @Param("targetType") MarketplaceReportTargetType targetType,
