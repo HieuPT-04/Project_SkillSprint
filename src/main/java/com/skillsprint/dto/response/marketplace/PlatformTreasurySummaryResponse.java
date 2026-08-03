@@ -11,6 +11,8 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PlatformTreasurySummaryResponse {
     BigDecimal vndInflow;
+    BigDecimal subscriptionPaymentVnd;
+    BigDecimal coinTopUpVnd;
     BigDecimal vndOutflow;
     BigDecimal vndNetPosition;
     BigDecimal commissionCoinEarned;

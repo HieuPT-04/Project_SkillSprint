@@ -3,6 +3,7 @@ package com.skillsprint.service.marketplace;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryEntryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryMonthlySummaryResponse;
+import com.skillsprint.dto.response.marketplace.PlatformTreasurySubscriptionPurchaseSummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySummaryResponse;
 import com.skillsprint.entity.PlatformTreasuryEntry;
 import com.skillsprint.entity.User;
@@ -11,6 +12,7 @@ import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
 import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
 import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.repository.PlatformTreasuryEntryRepository;
+import com.skillsprint.repository.PaymentTransactionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -40,15 +42,20 @@ public class PlatformTreasuryService {
     private static final int MAX_MONTHLY_PERIODS = 12;
 
     PlatformTreasuryEntryRepository treasuryEntryRepository;
+    PaymentTransactionRepository paymentTransactionRepository;
 
     @Transactional(readOnly = true)
     public PlatformTreasurySummaryResponse getSummary() {
         BigDecimal vndInflow = sum(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.CREDIT);
+        BigDecimal subscriptionPaymentVnd = sumByEntryType(
+                PlatformTreasuryEntryType.SUBSCRIPTION_PAYMENT_RECEIVED);
+        BigDecimal coinTopUpVnd = sumByEntryType(PlatformTreasuryEntryType.COIN_TOP_UP_RECEIVED);
         BigDecimal vndOutflow = sum(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.DEBIT);
         BigDecimal commissionEarned = sum(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.CREDIT);
         BigDecimal commissionReversed = sum(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.DEBIT);
         return PlatformTreasurySummaryResponse.builder()
-                .vndInflow(vndInflow).vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
+                .vndInflow(vndInflow).subscriptionPaymentVnd(subscriptionPaymentVnd).coinTopUpVnd(coinTopUpVnd)
+                .vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
                 .commissionCoinEarned(commissionEarned).commissionCoinReversed(commissionReversed)
                 .commissionCoinNetPosition(commissionEarned.subtract(commissionReversed)).build();
     }
@@ -64,18 +71,36 @@ public class PlatformTreasuryService {
             Instant from = month.atDay(1).atStartOfDay(VN_ZONE).toInstant();
             Instant to = month.plusMonths(1).atDay(1).atStartOfDay(VN_ZONE).toInstant();
             BigDecimal vndInflow = sumBetween(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.CREDIT, from, to);
+            BigDecimal subscriptionPaymentVnd = sumByEntryTypeBetween(
+                    PlatformTreasuryEntryType.SUBSCRIPTION_PAYMENT_RECEIVED, from, to);
+            long subscriptionPurchaserCount = paymentTransactionRepository
+                    .countDistinctPaidSubscriptionBuyersBetween(from, to, null);
+            BigDecimal coinTopUpVnd = sumByEntryTypeBetween(PlatformTreasuryEntryType.COIN_TOP_UP_RECEIVED, from, to);
             BigDecimal vndOutflow = sumBetween(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.DEBIT, from, to);
             BigDecimal commissionEarned = sumBetween(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.CREDIT, from, to);
             BigDecimal commissionReversed = sumBetween(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.DEBIT, from, to);
 
             summaries.add(PlatformTreasuryMonthlySummaryResponse.builder()
                     .month(month.toString())
-                    .vndInflow(vndInflow).vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
+                    .vndInflow(vndInflow).subscriptionPaymentVnd(subscriptionPaymentVnd)
+                    .subscriptionPurchaserCount(subscriptionPurchaserCount).coinTopUpVnd(coinTopUpVnd)
+                    .vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
                     .commissionCoinEarned(commissionEarned).commissionCoinReversed(commissionReversed)
                     .commissionCoinNetPosition(commissionEarned.subtract(commissionReversed))
                     .build());
         }
         return summaries;
+    }
+
+    @Transactional(readOnly = true)
+    public PlatformTreasurySubscriptionPurchaseSummaryResponse getSubscriptionPurchaseSummary(
+            Instant from,
+            Instant to,
+            UUID planId
+    ) {
+        return PlatformTreasurySubscriptionPurchaseSummaryResponse.builder()
+                .purchaserCount(paymentTransactionRepository.countDistinctPaidSubscriptionBuyersBetween(from, to, planId))
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -143,6 +168,14 @@ public class PlatformTreasuryService {
         return treasuryEntryRepository.sumAmountByAssetAndDirection(asset, direction);
     }
 
+    private BigDecimal sumByEntryType(PlatformTreasuryEntryType entryType) {
+        return treasuryEntryRepository.sumAmountByAssetAndDirectionAndEntryType(
+                PlatformTreasuryAsset.VND,
+                PlatformTreasuryDirection.CREDIT,
+                entryType
+        );
+    }
+
     private BigDecimal sumBetween(
             PlatformTreasuryAsset asset,
             PlatformTreasuryDirection direction,
@@ -150,6 +183,16 @@ public class PlatformTreasuryService {
             Instant to
     ) {
         return treasuryEntryRepository.sumAmountByAssetAndDirectionAndOccurredAtBetween(asset, direction, from, to);
+    }
+
+    private BigDecimal sumByEntryTypeBetween(PlatformTreasuryEntryType entryType, Instant from, Instant to) {
+        return treasuryEntryRepository.sumAmountByAssetAndDirectionAndEntryTypeAndOccurredAtBetween(
+                PlatformTreasuryAsset.VND,
+                PlatformTreasuryDirection.CREDIT,
+                entryType,
+                from,
+                to
+        );
     }
 
     private PlatformTreasuryEntryResponse toResponse(PlatformTreasuryEntry entry) {

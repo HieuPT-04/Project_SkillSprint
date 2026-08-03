@@ -135,4 +135,19 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             @Param("from") Instant from,
             @Param("to") Instant to
     );
+
+    @Query("""
+            select count(distinct payment.user.userId)
+            from PaymentTransaction payment
+            where payment.purpose = com.skillsprint.enums.payment.PaymentPurpose.SUBSCRIPTION
+              and payment.status = com.skillsprint.enums.payment.PaymentStatus.PAID
+              and payment.paidAt >= :from
+              and payment.paidAt < :to
+              and (:planId is null or payment.plan.planId = :planId)
+            """)
+    long countDistinctPaidSubscriptionBuyersBetween(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("planId") UUID planId
+    );
 }

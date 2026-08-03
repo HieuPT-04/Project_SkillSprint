@@ -32,12 +32,42 @@ public interface PlatformTreasuryEntryRepository extends JpaRepository<PlatformT
             from PlatformTreasuryEntry entry
             where entry.asset = :asset
               and entry.direction = :direction
+              and entry.entryType = :entryType
+            """)
+    BigDecimal sumAmountByAssetAndDirectionAndEntryType(
+            @Param("asset") PlatformTreasuryAsset asset,
+            @Param("direction") PlatformTreasuryDirection direction,
+            @Param("entryType") PlatformTreasuryEntryType entryType
+    );
+
+    @Query("""
+            select coalesce(sum(entry.amount), 0)
+            from PlatformTreasuryEntry entry
+            where entry.asset = :asset
+              and entry.direction = :direction
               and entry.occurredAt >= :from
               and entry.occurredAt < :to
             """)
     BigDecimal sumAmountByAssetAndDirectionAndOccurredAtBetween(
             @Param("asset") PlatformTreasuryAsset asset,
             @Param("direction") PlatformTreasuryDirection direction,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
+
+    @Query("""
+            select coalesce(sum(entry.amount), 0)
+            from PlatformTreasuryEntry entry
+            where entry.asset = :asset
+              and entry.direction = :direction
+              and entry.entryType = :entryType
+              and entry.occurredAt >= :from
+              and entry.occurredAt < :to
+            """)
+    BigDecimal sumAmountByAssetAndDirectionAndEntryTypeAndOccurredAtBetween(
+            @Param("asset") PlatformTreasuryAsset asset,
+            @Param("direction") PlatformTreasuryDirection direction,
+            @Param("entryType") PlatformTreasuryEntryType entryType,
             @Param("from") Instant from,
             @Param("to") Instant to
     );
