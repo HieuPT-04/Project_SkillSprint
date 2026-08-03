@@ -40,14 +40,14 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Initialize V70 migration test schema
+      - name: Initialize pending migration test schema
         env:
           PGPASSWORD: skillsprint
         run: >-
           psql --host=localhost --port=5432 --username=skillsprint --dbname=skillsprint_ci
           --file=database/ci/flyway_v70_baseline.sql --set ON_ERROR_STOP=1
 
-      - name: Apply Flyway V70 to PostgreSQL
+      - name: Apply pending Flyway migrations to PostgreSQL
         run: >-
           mvn -B flyway:migrate
           -Dflyway.url=jdbc:postgresql://localhost:5432/skillsprint_ci
