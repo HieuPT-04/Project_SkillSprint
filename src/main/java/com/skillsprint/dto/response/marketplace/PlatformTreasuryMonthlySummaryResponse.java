@@ -12,6 +12,9 @@ import lombok.experimental.FieldDefaults;
 public class PlatformTreasuryMonthlySummaryResponse {
     String month;
     BigDecimal vndInflow;
+    BigDecimal subscriptionPaymentVnd;
+    long subscriptionPurchaserCount;
+    BigDecimal coinTopUpVnd;
     BigDecimal vndOutflow;
     BigDecimal vndNetPosition;
     BigDecimal commissionCoinEarned;

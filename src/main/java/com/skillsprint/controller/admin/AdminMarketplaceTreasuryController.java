@@ -4,12 +4,14 @@ import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryEntryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryMonthlySummaryResponse;
+import com.skillsprint.dto.response.marketplace.PlatformTreasurySubscriptionPurchaseSummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySummaryResponse;
 import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
 import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
 import com.skillsprint.service.marketplace.PlatformTreasuryService;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -38,6 +40,16 @@ public class AdminMarketplaceTreasuryController {
             @RequestParam(defaultValue = "6") int months
     ) {
         return ResponseEntity.ok(ApiResponse.success(platformTreasuryService.getMonthlySummaries(months)));
+    }
+
+    @GetMapping("/subscription-purchases/summary")
+    public ResponseEntity<ApiResponse<PlatformTreasurySubscriptionPurchaseSummaryResponse>> subscriptionPurchaseSummary(
+            @RequestParam Instant from,
+            @RequestParam Instant to,
+            @RequestParam(required = false) UUID planId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                platformTreasuryService.getSubscriptionPurchaseSummary(from, to, planId)));
     }
 
     @GetMapping("/entries")
