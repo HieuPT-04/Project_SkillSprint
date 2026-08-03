@@ -84,7 +84,24 @@ DECLARE
     current_topup_rev NUMERIC;
     diff_sub NUMERIC;
     diff_topup NUMERIC;
+    v_subscription_plan_id UUID;
+    v_reconciliation_user_id VARCHAR(100);
 BEGIN
+    SELECT plan_id INTO v_subscription_plan_id
+    FROM service_plans
+    WHERE plan_type = 'PREMIUM' AND is_active = TRUE
+    LIMIT 1;
+
+    SELECT user_id INTO v_reconciliation_user_id
+    FROM users
+    WHERE email LIKE '%@gmail.com'
+    ORDER BY created_at ASC
+    LIMIT 1;
+
+    IF v_subscription_plan_id IS NULL OR v_reconciliation_user_id IS NULL THEN
+        RAISE EXCEPTION 'V70 requires an active PREMIUM plan and a reconciliation user';
+    END IF;
+
     SELECT COALESCE(SUM(amount), 0) INTO current_sub_rev
     FROM payment_transactions
     WHERE purpose = 'SUBSCRIPTION' AND status = 'PAID';
@@ -102,8 +119,8 @@ BEGIN
             subscription_months, transfer_content, expire_at, paid_at, provider_transaction_id,
             provider_reference_code, raw_callback_data, created_at, updated_at
         ) VALUES (
-            v67_uuid('sub-rev-adjust'), (SELECT user_id FROM users WHERE email LIKE '%@gmail.com' LIMIT 1),
-            NULL, 'SUBSCRIPTION', 'SEPAY', 'PAID', 'SP67SUB0001', ABS(diff_sub), 'VND', 1,
+            v67_uuid('sub-rev-adjust'), v_reconciliation_user_id,
+            v_subscription_plan_id, 'SUBSCRIPTION', 'SEPAY', 'PAID', 'SP67SUB0001', ABS(diff_sub), 'VND', 1,
             'SP67SUB0001', TIMESTAMPTZ '2026-08-02 19:00:00+07', TIMESTAMPTZ '2026-08-02 19:00:00+07',
             'SP67-SEPAY-SUB-1', 'SP67REF-SUB-1', '{"seed": "V67", "adjust": "subscription"}'::jsonb,
             TIMESTAMPTZ '2026-08-02 19:00:00+07', TIMESTAMPTZ '2026-08-02 19:00:00+07'
@@ -152,26 +169,55 @@ BEGIN
 END $$;
 
 -- 3. Add realistic pending and failed payment transactions for realistic status counts
-INSERT INTO payment_transactions (
-    payment_id, user_id, plan_id, purpose, provider, status, txn_ref, amount, currency,
-    subscription_months, transfer_content, expire_at, paid_at, provider_transaction_id,
-    provider_reference_code, raw_callback_data, created_at, updated_at
-) VALUES
-(
-    v67_uuid('payment-pending-1'), (SELECT user_id FROM users ORDER BY created_at ASC LIMIT 1),
-    NULL, 'COIN_TOP_UP', 'SEPAY', 'PENDING', 'SP67P0001', 100000, 'VND', 0,
-    'SP67P0001', TIMESTAMPTZ '2026-08-03 23:59:59+07', NULL, NULL, NULL,
-    '{"seed": "V67", "status": "PENDING"}'::jsonb,
-    TIMESTAMPTZ '2026-08-03 12:00:00+07', TIMESTAMPTZ '2026-08-03 12:00:00+07'
-),
-(
-    v67_uuid('payment-failed-1'), (SELECT user_id FROM users ORDER BY created_at DESC LIMIT 1),
-    NULL, 'SUBSCRIPTION', 'SEPAY', 'FAILED', 'SP67F0001', 199000, 'VND', 1,
-    'SP67F0001', TIMESTAMPTZ '2026-08-02 15:00:00+07', NULL, NULL, NULL,
-    '{"seed": "V67", "status": "FAILED", "reason": "User cancelled on payment gateway"}'::jsonb,
-    TIMESTAMPTZ '2026-08-02 14:45:00+07', TIMESTAMPTZ '2026-08-02 15:00:00+07'
-)
-ON CONFLICT DO NOTHING;
+DO $$
+DECLARE
+    v_subscription_plan_id UUID;
+    v_pending_user_id VARCHAR(100);
+    v_failed_user_id VARCHAR(100);
+BEGIN
+    SELECT plan_id INTO v_subscription_plan_id
+    FROM service_plans
+    WHERE plan_type = 'PREMIUM' AND is_active = TRUE
+    LIMIT 1;
+
+    SELECT user_id INTO v_pending_user_id
+    FROM users
+    ORDER BY created_at ASC
+    LIMIT 1;
+
+    SELECT user_id INTO v_failed_user_id
+    FROM users
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF v_subscription_plan_id IS NULL OR v_pending_user_id IS NULL OR v_failed_user_id IS NULL THEN
+        RAISE EXCEPTION 'V70 requires an active PREMIUM plan and users for payment status records';
+    END IF;
+
+    INSERT INTO payment_transactions (
+        payment_id, user_id, plan_id, purpose, coin_amount, coin_package_key, provider, status,
+        txn_ref, amount, currency, subscription_months, transfer_content, expire_at, paid_at,
+        provider_transaction_id, provider_reference_code, raw_callback_data, created_at, updated_at
+    ) VALUES (
+        v67_uuid('payment-pending-1'), v_pending_user_id,
+        NULL, 'COIN_TOP_UP', 100000, 'COIN_100', 'SEPAY', 'PENDING', 'SP67P0001', 100000, 'VND', 0,
+        'SP67P0001', TIMESTAMPTZ '2026-08-03 23:59:59+07', NULL, NULL, NULL,
+        '{"seed": "V67", "status": "PENDING"}'::jsonb,
+        TIMESTAMPTZ '2026-08-03 12:00:00+07', TIMESTAMPTZ '2026-08-03 12:00:00+07'
+    ) ON CONFLICT DO NOTHING;
+
+    INSERT INTO payment_transactions (
+        payment_id, user_id, plan_id, purpose, provider, status, txn_ref, amount, currency,
+        subscription_months, transfer_content, expire_at, paid_at, provider_transaction_id,
+        provider_reference_code, raw_callback_data, created_at, updated_at
+    ) VALUES (
+        v67_uuid('payment-failed-1'), v_failed_user_id,
+        v_subscription_plan_id, 'SUBSCRIPTION', 'SEPAY', 'FAILED', 'SP67F0001', 199000, 'VND', 1,
+        'SP67F0001', TIMESTAMPTZ '2026-08-02 15:00:00+07', NULL, NULL, NULL,
+        '{"seed": "V67", "status": "FAILED", "reason": "User cancelled on payment gateway"}'::jsonb,
+        TIMESTAMPTZ '2026-08-02 14:45:00+07', TIMESTAMPTZ '2026-08-02 15:00:00+07'
+    ) ON CONFLICT DO NOTHING;
+END $$;
 
 -- Cleanup temporary function
 DROP FUNCTION IF EXISTS v67_uuid(text);
