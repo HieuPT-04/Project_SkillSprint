@@ -78,7 +78,7 @@ BEGIN
         transfer_content = 'SP2026S' || right(s.txn_ref, 4),
         provider_transaction_id = 'SPY26-' || right(p.txn_ref, 4),
         provider_reference_code = 'SPREF26-' || right(p.txn_ref, 4),
-        raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true)::text
+        raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true)
     FROM v33_subscription_schedule s
     WHERE p.payment_id = s.payment_id;
 
@@ -129,7 +129,7 @@ BEGIN
         transfer_content = 'SP2026C' || right(s.txn_ref, 4),
         provider_transaction_id = 'SPC26-' || right(p.txn_ref, 4),
         provider_reference_code = 'SPCREF26-' || right(p.txn_ref, 4),
-        raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true)::text
+        raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true)
     FROM v33_coin_schedule s
     WHERE p.payment_id = s.payment_id;
 

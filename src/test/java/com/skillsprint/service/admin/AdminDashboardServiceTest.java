@@ -145,6 +145,21 @@ class AdminDashboardServiceTest {
     }
 
     @Test
+    void chartRangeSupportsTheCompleteMayToAugustDemoPeriod() {
+        AdminDashboardResponse response = service.getDashboard(
+                LocalDate.parse("2026-05-01"),
+                LocalDate.parse("2026-08-03")
+        );
+
+        assertThat(response.getRange().getFrom()).isEqualTo(LocalDate.parse("2026-05-01"));
+        assertThat(response.getRange().getTo()).isEqualTo(LocalDate.parse("2026-08-03"));
+        assertThat(response.getCharts().getRevenueByDay()).hasSize(95);
+        assertThat(response.getCharts().getCoinTopUpByDay()).hasSize(95);
+        assertThat(response.getCharts().getMarketplaceCommissionByDay()).hasSize(95);
+        assertThat(response.getCharts().getNewUsersByDay()).hasSize(95);
+    }
+
+    @Test
     void marketplaceCommissionChartUsesTheTreasuryLedgerForCreditsAndReversals() {
         stubTreasuryCommission(new BigDecimal("20"), new BigDecimal("5"));
 

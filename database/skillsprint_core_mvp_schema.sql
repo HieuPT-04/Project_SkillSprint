@@ -87,6 +87,7 @@ CREATE TABLE study_workspaces (
     user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -183,14 +184,164 @@ CREATE INDEX idx_topics_chapter_id ON topics(chapter_id);
 CREATE TABLE roadmaps (
     roadmap_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id UUID NOT NULL REFERENCES study_workspaces(workspace_id) ON DELETE CASCADE,
+    structure_version_id UUID,
+    user_id VARCHAR(100) REFERENCES users(user_id) ON DELETE CASCADE,
+    title VARCHAR(500),
+    description TEXT,
+    current_step_id UUID,
+    total_steps INTEGER NOT NULL DEFAULT 0,
+    completed_steps INTEGER NOT NULL DEFAULT 0,
+    progress_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
     version_no INTEGER NOT NULL DEFAULT 1,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
         CHECK (status IN ('ACTIVE', 'COMPLETED', 'ARCHIVED', 'ADJUSTED')),
-    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_roadmaps_workspace_id ON roadmaps(workspace_id);
 CREATE INDEX idx_roadmaps_status ON roadmaps(status);
+
+CREATE TABLE IF NOT EXISTS roadmap_steps (
+    step_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    roadmap_id UUID NOT NULL REFERENCES roadmaps(roadmap_id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES study_workspaces(workspace_id) ON DELETE CASCADE,
+    chapter_id UUID,
+    topic_id UUID,
+    title VARCHAR(500) NOT NULL,
+    subtitle VARCHAR(500),
+    summary TEXT,
+    what_to_learn JSONB,
+    key_concepts JSONB,
+    learning_outcomes JSONB,
+    recommended_focus JSONB,
+    difficulty VARCHAR(20),
+    estimated_study_time VARCHAR(100),
+    estimated_minutes INTEGER,
+    sequence_no INTEGER NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'UPCOMING',
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quizzes (
+    quiz_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES study_workspaces(workspace_id) ON DELETE CASCADE,
+    roadmap_step_id UUID NOT NULL REFERENCES roadmap_steps(step_id) ON DELETE CASCADE,
+    title VARCHAR(500) NOT NULL,
+    passing_score INTEGER NOT NULL DEFAULT 70,
+    question_count INTEGER NOT NULL DEFAULT 5,
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quiz_questions (
+    question_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quiz_id UUID NOT NULL REFERENCES quizzes(quiz_id) ON DELETE CASCADE,
+    type VARCHAR(30) NOT NULL,
+    question_text TEXT NOT NULL,
+    explanation TEXT,
+    sequence_no INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quiz_options (
+    option_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question_id UUID NOT NULL REFERENCES quiz_questions(question_id) ON DELETE CASCADE,
+    label VARCHAR(5) NOT NULL,
+    option_text TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    sequence_no INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    attempt_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quiz_id UUID NOT NULL REFERENCES quizzes(quiz_id) ON DELETE CASCADE,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    score INTEGER NOT NULL,
+    passed BOOLEAN NOT NULL DEFAULT FALSE,
+    correct_count INTEGER NOT NULL,
+    question_count INTEGER NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
+    answer_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attempt_id UUID NOT NULL REFERENCES quiz_attempts(attempt_id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES quiz_questions(question_id) ON DELETE CASCADE,
+    selected_option_id UUID NOT NULL REFERENCES quiz_options(option_id) ON DELETE CASCADE,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS point_events (
+    point_event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    workspace_id UUID REFERENCES study_workspaces(workspace_id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    source_type VARCHAR(50) NOT NULL,
+    source_id VARCHAR(100) NOT NULL,
+    points INTEGER NOT NULL,
+    description VARCHAR(500),
+    event_date DATE NOT NULL,
+    week_start_date DATE NOT NULL,
+    month_start_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_point_events_source UNIQUE (user_id, event_type, source_type, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_point_summaries (
+    user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    total_points INTEGER NOT NULL DEFAULT 0,
+    current_week_points INTEGER NOT NULL DEFAULT 0,
+    current_week_start_date DATE,
+    current_month_points INTEGER NOT NULL DEFAULT 0,
+    current_month_start_date DATE,
+    streak_days INTEGER NOT NULL DEFAULT 0,
+    last_point_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_quiz_scores (
+    user_quiz_score_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    quiz_id UUID NOT NULL REFERENCES quizzes(quiz_id) ON DELETE CASCADE,
+    best_attempt_id UUID REFERENCES quiz_attempts(attempt_id) ON DELETE SET NULL,
+    best_score_percent INTEGER NOT NULL DEFAULT 0,
+    earned_points INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_user_quiz_scores_user_quiz UNIQUE (user_id, quiz_id)
+);
+
+CREATE TABLE IF NOT EXISTS feedbacks (
+    feedback_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    related_url VARCHAR(1000),
+    image_object_key VARCHAR(512),
+    status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
+    admin_note TEXT,
+    admin_reply TEXT,
+    replied_at TIMESTAMPTZ,
+    replied_by_user_id VARCHAR(100) REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE roadmap_items (
     item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -418,12 +569,21 @@ CREATE TABLE service_plans (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+INSERT INTO service_plans (plan_id, plan_name, plan_type, monthly_price, ai_parsing_limit, is_active)
+VALUES
+    ('11111111-1111-1111-1111-111111111111', 'Miễn Phí', 'FREE', 0.00, 5, TRUE),
+    ('22222222-2222-2222-2222-222222222222', 'Skill Builder', 'SKILL_BUILDER', 89000.00, 50, TRUE),
+    ('33333333-3333-3333-3333-333333333333', 'Premium', 'PREMIUM', 199000.00, 999, TRUE)
+ON CONFLICT (plan_type) DO NOTHING;
+
 CREATE TABLE subscriptions (
     subscription_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     plan_id UUID NOT NULL REFERENCES service_plans(plan_id),
     start_date DATE NOT NULL,
     end_date DATE,
+    start_at TIMESTAMPTZ,
+    end_at TIMESTAMPTZ,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
         CHECK (status IN ('TRIAL', 'ACTIVE', 'CANCELED', 'EXPIRED', 'PAST_DUE')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
