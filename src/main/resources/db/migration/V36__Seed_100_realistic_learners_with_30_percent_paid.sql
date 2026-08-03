@@ -109,7 +109,7 @@ BEGIN
                 v_reference, v_paid_at - INTERVAL '13 minutes', v_paid_at,
                 'SP36-TXN-' || lpad(v_paid_ordinal::text, 4, '0'),
                 'SP36-REF-' || lpad(v_paid_ordinal::text, 4, '0'),
-                jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true)::text,
+                jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true),
                 v_paid_at - INTERVAL '13 minutes', v_paid_at
             );
 
@@ -159,7 +159,7 @@ BEGIN
                     jsonb_build_object(
                         'channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true,
                         'subscriptionCycle', v_history_cycle
-                    )::text,
+                    ),
                     v_history_paid_at - INTERVAL '11 minutes', v_history_paid_at
                 );
 

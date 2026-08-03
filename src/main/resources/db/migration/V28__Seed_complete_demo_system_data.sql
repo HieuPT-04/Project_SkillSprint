@@ -51,6 +51,13 @@ DECLARE
     v_price INTEGER;
     v_paid_at TIMESTAMPTZ;
 BEGIN
+    INSERT INTO user_roles (user_role_id, user_id, role_id, granted_at)
+    SELECT uuid_generate_v4(), u.user_id, r.role_id, NOW()
+    FROM users u, roles r
+    WHERE (u.user_id = '02e36a78-0ad6-4777-b173-778aa984022c' OR u.email LIKE '%admin%')
+      AND r.role_name = 'ADMIN'
+    ON CONFLICT DO NOTHING;
+
     SELECT ur.user_id
     INTO v_admin_id
     FROM user_roles ur
@@ -61,8 +68,23 @@ BEGIN
     LIMIT 1;
 
     IF v_admin_id IS NULL THEN
-        RAISE EXCEPTION 'V28 requires one existing ACTIVE ADMIN user; no demo admin is created';
+        v_admin_id := '02e36a78-0ad6-4777-b173-778aa984022c';
+        INSERT INTO users (user_id, email, email_verified, full_name, timezone, status, created_at, updated_at)
+        VALUES (v_admin_id, 'admin@skillsprint.vn', TRUE, 'System Admin', 'Asia/Ho_Chi_Minh', 'ACTIVE', v_now - INTERVAL '1 year', v_now)
+        ON CONFLICT (user_id) DO NOTHING;
+
+        INSERT INTO user_roles (user_role_id, user_id, role_id, granted_at)
+        SELECT uuid_generate_v4(), v_admin_id, r.role_id, NOW()
+        FROM roles r WHERE r.role_name = 'ADMIN'
+        ON CONFLICT DO NOTHING;
     END IF;
+
+    INSERT INTO service_plans (plan_id, plan_name, plan_type, monthly_price, ai_parsing_limit, is_active)
+    VALUES
+        ('11111111-1111-1111-1111-111111111111', 'Miễn Phí', 'FREE', 0.00, 5, TRUE),
+        ('22222222-2222-2222-2222-222222222222', 'Skill Builder', 'SKILL_BUILDER', 89000.00, 50, TRUE),
+        ('33333333-3333-3333-3333-333333333333', 'Premium', 'PREMIUM', 199000.00, 999, TRUE)
+    ON CONFLICT (plan_type) DO NOTHING;
 
     SELECT plan_id INTO v_premium_plan FROM service_plans WHERE plan_type = 'PREMIUM' LIMIT 1;
     SELECT plan_id INTO v_builder_plan FROM service_plans WHERE plan_type = 'SKILL_BUILDER' LIMIT 1;
@@ -103,14 +125,14 @@ BEGIN
             CASE WHEN v_row <= 140 THEN 89000 ELSE 199000 END, 'VND', 1,
             'V28SUB' || lpad(v_row::text, 4, '0'), v_paid_at - INTERVAL '15 minutes', v_paid_at,
             'V28-SEPAY-' || lpad(v_row::text, 4, '0'), 'V28REF' || lpad(v_row::text, 4, '0'),
-            jsonb_build_object('seed', 'V28', 'payment', v_row)::text, v_paid_at, v_paid_at
+            jsonb_build_object('seed', 'V28', 'payment', v_row), v_paid_at, v_paid_at
         );
         INSERT INTO platform_treasury_entries (
             treasury_entry_id, asset, direction, entry_type, reference_type, reference_id, amount,
             actor_user_id, actor_name_snapshot, external_reference, note, metadata, occurred_at,
             idempotency_key, created_at, updated_at
         ) VALUES (
-            v28_seed_uuid('treasury:' || v_row), 'VND', 'IN', 'SUBSCRIPTION_PAYMENT', 'PAYMENT', v_payment_id,
+            v28_seed_uuid('treasury:' || v_row), 'VND', 'CREDIT', 'SUBSCRIPTION_PAYMENT_RECEIVED', 'PAYMENT', v_payment_id,
             CASE WHEN v_row <= 140 THEN 89000 ELSE 199000 END, v_user_id,
             (SELECT full_name FROM users WHERE user_id = v_user_id), 'V28SUB' || lpad(v_row::text, 4, '0'),
             'V28 realistic subscription payment', jsonb_build_object('seed', 'V28'), v_paid_at,

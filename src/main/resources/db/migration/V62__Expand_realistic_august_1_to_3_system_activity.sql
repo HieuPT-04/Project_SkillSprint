@@ -1,4 +1,4 @@
--- Expands realistic user activity, learning progress, marketplace sales, social interactions,
+﻿-- Expands realistic user activity, learning progress, marketplace sales, social interactions,
 -- feedback, and financial transactions for the window 01-03 August 2026.
 -- All data is completely reconciled across wallets, payment ledgers, treasury, and point summaries.
 
@@ -103,7 +103,7 @@ SELECT v62_uuid('topup-payment:' || row_no), user_id, NULL, 'COIN_TOP_UP', coin_
        'COIN_' || coin_amount, 'SEPAY', 'PAID', 'SP62C' || lpad(row_no::text, 4, '0'),
        coin_amount, 'VND', 0, 'SP62C' || lpad(row_no::text, 4, '0'), paid_at - INTERVAL '15 minutes', paid_at,
        'SP62-SEPAY-C-' || lpad(row_no::text, 4, '0'), 'SP62REF-C-' || lpad(row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V62', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount)::text,
+       jsonb_build_object('seed', 'V62', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount),
        paid_at - INTERVAL '3 minutes', paid_at
 FROM v62_topups;
 
@@ -167,7 +167,7 @@ SELECT v62_uuid('subscription-payment:' || purchase.row_no), purchase.user_id, p
        'SUBSCRIPTION', 'SEPAY', 'PAID', 'SP62S' || lpad(purchase.row_no::text, 4, '0'), purchase.amount, 'VND', 1,
        'SP62S' || lpad(purchase.row_no::text, 4, '0'), purchase.paid_at - INTERVAL '15 minutes', purchase.paid_at,
        'SP62-SEPAY-S-' || lpad(purchase.row_no::text, 4, '0'), 'SP62REF-S-' || lpad(purchase.row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V62', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type)::text,
+       jsonb_build_object('seed', 'V62', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type),
        purchase.paid_at - INTERVAL '3 minutes', purchase.paid_at
 FROM v62_sub_purchases purchase
 JOIN service_plans plan ON plan.plan_type = purchase.plan_type;

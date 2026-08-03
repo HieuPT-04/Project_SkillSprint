@@ -3,10 +3,31 @@
 -- Additive only. Existing subscription payment rows keep their meaning: they are
 -- backfilled to purpose = 'SUBSCRIPTION' and none is rewritten or repurposed.
 
--- 1. Payment purpose ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    payment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    plan_id UUID REFERENCES service_plans(plan_id) ON DELETE SET NULL,
+    provider VARCHAR(50) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    txn_ref VARCHAR(100) NOT NULL UNIQUE,
+    amount NUMERIC(19, 2) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'VND',
+    subscription_months INTEGER DEFAULT 0,
+    transfer_content VARCHAR(255),
+    expire_at TIMESTAMPTZ,
+    paid_at TIMESTAMPTZ,
+    provider_transaction_id VARCHAR(255),
+    provider_reference_code VARCHAR(255),
+    raw_callback_data JSONB,
+    bank_account_name VARCHAR(255),
+    bank_account_number VARCHAR(255),
+    bank_code VARCHAR(50),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 ALTER TABLE payment_transactions
-    ADD COLUMN purpose VARCHAR(30);
+    ADD COLUMN IF NOT EXISTS purpose VARCHAR(30);
 
 -- Every pre-existing payment row is a subscription payment by definition.
 UPDATE payment_transactions SET purpose = 'SUBSCRIPTION' WHERE purpose IS NULL;
@@ -19,9 +40,9 @@ ALTER TABLE payment_transactions
 -- 2. Coin top-up fields ------------------------------------------------------
 
 ALTER TABLE payment_transactions
-    ADD COLUMN coin_amount INTEGER;
+    ADD COLUMN IF NOT EXISTS coin_amount INTEGER;
 ALTER TABLE payment_transactions
-    ADD COLUMN coin_package_key VARCHAR(50);
+    ADD COLUMN IF NOT EXISTS coin_package_key VARCHAR(50);
 
 -- A Coin top-up has no service plan, so plan_id can no longer be mandatory.
 -- Existing subscription rows keep their plan; the shape check below guarantees

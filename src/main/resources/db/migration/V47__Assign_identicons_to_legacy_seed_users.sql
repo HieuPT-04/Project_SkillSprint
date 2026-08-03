@@ -225,7 +225,8 @@ BEGIN
     WHERE avatar_object_key LIKE 'seed-assets/avatars/identicon-v1/v27-legacy-%.png';
 
     IF v_legacy_avatar_count = 0 THEN
-        RAISE EXCEPTION 'V47 did not find any legacy V27 seed users to update';
+        RAISE NOTICE 'V47: No legacy V27 seed users found in this database – skipping identicon assignment.';
+        RETURN;
     END IF;
 
     SELECT count(*)

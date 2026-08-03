@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Profile;
  */
 @Slf4j
 @Configuration
-@Profile("prod")
+@Profile({"prod", "dev"})
 public class FlywayRecoveryConfiguration {
 
     @Bean

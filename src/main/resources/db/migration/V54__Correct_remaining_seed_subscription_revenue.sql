@@ -1,4 +1,4 @@
--- V53 rebuilt the recognizable subscription cohort but left 131 older seed
+﻿-- V53 rebuilt the recognizable subscription cohort but left 131 older seed
 -- payments whose references did not carry the expected V27 prefix.  This
 -- correction is intentionally limited to reserved .invalid accounts plus the
 -- nineteen legacy Gmail seed accounts verified from the production report.
@@ -154,7 +154,7 @@ BEGIN
         'SP54S' || lpad(promotion.ordinal::text, 4, '0'), promotion.paid_at - INTERVAL '12 minutes',
         promotion.paid_at, 'SP54-CURRENT-TXN-' || lpad(promotion.ordinal::text, 4, '0'),
         'SP54-CURRENT-REF-' || lpad(promotion.ordinal::text, 4, '0'),
-        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true)::text,
+        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true),
         promotion.paid_at - INTERVAL '12 minutes', promotion.paid_at
     FROM v54_promotions promotion;
 
@@ -262,7 +262,7 @@ BEGIN
         'SP54H' || lpad(history.ordinal::text, 4, '0'), history.paid_at - INTERVAL '11 minutes', history.paid_at,
         'SP54-HISTORY-TXN-' || lpad(history.ordinal::text, 4, '0'),
         'SP54-HISTORY-REF-' || lpad(history.ordinal::text, 4, '0'),
-        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'billingCycle', 'RENEWAL')::text,
+        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'billingCycle', 'RENEWAL'),
         history.paid_at - INTERVAL '11 minutes', history.paid_at
     FROM v54_history_targets history;
 

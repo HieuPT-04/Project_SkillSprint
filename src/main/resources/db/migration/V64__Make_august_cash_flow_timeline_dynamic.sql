@@ -1,4 +1,4 @@
--- Re-balances August 1 to 3, 2026 financial transactions, coin top-ups, and marketplace sales
+﻿-- Re-balances August 1 to 3, 2026 financial transactions, coin top-ups, and marketplace sales
 -- to create dynamic, natural daily activity curves on admin cash flow charts.
 
 CREATE FUNCTION v64_uuid(seed TEXT) RETURNS UUID LANGUAGE SQL IMMUTABLE AS $$
@@ -45,7 +45,7 @@ SELECT v64_uuid('topup-payment:' || row_no), user_id, NULL, 'COIN_TOP_UP', coin_
        'COIN_' || coin_amount, 'SEPAY', 'PAID', 'SP64C' || lpad(row_no::text, 4, '0'),
        coin_amount, 'VND', 0, 'SP64C' || lpad(row_no::text, 4, '0'), paid_at - INTERVAL '15 minutes', paid_at,
        'SP64-SEPAY-C-' || lpad(row_no::text, 4, '0'), 'SP64REF-C-' || lpad(row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V64', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount)::text,
+       jsonb_build_object('seed', 'V64', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount),
        paid_at - INTERVAL '3 minutes', paid_at
 FROM v64_extra_topups;
 
@@ -105,7 +105,7 @@ SELECT v64_uuid('subscription-payment:' || purchase.row_no), purchase.user_id, p
        'SUBSCRIPTION', 'SEPAY', 'PAID', 'SP64S' || lpad(purchase.row_no::text, 4, '0'), purchase.amount, 'VND', 1,
        'SP64S' || lpad(purchase.row_no::text, 4, '0'), purchase.paid_at - INTERVAL '15 minutes', purchase.paid_at,
        'SP64-SEPAY-S-' || lpad(purchase.row_no::text, 4, '0'), 'SP64REF-S-' || lpad(purchase.row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V64', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type)::text,
+       jsonb_build_object('seed', 'V64', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type),
        purchase.paid_at - INTERVAL '3 minutes', purchase.paid_at
 FROM v64_extra_subs purchase
 JOIN service_plans plan ON plan.plan_type = purchase.plan_type;

@@ -315,7 +315,7 @@ SELECT v52_uuid('payment:' || funding.buyer_id), funding.buyer_id, NULL, 'COIN_T
        funding.funded_at + INTERVAL '15 minutes', funding.funded_at + INTERVAL '3 minutes',
        'SP52-SEPAY-' || lpad(row_number() OVER (ORDER BY funding.buyer_id)::text, 4, '0'),
        'SP52REF-' || lpad(row_number() OVER (ORDER BY funding.buyer_id)::text, 4, '0'),
-       jsonb_build_object('seed', 'V52', 'purpose', 'COIN_TOP_UP', 'coinAmount', funding.funded_coin)::text,
+       jsonb_build_object('seed', 'V52', 'purpose', 'COIN_TOP_UP', 'coinAmount', funding.funded_coin),
        funding.funded_at, funding.funded_at + INTERVAL '3 minutes'
 FROM v52_buyer_funding funding;
 

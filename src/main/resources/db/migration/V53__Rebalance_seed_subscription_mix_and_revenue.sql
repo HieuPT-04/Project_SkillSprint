@@ -1,4 +1,4 @@
--- Rebalance only the identifiable V27/V28/V36 seed cohorts.  The V27 scope
+﻿-- Rebalance only the identifiable V27/V28/V36 seed cohorts.  The V27 scope
 -- uses its migration-only transaction prefix; V28 and V36 use deterministic
 -- ids, so real accounts and their payment history are never selected.
 --
@@ -227,7 +227,7 @@ BEGIN
         'SP53S' || lpad(target.ordinal::text, 4, '0'), target.current_start_at - INTERVAL '12 minutes',
         target.current_start_at, 'SP53-CURRENT-TXN-' || lpad(target.ordinal::text, 4, '0'),
         'SP53-CURRENT-REF-' || lpad(target.ordinal::text, 4, '0'),
-        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true)::text,
+        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'verified', true),
         target.current_start_at - INTERVAL '12 minutes', target.current_start_at
     FROM v53_plan_targets target
     WHERE target.plan_type <> 'FREE';
@@ -301,7 +301,7 @@ BEGIN
         'SP53H' || lpad(history.ordinal::text, 4, '0'), history.paid_at - INTERVAL '11 minutes', history.paid_at,
         'SP53-HISTORY-TXN-' || lpad(history.ordinal::text, 4, '0'),
         'SP53-HISTORY-REF-' || lpad(history.ordinal::text, 4, '0'),
-        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'billingCycle', 'RENEWAL')::text,
+        jsonb_build_object('channel', 'SEPAY', 'purpose', 'SUBSCRIPTION', 'billingCycle', 'RENEWAL'),
         history.paid_at - INTERVAL '11 minutes', history.paid_at
     FROM v53_history_targets history;
 

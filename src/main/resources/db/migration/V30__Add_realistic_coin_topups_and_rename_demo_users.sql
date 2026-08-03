@@ -81,7 +81,7 @@ BEGIN
             'V30COIN' || lpad(v_row::text, 4, '0'), v_coin_amount, 'VND', 0,
             'V30COIN' || lpad(v_row::text, 4, '0'), v_paid_at - INTERVAL '15 minutes', v_paid_at,
             'V30-SEPAY-' || lpad(v_row::text, 4, '0'), 'V30REF' || lpad(v_row::text, 4, '0'),
-            jsonb_build_object('seed', 'V30', 'purpose', 'COIN_TOP_UP', 'coinAmount', v_coin_amount)::text,
+            jsonb_build_object('seed', 'V30', 'purpose', 'COIN_TOP_UP', 'coinAmount', v_coin_amount),
             v_paid_at, v_paid_at
         );
 

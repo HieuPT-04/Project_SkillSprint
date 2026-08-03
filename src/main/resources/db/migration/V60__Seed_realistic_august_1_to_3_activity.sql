@@ -1,4 +1,4 @@
--- Adds a compact, internally reconciled activity window for 01-03 August 2026.
+﻿-- Adds a compact, internally reconciled activity window for 01-03 August 2026.
 -- It only uses deterministic V36 learners and their V37 workspaces; no real account is
 -- created or changed.  Financial entries are recorded through the same payment, wallet,
 -- settlement and treasury ledgers used by the application.
@@ -92,7 +92,7 @@ SELECT v60_uuid('topup-payment:' || row_no), user_id, NULL, 'COIN_TOP_UP', coin_
        'COIN_' || coin_amount, 'SEPAY', 'PAID', 'SP60C' || lpad(row_no::text, 4, '0'),
        coin_amount, 'VND', 0, 'SP60C' || lpad(row_no::text, 4, '0'), paid_at - INTERVAL '12 minutes', paid_at,
        'SP60-SEPAY-C-' || lpad(row_no::text, 4, '0'), 'SP60REF-C-' || lpad(row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V60', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount)::text,
+       jsonb_build_object('seed', 'V60', 'purpose', 'COIN_TOP_UP', 'coinAmount', coin_amount),
        paid_at - INTERVAL '2 minutes', paid_at
 FROM v60_topups;
 
@@ -167,7 +167,7 @@ SELECT v60_uuid('subscription-payment:' || purchase.row_no), purchase.user_id, p
        'SUBSCRIPTION', 'SEPAY', 'PAID', 'SP60S' || lpad(purchase.row_no::text, 4, '0'), purchase.amount, 'VND', 1,
        'SP60S' || lpad(purchase.row_no::text, 4, '0'), purchase.paid_at - INTERVAL '15 minutes', purchase.paid_at,
        'SP60-SEPAY-S-' || lpad(purchase.row_no::text, 4, '0'), 'SP60REF-S-' || lpad(purchase.row_no::text, 4, '0'),
-       jsonb_build_object('seed', 'V60', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type)::text,
+       jsonb_build_object('seed', 'V60', 'purpose', 'SUBSCRIPTION', 'planType', purchase.plan_type),
        purchase.paid_at - INTERVAL '3 minutes', purchase.paid_at
 FROM v60_subscription_purchases purchase
 JOIN service_plans plan ON plan.plan_type = purchase.plan_type;

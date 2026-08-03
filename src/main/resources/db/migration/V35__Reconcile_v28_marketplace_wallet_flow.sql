@@ -102,7 +102,7 @@ SET user_id = schedule.buyer_id,
     paid_at = schedule.paid_at,
     provider_transaction_id = 'SPC26-' || lpad(schedule.ordinal::text, 4, '0'),
     provider_reference_code = 'SPCREF26-' || lpad(schedule.ordinal::text, 4, '0'),
-    raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true)::text,
+    raw_callback_data = jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true),
     created_at = schedule.paid_at - INTERVAL '14 minutes',
     updated_at = schedule.paid_at
 FROM v35_top_up_schedule schedule
@@ -118,7 +118,7 @@ SELECT
     'SEPAY', 'PAID', 'SP2026C' || lpad(schedule.ordinal::text, 4, '0'), schedule.coin_amount, 'VND', 0,
     'SP2026C' || lpad(schedule.ordinal::text, 4, '0'), schedule.paid_at - INTERVAL '14 minutes', schedule.paid_at,
     'SPC26-' || lpad(schedule.ordinal::text, 4, '0'), 'SPCREF26-' || lpad(schedule.ordinal::text, 4, '0'),
-    jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true)::text,
+    jsonb_build_object('channel', 'SEPAY', 'purpose', 'COIN_TOP_UP', 'verified', true),
     schedule.paid_at - INTERVAL '14 minutes', schedule.paid_at
 FROM v35_top_up_schedule schedule
 WHERE schedule.ordinal > 56;

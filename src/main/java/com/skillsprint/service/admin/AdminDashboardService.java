@@ -360,15 +360,19 @@ public class AdminDashboardService {
 
     private DateRange normalizeRange(LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now(VN_ZONE);
-        LocalDate normalizedFrom = from == null ? today.withDayOfMonth(1) : from;
+        // The default review period covers the whole demo timeline rather than
+        // only the current calendar month, so every chart shares May-to-today.
+        LocalDate normalizedFrom = from == null ? LocalDate.of(today.getYear(), 5, 1) : from;
         LocalDate normalizedTo = to == null ? today : to;
 
         if (normalizedTo.isBefore(normalizedFrom)) {
             normalizedTo = normalizedFrom;
         }
 
-        if (normalizedFrom.plusDays(30).isBefore(normalizedTo)) {
-            normalizedTo = normalizedFrom.plusDays(30);
+        // Bound the daily aggregation workload while allowing the complete
+        // May-to-current demo period.
+        if (normalizedFrom.plusDays(180).isBefore(normalizedTo)) {
+            normalizedTo = normalizedFrom.plusDays(180);
         }
 
         return new DateRange(normalizedFrom, normalizedTo);

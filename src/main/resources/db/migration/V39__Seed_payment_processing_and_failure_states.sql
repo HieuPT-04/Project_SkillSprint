@@ -115,7 +115,7 @@ BEGIN
             CASE WHEN v_purpose = 'SUBSCRIPTION' THEN 1 ELSE 0 END,
             'SP39' || lpad(v_row::text, 4, '0'), v_expire_at, NULL,
             NULL, NULL,
-            jsonb_build_object('channel', 'SEPAY', 'purpose', v_purpose, 'status', v_status, 'reason', v_reason)::text,
+            jsonb_build_object('channel', 'SEPAY', 'purpose', v_purpose, 'status', v_status, 'reason', v_reason),
             v_created_at, CASE WHEN v_status = 'PENDING' THEN v_created_at ELSE v_expire_at END
         );
     END LOOP;
