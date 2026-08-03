@@ -116,6 +116,50 @@ CREATE TABLE content_reports (
     CONSTRAINT uk_content_report_target_reporter UNIQUE (target_type, target_id, reporter_id)
 );
 
+CREATE TABLE community_rooms (
+    room_id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    mode VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    owner_id VARCHAR(100) NOT NULL REFERENCES users(user_id),
+    max_members INTEGER NOT NULL DEFAULT 50,
+    member_count INTEGER NOT NULL DEFAULT 0,
+    report_count INTEGER NOT NULL DEFAULT 0,
+    admin_note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE community_chat_messages (
+    message_id UUID PRIMARY KEY,
+    room_id UUID NOT NULL REFERENCES community_rooms(room_id),
+    sender_id VARCHAR(100) NOT NULL REFERENCES users(user_id),
+    raw_content TEXT NOT NULL,
+    masked_content TEXT NOT NULL,
+    hidden BOOLEAN NOT NULL DEFAULT FALSE,
+    report_count INTEGER NOT NULL DEFAULT 0,
+    admin_note TEXT,
+    sent_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE feedbacks (
+    feedback_id UUID PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id),
+    type VARCHAR(30) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    related_url VARCHAR(500),
+    image_object_key VARCHAR(500),
+    status VARCHAR(30) NOT NULL,
+    admin_note TEXT,
+    admin_reply TEXT,
+    replied_by_user_id VARCHAR(100) REFERENCES users(user_id),
+    replied_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT INTO users (user_id, email, created_at)
 VALUES ('ci-reconciliation-user', 'reconciliation@gmail.com', TIMESTAMPTZ '2026-05-01 08:00:00+07');
 
