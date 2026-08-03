@@ -2,8 +2,10 @@ package com.skillsprint.controller.admin;
 
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.admin.AdminDashboardResponse;
+import com.skillsprint.dto.response.admin.AdminMonthlyFinancialPointResponse;
 import com.skillsprint.service.admin.AdminDashboardService;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -35,5 +37,13 @@ public class AdminDashboardController {
     ) {
         AdminDashboardResponse response = adminDashboardService.getDashboard(from, to);
         return ResponseEntity.ok(ApiResponse.success("Lấy dashboard admin thành công", response));
+    }
+
+    @GetMapping("/monthly-financials")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<AdminMonthlyFinancialPointResponse>>> getMonthlyFinancials(
+            @RequestParam(defaultValue = "6") int months
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(adminDashboardService.getMonthlyFinancials(months)));
     }
 }

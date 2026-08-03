@@ -3,11 +3,13 @@ package com.skillsprint.controller.admin;
 import com.skillsprint.common.ApiResponse;
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryEntryResponse;
+import com.skillsprint.dto.response.marketplace.PlatformTreasuryMonthlySummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySummaryResponse;
 import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
 import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
 import com.skillsprint.service.marketplace.PlatformTreasuryService;
 import java.time.Instant;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +31,13 @@ public class AdminMarketplaceTreasuryController {
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<PlatformTreasurySummaryResponse>> summary() {
         return ResponseEntity.ok(ApiResponse.success(platformTreasuryService.getSummary()));
+    }
+
+    @GetMapping("/monthly-summaries")
+    public ResponseEntity<ApiResponse<List<PlatformTreasuryMonthlySummaryResponse>>> monthlySummaries(
+            @RequestParam(defaultValue = "6") int months
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(platformTreasuryService.getMonthlySummaries(months)));
     }
 
     @GetMapping("/entries")
