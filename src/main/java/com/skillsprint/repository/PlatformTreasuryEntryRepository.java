@@ -4,6 +4,7 @@ import com.skillsprint.entity.PlatformTreasuryEntry;
 import java.util.Optional;
 import java.util.UUID;
 import java.math.BigDecimal;
+import java.time.Instant;
 import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
 import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
 import com.skillsprint.enums.marketplace.PlatformTreasuryEntryType;
@@ -24,5 +25,20 @@ public interface PlatformTreasuryEntryRepository extends JpaRepository<PlatformT
     BigDecimal sumAmountByAssetAndDirection(
             @Param("asset") PlatformTreasuryAsset asset,
             @Param("direction") PlatformTreasuryDirection direction
+    );
+
+    @Query("""
+            select coalesce(sum(entry.amount), 0)
+            from PlatformTreasuryEntry entry
+            where entry.asset = :asset
+              and entry.direction = :direction
+              and entry.occurredAt >= :from
+              and entry.occurredAt < :to
+            """)
+    BigDecimal sumAmountByAssetAndDirectionAndOccurredAtBetween(
+            @Param("asset") PlatformTreasuryAsset asset,
+            @Param("direction") PlatformTreasuryDirection direction,
+            @Param("from") Instant from,
+            @Param("to") Instant to
     );
 }

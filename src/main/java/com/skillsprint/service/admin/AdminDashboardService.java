@@ -1,10 +1,13 @@
 package com.skillsprint.service.admin;
 
 import com.skillsprint.dto.response.admin.AdminDashboardResponse;
+import com.skillsprint.dto.response.admin.AdminMonthlyFinancialPointResponse;
 import com.skillsprint.dto.response.payment.PaymentTransactionResponse;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.auth.UserStatus;
 import com.skillsprint.enums.calendar.CalendarTaskStatus;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
 import com.skillsprint.enums.material.MaterialProcessingStatus;
 import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
@@ -17,7 +20,7 @@ import com.skillsprint.mapper.PaymentMapper;
 import com.skillsprint.repository.CalendarTaskRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.PaymentTransactionRepository;
-import com.skillsprint.repository.PlatformRevenueEntryRepository;
+import com.skillsprint.repository.PlatformTreasuryEntryRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.repository.SubscriptionRepository;
@@ -26,6 +29,7 @@ import com.skillsprint.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminDashboardService {
+
+    private static final int MAX_MONTHLY_PERIODS = 12;
 
     static ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -59,7 +65,7 @@ public class AdminDashboardService {
     StudySessionRepository studySessionRepository;
     SubscriptionRepository subscriptionRepository;
     PaymentTransactionRepository paymentTransactionRepository;
-    PlatformRevenueEntryRepository platformRevenueEntryRepository;
+    PlatformTreasuryEntryRepository platformTreasuryEntryRepository;
     PaymentMapper paymentMapper;
 
     @Transactional(readOnly = true)
@@ -91,6 +97,31 @@ public class AdminDashboardService {
                 .recentUsers(buildRecentUsers())
                 .recentPayments(buildRecentPayments())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminMonthlyFinancialPointResponse> getMonthlyFinancials(int requestedMonths) {
+        int months = Math.max(1, Math.min(requestedMonths, MAX_MONTHLY_PERIODS));
+        YearMonth currentMonth = YearMonth.from(LocalDate.now(VN_ZONE));
+        List<AdminMonthlyFinancialPointResponse> points = new ArrayList<>();
+
+        for (int offset = months - 1; offset >= 0; offset--) {
+            YearMonth month = currentMonth.minusMonths(offset);
+            Instant from = month.atDay(1).atStartOfDay(VN_ZONE).toInstant();
+            Instant to = month.plusMonths(1).atDay(1).atStartOfDay(VN_ZONE).toInstant();
+            BigDecimal commissionEarned = sumTreasuryAmount(PlatformTreasuryDirection.CREDIT, from, to);
+            BigDecimal commissionReversed = sumTreasuryAmount(PlatformTreasuryDirection.DEBIT, from, to);
+
+            points.add(AdminMonthlyFinancialPointResponse.builder()
+                    .month(month.toString())
+                    .subscriptionRevenue(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                            REVENUE_PURPOSE, PaymentStatus.PAID, from, to)))
+                    .coinTopUp(defaultMoney(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                            COIN_TOP_UP_PURPOSE, PaymentStatus.PAID, from, to)))
+                    .marketplaceCommission(commissionEarned.subtract(commissionReversed).longValue())
+                    .build());
+        }
+        return points;
     }
 
     private AdminDashboardResponse.UserStats buildUserStats(Instant todayStart, DateRange dateRange) {
@@ -246,19 +277,13 @@ public class AdminDashboardService {
                     )))
                     .build());
 
-            long grossCommissionCoin = platformRevenueEntryRepository.sumGrossCommissionCoinCreatedBetween(
-                    dayStart,
-                    nextDayStart
-            );
-            long refundedCommissionCoin = platformRevenueEntryRepository.sumRefundedCommissionCoinBetween(
-                    dayStart,
-                    nextDayStart
-            );
+            BigDecimal commissionEarned = sumTreasuryAmount(PlatformTreasuryDirection.CREDIT, dayStart, nextDayStart);
+            BigDecimal commissionReversed = sumTreasuryAmount(PlatformTreasuryDirection.DEBIT, dayStart, nextDayStart);
             marketplaceCommissionByDay.add(AdminDashboardResponse.MarketplaceCommissionPoint.builder()
                     .date(current)
-                    .grossCommissionCoin(grossCommissionCoin)
-                    .refundedCommissionCoin(refundedCommissionCoin)
-                    .netCommissionCoin(grossCommissionCoin - refundedCommissionCoin)
+                    .grossCommissionCoin(commissionEarned.longValue())
+                    .refundedCommissionCoin(commissionReversed.longValue())
+                    .netCommissionCoin(commissionEarned.subtract(commissionReversed).longValue())
                     .build());
 
             newUsersByDay.add(AdminDashboardResponse.CountPoint.builder()
@@ -351,6 +376,15 @@ public class AdminDashboardService {
 
     private BigDecimal defaultMoney(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private BigDecimal sumTreasuryAmount(PlatformTreasuryDirection direction, Instant from, Instant to) {
+        return defaultMoney(platformTreasuryEntryRepository.sumAmountByAssetAndDirectionAndOccurredAtBetween(
+                PlatformTreasuryAsset.COIN,
+                direction,
+                from,
+                to
+        ));
     }
 
     private record DateRange(LocalDate from, LocalDate to) {

@@ -6,12 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.skillsprint.dto.response.admin.AdminDashboardResponse;
+import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
+import com.skillsprint.enums.marketplace.PlatformTreasuryDirection;
 import com.skillsprint.enums.payment.PaymentPurpose;
 import com.skillsprint.enums.payment.PaymentStatus;
 import com.skillsprint.mapper.PaymentMapper;
 import com.skillsprint.repository.CalendarTaskRepository;
 import com.skillsprint.repository.PaymentTransactionRepository;
-import com.skillsprint.repository.PlatformRevenueEntryRepository;
+import com.skillsprint.repository.PlatformTreasuryEntryRepository;
 import com.skillsprint.repository.RoadmapRepository;
 import com.skillsprint.repository.StudySessionRepository;
 import com.skillsprint.repository.StudyWorkspaceRepository;
@@ -45,7 +47,7 @@ class AdminDashboardServiceTest {
     @Mock StudySessionRepository studySessionRepository;
     @Mock SubscriptionRepository subscriptionRepository;
     @Mock PaymentTransactionRepository paymentTransactionRepository;
-    @Mock PlatformRevenueEntryRepository platformRevenueEntryRepository;
+    @Mock PlatformTreasuryEntryRepository platformTreasuryEntryRepository;
     @Mock PaymentMapper paymentMapper;
     @InjectMocks AdminDashboardService service;
 
@@ -118,11 +120,33 @@ class AdminDashboardServiceTest {
     }
 
     @Test
-    void marketplaceCommissionChartRecordsRefundAsASeparateNegativeAdjustment() {
-        when(platformRevenueEntryRepository.sumGrossCommissionCoinCreatedBetween(any(Instant.class), any(Instant.class)))
-                .thenReturn(20L);
-        when(platformRevenueEntryRepository.sumRefundedCommissionCoinBetween(any(Instant.class), any(Instant.class)))
-                .thenReturn(5L);
+    void monthlyFinancialsReturnSeparateValuesForEachRequestedMonth() {
+        when(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                org.mockito.ArgumentMatchers.eq(PaymentPurpose.SUBSCRIPTION),
+                org.mockito.ArgumentMatchers.eq(PaymentStatus.PAID),
+                any(Instant.class),
+                any(Instant.class))).thenReturn(SUBSCRIPTION_REVENUE);
+        when(paymentTransactionRepository.sumAmountByPurposeAndStatusAndPaidAtBetween(
+                org.mockito.ArgumentMatchers.eq(PaymentPurpose.COIN_TOP_UP),
+                org.mockito.ArgumentMatchers.eq(PaymentStatus.PAID),
+                any(Instant.class),
+                any(Instant.class))).thenReturn(COIN_TOP_UP_VOLUME);
+        stubTreasuryCommission(new BigDecimal("20"), new BigDecimal("5"));
+
+        var points = service.getMonthlyFinancials(3);
+
+        assertThat(points).hasSize(3).allSatisfy(point -> {
+            assertThat(point.getSubscriptionRevenue()).isEqualByComparingTo(SUBSCRIPTION_REVENUE);
+            assertThat(point.getCoinTopUp()).isEqualByComparingTo(COIN_TOP_UP_VOLUME);
+            assertThat(point.getMarketplaceCommission()).isEqualTo(15L);
+        });
+        verify(paymentTransactionRepository, org.mockito.Mockito.times(6))
+                .sumAmountByPurposeAndStatusAndPaidAtBetween(any(), any(), any(Instant.class), any(Instant.class));
+    }
+
+    @Test
+    void marketplaceCommissionChartUsesTheTreasuryLedgerForCreditsAndReversals() {
+        stubTreasuryCommission(new BigDecimal("20"), new BigDecimal("5"));
 
         AdminDashboardResponse response = service.getDashboard(LocalDate.parse("2026-07-01"), LocalDate.parse("2026-07-01"));
 
@@ -131,8 +155,16 @@ class AdminDashboardServiceTest {
             assertThat(point.getRefundedCommissionCoin()).isEqualTo(5L);
             assertThat(point.getNetCommissionCoin()).isEqualTo(15L);
         });
-        verify(platformRevenueEntryRepository).sumGrossCommissionCoinCreatedBetween(any(Instant.class), any(Instant.class));
-        verify(platformRevenueEntryRepository).sumRefundedCommissionCoinBetween(any(Instant.class), any(Instant.class));
+        verify(platformTreasuryEntryRepository).sumAmountByAssetAndDirectionAndOccurredAtBetween(
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryAsset.COIN),
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryDirection.CREDIT),
+                any(Instant.class),
+                any(Instant.class));
+        verify(platformTreasuryEntryRepository).sumAmountByAssetAndDirectionAndOccurredAtBetween(
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryAsset.COIN),
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryDirection.DEBIT),
+                any(Instant.class),
+                any(Instant.class));
     }
 
     @Test
@@ -164,5 +196,18 @@ class AdminDashboardServiceTest {
         assertThat(response.getPayments().getTotal()).isEqualTo(7L);
         assertThat(response.getPayments().getPaid()).isEqualTo(5L);
         verify(paymentTransactionRepository).countByStatus(PaymentStatus.PAID);
+    }
+
+    private void stubTreasuryCommission(BigDecimal earned, BigDecimal reversed) {
+        when(platformTreasuryEntryRepository.sumAmountByAssetAndDirectionAndOccurredAtBetween(
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryAsset.COIN),
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryDirection.CREDIT),
+                any(Instant.class),
+                any(Instant.class))).thenReturn(earned);
+        when(platformTreasuryEntryRepository.sumAmountByAssetAndDirectionAndOccurredAtBetween(
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryAsset.COIN),
+                org.mockito.ArgumentMatchers.eq(PlatformTreasuryDirection.DEBIT),
+                any(Instant.class),
+                any(Instant.class))).thenReturn(reversed);
     }
 }

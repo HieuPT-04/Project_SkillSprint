@@ -2,6 +2,7 @@ package com.skillsprint.service.marketplace;
 
 import com.skillsprint.dto.response.common.PageResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryEntryResponse;
+import com.skillsprint.dto.response.marketplace.PlatformTreasuryMonthlySummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySummaryResponse;
 import com.skillsprint.entity.PlatformTreasuryEntry;
 import com.skillsprint.entity.User;
@@ -12,6 +13,9 @@ import com.skillsprint.enums.marketplace.PlatformTreasuryReferenceType;
 import com.skillsprint.repository.PlatformTreasuryEntryRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.UUID;
 import java.util.ArrayList;
@@ -32,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PlatformTreasuryService {
 
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final int MAX_MONTHLY_PERIODS = 12;
+
     PlatformTreasuryEntryRepository treasuryEntryRepository;
 
     @Transactional(readOnly = true)
@@ -44,6 +51,31 @@ public class PlatformTreasuryService {
                 .vndInflow(vndInflow).vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
                 .commissionCoinEarned(commissionEarned).commissionCoinReversed(commissionReversed)
                 .commissionCoinNetPosition(commissionEarned.subtract(commissionReversed)).build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlatformTreasuryMonthlySummaryResponse> getMonthlySummaries(int requestedMonths) {
+        int months = Math.max(1, Math.min(requestedMonths, MAX_MONTHLY_PERIODS));
+        YearMonth currentMonth = YearMonth.from(LocalDate.now(VN_ZONE));
+        List<PlatformTreasuryMonthlySummaryResponse> summaries = new ArrayList<>();
+
+        for (int offset = months - 1; offset >= 0; offset--) {
+            YearMonth month = currentMonth.minusMonths(offset);
+            Instant from = month.atDay(1).atStartOfDay(VN_ZONE).toInstant();
+            Instant to = month.plusMonths(1).atDay(1).atStartOfDay(VN_ZONE).toInstant();
+            BigDecimal vndInflow = sumBetween(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.CREDIT, from, to);
+            BigDecimal vndOutflow = sumBetween(PlatformTreasuryAsset.VND, PlatformTreasuryDirection.DEBIT, from, to);
+            BigDecimal commissionEarned = sumBetween(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.CREDIT, from, to);
+            BigDecimal commissionReversed = sumBetween(PlatformTreasuryAsset.COIN, PlatformTreasuryDirection.DEBIT, from, to);
+
+            summaries.add(PlatformTreasuryMonthlySummaryResponse.builder()
+                    .month(month.toString())
+                    .vndInflow(vndInflow).vndOutflow(vndOutflow).vndNetPosition(vndInflow.subtract(vndOutflow))
+                    .commissionCoinEarned(commissionEarned).commissionCoinReversed(commissionReversed)
+                    .commissionCoinNetPosition(commissionEarned.subtract(commissionReversed))
+                    .build());
+        }
+        return summaries;
     }
 
     @Transactional(readOnly = true)
@@ -109,6 +141,15 @@ public class PlatformTreasuryService {
 
     private BigDecimal sum(PlatformTreasuryAsset asset, PlatformTreasuryDirection direction) {
         return treasuryEntryRepository.sumAmountByAssetAndDirection(asset, direction);
+    }
+
+    private BigDecimal sumBetween(
+            PlatformTreasuryAsset asset,
+            PlatformTreasuryDirection direction,
+            Instant from,
+            Instant to
+    ) {
+        return treasuryEntryRepository.sumAmountByAssetAndDirectionAndOccurredAtBetween(asset, direction, from, to);
     }
 
     private PlatformTreasuryEntryResponse toResponse(PlatformTreasuryEntry entry) {
