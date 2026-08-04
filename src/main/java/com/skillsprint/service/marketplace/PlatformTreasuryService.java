@@ -5,6 +5,7 @@ import com.skillsprint.dto.response.marketplace.PlatformTreasuryEntryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasuryMonthlySummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySubscriptionPurchaseSummaryResponse;
 import com.skillsprint.dto.response.marketplace.PlatformTreasurySummaryResponse;
+import com.skillsprint.entity.PaymentTransaction;
 import com.skillsprint.entity.PlatformTreasuryEntry;
 import com.skillsprint.entity.User;
 import com.skillsprint.enums.marketplace.PlatformTreasuryAsset;
@@ -23,6 +24,8 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -105,11 +108,27 @@ public class PlatformTreasuryService {
 
     @Transactional(readOnly = true)
     public PageResponse<PlatformTreasuryEntryResponse> getEntries(
-            PlatformTreasuryAsset asset, PlatformTreasuryEntryType entryType, Instant from, Instant to, int page, int size) {
+            PlatformTreasuryAsset asset,
+            PlatformTreasuryEntryType entryType,
+            UUID planId,
+            Instant from,
+            Instant to,
+            int page,
+            int size
+    ) {
         Specification<PlatformTreasuryEntry> filters = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (asset != null) predicates.add(criteriaBuilder.equal(root.get("asset"), asset));
             if (entryType != null) predicates.add(criteriaBuilder.equal(root.get("entryType"), entryType));
+            if (planId != null) {
+                predicates.add(criteriaBuilder.equal(
+                        root.get("entryType"), PlatformTreasuryEntryType.SUBSCRIPTION_PAYMENT_RECEIVED));
+                Subquery<UUID> matchingPaymentIds = query.subquery(UUID.class);
+                Root<PaymentTransaction> payment = matchingPaymentIds.from(PaymentTransaction.class);
+                matchingPaymentIds.select(payment.get("paymentId"));
+                matchingPaymentIds.where(criteriaBuilder.equal(payment.get("plan").get("planId"), planId));
+                predicates.add(root.get("referenceId").in(matchingPaymentIds));
+            }
             if (from != null) predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("occurredAt"), from));
             if (to != null) predicates.add(criteriaBuilder.lessThan(root.get("occurredAt"), to));
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));

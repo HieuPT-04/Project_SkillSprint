@@ -74,17 +74,33 @@ public interface UserRepository extends JpaRepository<User, String> {
                       and userRole.workspace is null
                       and userRole.role.roleName = :role
               ))
-              and (:hasPlanType = false or exists (
-                    select 1
-                    from Subscription subscription
-                    where subscription.user = user
-                      and subscription.plan.planType = :planType
-                      and subscription.createdAt = (
-                            select max(currentSubscription.createdAt)
-                            from Subscription currentSubscription
-                            where currentSubscription.user = user
-                      )
-              ))
+              and (
+                    :hasPlanType = false
+                    or (
+                        :hasAdminPlanType = true
+                        and exists (
+                            select 1
+                            from UserRole adminRole
+                            where adminRole.user = user
+                              and adminRole.workspace is null
+                              and adminRole.role.roleName = com.skillsprint.enums.auth.RoleName.ADMIN
+                        )
+                    )
+                    or (
+                        :hasAdminPlanType = false
+                        and exists (
+                            select 1
+                            from Subscription subscription
+                            where subscription.user = user
+                              and subscription.plan.planType = :planType
+                              and subscription.createdAt = (
+                                    select max(currentSubscription.createdAt)
+                                    from Subscription currentSubscription
+                                    where currentSubscription.user = user
+                              )
+                        )
+                    )
+              )
             """)
     Page<User> findAdminUsers(
             @Param("hasSearch") boolean hasSearch,
@@ -92,6 +108,7 @@ public interface UserRepository extends JpaRepository<User, String> {
             @Param("hasRole") boolean hasRole,
             @Param("role") RoleName role,
             @Param("hasPlanType") boolean hasPlanType,
+            @Param("hasAdminPlanType") boolean hasAdminPlanType,
             @Param("planType") ServicePlanType planType,
             Pageable pageable
     );
