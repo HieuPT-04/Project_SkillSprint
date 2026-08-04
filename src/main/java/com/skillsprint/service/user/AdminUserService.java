@@ -80,6 +80,7 @@ public class AdminUserService {
                 role != null,
                 role == null ? RoleName.LEARNER : role,
                 planType != null,
+                ServicePlanType.ADMIN_DEFAULT.equals(planType),
                 planType == null ? ServicePlanType.FREE : planType,
                 pageable
         );
