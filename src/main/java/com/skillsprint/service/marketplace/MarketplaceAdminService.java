@@ -57,6 +57,38 @@ public class MarketplaceAdminService {
                 .map(qualityService::findRecentForAdmin)
                 .orElse(List.of());
         var qualityJob = qualityJobHistory.stream().findFirst().orElse(null);
+
+        com.fasterxml.jackson.databind.JsonNode content = snapshot.getContent();
+        int chapterCount = snapshot.getChapterCount() != null ? snapshot.getChapterCount() : 0;
+        int quizCount = snapshot.getQuizCount() != null ? snapshot.getQuizCount() : 0;
+        int questionCount = snapshot.getQuestionCount() != null ? snapshot.getQuestionCount() : 0;
+
+        if (content != null && content.has("chapters") && content.get("chapters").isArray()) {
+            com.fasterxml.jackson.databind.node.ArrayNode chapters = (com.fasterxml.jackson.databind.node.ArrayNode) content.get("chapters");
+            if (!chapters.isEmpty()) {
+                chapterCount = chapters.size();
+                int derivedQuizzes = 0;
+                int derivedQuestions = 0;
+                for (com.fasterxml.jackson.databind.JsonNode ch : chapters) {
+                    if (ch.has("quizzes") && ch.get("quizzes").isArray()) {
+                        com.fasterxml.jackson.databind.node.ArrayNode quizzes = (com.fasterxml.jackson.databind.node.ArrayNode) ch.get("quizzes");
+                        derivedQuizzes += quizzes.size();
+                        for (com.fasterxml.jackson.databind.JsonNode qz : quizzes) {
+                            if (qz.has("questions") && qz.get("questions").isArray()) {
+                                derivedQuestions += qz.get("questions").size();
+                            } else if (qz.has("questionCount")) {
+                                derivedQuestions += qz.get("questionCount").asInt();
+                            }
+                        }
+                    } else if (ch.has("quizCount")) {
+                        derivedQuizzes += ch.get("quizCount").asInt();
+                    }
+                }
+                if (derivedQuizzes > 0) quizCount = derivedQuizzes;
+                if (derivedQuestions > 0) questionCount = derivedQuestions;
+            }
+        }
+
         return MarketplaceAdminItemDetailResponse.builder()
                 .itemId(item.getItemId())
                 .packId(identity.packId())
@@ -68,9 +100,9 @@ public class MarketplaceAdminService {
                 .description(item.getDescription())
                 .subject(item.getSubject())
                 .priceCoins(item.getPriceCoins())
-                .chapterCount(snapshot.getChapterCount())
-                .quizCount(snapshot.getQuizCount())
-                .questionCount(snapshot.getQuestionCount())
+                .chapterCount(chapterCount)
+                .quizCount(quizCount)
+                .questionCount(questionCount)
                 .status(item.getStatus().name())
                 .creatorValidationScore(item.getCreatorValidationScore())
                 .qualityJob(qualityJob)
