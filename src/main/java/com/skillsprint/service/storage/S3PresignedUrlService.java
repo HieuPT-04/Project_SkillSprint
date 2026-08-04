@@ -272,6 +272,9 @@ public class S3PresignedUrlService {
         if (objectKey == null || objectKey.isBlank()) {
             return null;
         }
+        if (objectKey.startsWith("http://") || objectKey.startsWith("https://") || objectKey.startsWith("data:")) {
+            return objectKey;
+        }
         if (DefaultIdenticon.isDefaultObjectKey(objectKey)) {
             return DefaultIdenticon.dataUrl(objectKey);
         }
