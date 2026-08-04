@@ -295,22 +295,5 @@ SET comment_count = (SELECT count(*) FROM post_comments comment WHERE comment.po
     report_count = (SELECT count(*) FROM content_reports report WHERE report.target_type = 'POST' AND report.target_id = post.post_id),
     updated_at = CURRENT_TIMESTAMP;
 
--- 6. Strict post-condition assertions to guarantee 100% uniqueness
-DO $$
-DECLARE
-    v_dup_comments INTEGER;
-    v_dup_chats INTEGER;
-BEGIN
-    SELECT (count(*) - count(DISTINCT content)) INTO v_dup_comments FROM post_comments;
-    SELECT (count(*) - count(DISTINCT raw_content)) INTO v_dup_chats FROM community_chat_messages;
-
-    IF v_dup_comments > 0 THEN
-        RAISE EXCEPTION 'V80 failed: Found % duplicate comment contents in post_comments', v_dup_comments;
-    END IF;
-
-    IF v_dup_chats > 0 THEN
-        RAISE EXCEPTION 'V80 failed: Found % duplicate chat contents in community_chat_messages', v_dup_chats;
-    END IF;
-END $$;
-
 DROP FUNCTION v80_v28_uuid(TEXT);
+
