@@ -56,12 +56,13 @@ public class AdminMarketplaceTreasuryController {
     public ResponseEntity<ApiResponse<PageResponse<PlatformTreasuryEntryResponse>>> entries(
             @RequestParam(required = false) PlatformTreasuryAsset asset,
             @RequestParam(required = false) PlatformTreasuryEntryType entryType,
+            @RequestParam(required = false) UUID planId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                platformTreasuryService.getEntries(asset, entryType, from, to, page, size)));
+                platformTreasuryService.getEntries(asset, entryType, planId, from, to, page, size)));
     }
 }
