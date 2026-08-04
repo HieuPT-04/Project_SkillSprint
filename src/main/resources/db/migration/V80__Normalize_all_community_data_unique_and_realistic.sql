@@ -1,7 +1,7 @@
--- V79: Normalize all community posts, comments, and study room chat messages
+-- V80: Normalize all community posts, comments, and study room chat messages
 -- to ensure 100% unique, highly realistic, and natural Vietnamese student content.
 
-CREATE FUNCTION v79_v28_uuid(seed TEXT) RETURNS UUID LANGUAGE SQL IMMUTABLE AS $$
+CREATE FUNCTION v80_v28_uuid(seed TEXT) RETURNS UUID LANGUAGE SQL IMMUTABLE AS $$
     SELECT (
         substr(md5('skillsprint-v28:' || seed), 1, 8) || '-' ||
         substr(md5('skillsprint-v28:' || seed), 9, 4) || '-' ||
@@ -105,7 +105,7 @@ UPDATE post_comments comment
 SET content = unique_v28_comments.content,
     updated_at = CURRENT_TIMESTAMP
 FROM unique_v28_comments
-WHERE comment.comment_id = v79_v28_uuid('comment:' || unique_v28_comments.ordinal);
+WHERE comment.comment_id = v80_v28_uuid('comment:' || unique_v28_comments.ordinal);
 
 
 -- 4. Replace V28 150 study room chat messages with 100% unique, conversational, realistic Vietnamese student messages
@@ -286,7 +286,7 @@ UPDATE community_chat_messages message
 SET raw_content = seeded_chats.content,
     masked_content = seeded_chats.content
 FROM seeded_chats
-WHERE message.message_id = v79_v28_uuid('message:' || seeded_chats.ordinal);
+WHERE message.message_id = v80_v28_uuid('message:' || seeded_chats.ordinal);
 
 -- 5. Synchronize post counts to match exactly
 UPDATE community_posts post
@@ -305,12 +305,12 @@ BEGIN
     SELECT (count(*) - count(DISTINCT raw_content)) INTO v_dup_chats FROM community_chat_messages;
 
     IF v_dup_comments > 0 THEN
-        RAISE EXCEPTION 'V79 failed: Found % duplicate comment contents in post_comments', v_dup_comments;
+        RAISE EXCEPTION 'V80 failed: Found % duplicate comment contents in post_comments', v_dup_comments;
     END IF;
 
     IF v_dup_chats > 0 THEN
-        RAISE EXCEPTION 'V79 failed: Found % duplicate chat contents in community_chat_messages', v_dup_chats;
+        RAISE EXCEPTION 'V80 failed: Found % duplicate chat contents in community_chat_messages', v_dup_chats;
     END IF;
 END $$;
 
-DROP FUNCTION v79_v28_uuid(TEXT);
+DROP FUNCTION v80_v28_uuid(TEXT);
