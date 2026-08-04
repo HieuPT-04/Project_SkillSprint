@@ -1,12 +1,12 @@
--- Migration V75: 
--- 1. Fix Creator Payout QR URLs and account holder names so VietQR image content matches Creator Name 100%.
+-- Migration V78: 
+-- 1. Fix Creator Payout QR URLs and account holder names so VietQR image content matches Creator Full Name 100% (NO INITIALS like T G H, L Q B).
 -- 2. Reduce Creator Payout requested amounts to realistic small amounts (50,000đ - 180,000đ) per leader feedback.
 -- 3. Reconcile platform treasury entries for completed payouts with the reduced amounts.
 
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'creator_payouts') THEN
-        -- 1. First, normalize destination account holders to match creator full_name (UPPERCASE unaccented)
+        -- 1. First, normalize destination account holders to match creator full_name (FULL UPPERCASE unaccented name, NO initials)
         UPDATE creator_payouts p
         SET destination_account_holder = UPPER(
             REGEXP_REPLACE(
@@ -49,7 +49,7 @@ BEGIN
                 ELSE NULL
             END;
 
-        -- 3. Set destination_qr_object_key to dynamic, 100% valid VietQR URL with matching name, bank, acc, & reduced amount
+        -- 3. Set destination_qr_object_key to dynamic, 100% valid VietQR URL with full creator name, bank, acc, & reduced amount
         UPDATE creator_payouts
         SET destination_qr_object_key = 'https://img.vietqr.io/image/' ||
             COALESCE(NULLIF(destination_bank_code, ''), 'MB') || '-' ||
