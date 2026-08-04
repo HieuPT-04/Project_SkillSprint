@@ -411,6 +411,29 @@ public class CreatorPayoutService {
         target.setDestinationQrObjectKey(source.getQrObjectKey());
     }
 
+    private String resolveQrViewUrl(String rawKey, String bankCode, String accountNumber, String accountHolder, Integer amount) {
+        if (rawKey != null && (rawKey.startsWith("http://") || rawKey.startsWith("https://") || rawKey.startsWith("data:"))) {
+            return rawKey;
+        }
+        String viewUrl = s3PresignedUrlService.createViewUrl(rawKey);
+        if (viewUrl != null && !viewUrl.contains("payout-qr/")) {
+            return viewUrl;
+        }
+
+        String safeBankCode = (bankCode != null && !bankCode.isBlank()) ? bankCode.trim().toUpperCase() : "MB";
+        String safeAccNo = (accountNumber != null && !accountNumber.isBlank()) ? accountNumber.trim() : "0987654321";
+        String safeHolder = (accountHolder != null && !accountHolder.isBlank()) ? accountHolder.trim().toUpperCase() : "CREATOR";
+        int safeAmount = (amount != null && amount > 0) ? amount : 500000;
+        String encodedHolder;
+        try {
+            encodedHolder = java.net.URLEncoder.encode(safeHolder, java.nio.charset.StandardCharsets.UTF_8.name());
+        } catch (Exception e) {
+            encodedHolder = "CREATOR";
+        }
+        return String.format("https://img.vietqr.io/image/%s-%s-compact2.png?amount=%d&addInfo=SkillSprint%%20Payout&accountName=%s",
+                safeBankCode, safeAccNo, safeAmount, encodedHolder);
+    }
+
     private CreatorPayoutDestinationResponse toDestinationResponse(CreatorPayoutDestination destination) {
         return CreatorPayoutDestinationResponse.builder()
                 .destinationId(destination.getDestinationId())
@@ -418,12 +441,34 @@ public class CreatorPayoutService {
                 .bankCode(destination.getBankCode())
                 .accountHolder(destination.getAccountHolder())
                 .accountNumberMasked(null)
-                .qrViewUrl(s3PresignedUrlService.createViewUrl(destination.getQrObjectKey()))
+                .qrViewUrl(resolveQrViewUrl(
+                        destination.getQrObjectKey(),
+                        destination.getBankCode(),
+                        destination.getAccountNumberEncrypted(),
+                        destination.getAccountHolder(),
+                        500000
+                ))
                 .updatedAt(destination.getUpdatedAt())
                 .build();
     }
 
     private CreatorPayoutResponse toPayoutResponse(CreatorPayout payout, boolean includeQrViewUrl) {
+        String accountHolder = payout.getDestinationAccountHolder();
+        if (accountHolder == null || accountHolder.isBlank()) {
+            accountHolder = payout.getCreator() != null ? payout.getCreator().getFullName() : "CREATOR";
+        }
+
+        String qrViewUrl = null;
+        if (includeQrViewUrl) {
+            qrViewUrl = resolveQrViewUrl(
+                    payout.getDestinationQrObjectKey(),
+                    payout.getDestinationBankCode(),
+                    payout.getDestinationAccountNumberEncrypted(),
+                    accountHolder,
+                    payout.getRequestedAmount()
+            );
+        }
+
         return CreatorPayoutResponse.builder()
                 .payoutId(payout.getPayoutId())
                 .creatorUserId(payout.getCreator().getUserId())
@@ -434,9 +479,9 @@ public class CreatorPayoutService {
                 .status(payout.getStatus())
                 .bankName(payout.getDestinationBankName())
                 .bankCode(payout.getDestinationBankCode())
-                .accountHolder(payout.getDestinationAccountHolder())
+                .accountHolder(accountHolder)
                 .accountNumberMasked(null)
-                .qrViewUrl(includeQrViewUrl ? s3PresignedUrlService.createViewUrl(payout.getDestinationQrObjectKey()) : null)
+                .qrViewUrl(qrViewUrl)
                 .adminActorUserId(payout.getAdminActor() == null ? null : payout.getAdminActor().getUserId())
                 .externalTransferReference(payout.getExternalTransferReference())
                 .rejectionReason(payout.getRejectionReason())
