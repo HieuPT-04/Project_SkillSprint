@@ -2,57 +2,70 @@
 -- 1. Spread out community room created_at and updated_at timestamps evenly across June 2026 to August 2026.
 -- 2. Normalize creator payout destination account holders & bank info so VietQR rendering matches account owner names 100%.
 -- 3. Enrich pending moderation quiz pack snapshots with complete 4-chapter content so card summary & chapter list match 100%.
+-- Defensive table existence checks ensure compatibility with both full production schemas and minimal CI baseline schemas.
 
 -- 1. Community Rooms Timestamp Distribution
-UPDATE community_rooms
-SET
-    updated_at = CASE
-        WHEN name ILIKE '%TOEIC%' THEN TIMESTAMPTZ '2026-06-06 09:15:00+07'
-        WHEN name ILIKE '%IT & Computer Science%' OR name ILIKE '%Khoa học máy tính%' THEN TIMESTAMPTZ '2026-06-18 14:30:00+07'
-        WHEN name ILIKE '%React%' THEN TIMESTAMPTZ '2026-07-02 11:20:00+07'
-        WHEN name ILIKE '%SkillSprint%' OR name ILIKE '%FPT%' THEN TIMESTAMPTZ '2026-07-15 16:45:00+07'
-        WHEN name ILIKE '%Java%' THEN TIMESTAMPTZ '2026-07-28 10:10:00+07'
-        WHEN name ILIKE '%Pomodoro%' THEN TIMESTAMPTZ '2026-08-03 22:04:00+07'
-        ELSE TIMESTAMPTZ '2026-06-15 10:00:00+07'
-    END,
-    created_at = CASE
-        WHEN name ILIKE '%TOEIC%' THEN TIMESTAMPTZ '2026-05-15 08:00:00+07'
-        WHEN name ILIKE '%IT & Computer Science%' OR name ILIKE '%Khoa học máy tính%' THEN TIMESTAMPTZ '2026-05-18 10:00:00+07'
-        WHEN name ILIKE '%React%' THEN TIMESTAMPTZ '2026-06-01 09:00:00+07'
-        WHEN name ILIKE '%SkillSprint%' OR name ILIKE '%FPT%' THEN TIMESTAMPTZ '2026-06-10 14:00:00+07'
-        WHEN name ILIKE '%Java%' THEN TIMESTAMPTZ '2026-06-20 11:30:00+07'
-        WHEN name ILIKE '%Pomodoro%' THEN TIMESTAMPTZ '2026-07-01 08:00:00+07'
-        ELSE TIMESTAMPTZ '2026-05-01 10:00:00+07'
-    END;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'community_rooms') THEN
+        UPDATE community_rooms
+        SET
+            updated_at = CASE
+                WHEN name ILIKE '%TOEIC%' THEN TIMESTAMPTZ '2026-06-06 09:15:00+07'
+                WHEN name ILIKE '%IT & Computer Science%' OR name ILIKE '%Khoa học máy tính%' THEN TIMESTAMPTZ '2026-06-18 14:30:00+07'
+                WHEN name ILIKE '%React%' THEN TIMESTAMPTZ '2026-07-02 11:20:00+07'
+                WHEN name ILIKE '%SkillSprint%' OR name ILIKE '%FPT%' THEN TIMESTAMPTZ '2026-07-15 16:45:00+07'
+                WHEN name ILIKE '%Java%' THEN TIMESTAMPTZ '2026-07-28 10:10:00+07'
+                WHEN name ILIKE '%Pomodoro%' THEN TIMESTAMPTZ '2026-08-03 22:04:00+07'
+                ELSE TIMESTAMPTZ '2026-06-15 10:00:00+07'
+            END,
+            created_at = CASE
+                WHEN name ILIKE '%TOEIC%' THEN TIMESTAMPTZ '2026-05-15 08:00:00+07'
+                WHEN name ILIKE '%IT & Computer Science%' OR name ILIKE '%Khoa học máy tính%' THEN TIMESTAMPTZ '2026-05-18 10:00:00+07'
+                WHEN name ILIKE '%React%' THEN TIMESTAMPTZ '2026-06-01 09:00:00+07'
+                WHEN name ILIKE '%SkillSprint%' OR name ILIKE '%FPT%' THEN TIMESTAMPTZ '2026-06-10 14:00:00+07'
+                WHEN name ILIKE '%Java%' THEN TIMESTAMPTZ '2026-06-20 11:30:00+07'
+                WHEN name ILIKE '%Pomodoro%' THEN TIMESTAMPTZ '2026-07-01 08:00:00+07'
+                ELSE TIMESTAMPTZ '2026-05-01 10:00:00+07'
+            END;
+    END IF;
+END $$;
 
 -- 2. Creator Payout Account Holder Normalization (Matching Creator Names 100%)
-UPDATE creator_payouts p
-SET destination_account_holder = UPPER(
-    REGEXP_REPLACE(
-        TRANSLATE(
-            u.full_name,
-            'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ',
-            'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyydaaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyd'
-        ),
-        '[^A-ZA-Z0-9 ]', '', 'g'
-    )
-)
-FROM users u
-WHERE u.user_id = p.creator_id;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'creator_payouts') THEN
+        UPDATE creator_payouts p
+        SET destination_account_holder = UPPER(
+            REGEXP_REPLACE(
+                TRANSLATE(
+                    u.full_name,
+                    'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ',
+                    'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyydaaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyd'
+                ),
+                '[^A-ZA-Z0-9 ]', '', 'g'
+            )
+        )
+        FROM users u
+        WHERE u.user_id = p.creator_id;
+    END IF;
 
-UPDATE creator_payout_destinations d
-SET account_holder = UPPER(
-    REGEXP_REPLACE(
-        TRANSLATE(
-            u.full_name,
-            'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ',
-            'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyydaaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyd'
-        ),
-        '[^A-ZA-Z0-9 ]', '', 'g'
-    )
-)
-FROM users u
-WHERE u.user_id = d.creator_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'creator_payout_destinations') THEN
+        UPDATE creator_payout_destinations d
+        SET account_holder = UPPER(
+            REGEXP_REPLACE(
+                TRANSLATE(
+                    u.full_name,
+                    'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ',
+                    'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyydaaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyd'
+                ),
+                '[^A-ZA-Z0-9 ]', '', 'g'
+            )
+        )
+        FROM users u
+        WHERE u.user_id = d.creator_id;
+    END IF;
+END $$;
 
 -- 3. Quiz Pack Moderation Content Enrichment (4 Chapters, matching counts 100%)
 DO $$
@@ -224,17 +237,21 @@ BEGIN
       ]
     }'::jsonb;
 
-    UPDATE marketplace_quiz_pack_snapshots
-    SET content_json = v_multi_chapter_json,
-        chapter_count = 4,
-        quiz_count = 8,
-        question_count = 8
-    WHERE content_json IS NOT NULL;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'marketplace_quiz_pack_snapshots') THEN
+        UPDATE marketplace_quiz_pack_snapshots
+        SET content_json = v_multi_chapter_json,
+            chapter_count = 4,
+            quiz_count = 8,
+            question_count = 8
+        WHERE content_json IS NOT NULL;
+    END IF;
 
-    UPDATE marketplace_pack_versions
-    SET content_json = v_multi_chapter_json,
-        chapter_count = 4,
-        quiz_count = 8,
-        question_count = 8
-    WHERE content_json IS NOT NULL;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'marketplace_pack_versions') THEN
+        UPDATE marketplace_pack_versions
+        SET content_json = v_multi_chapter_json,
+            chapter_count = 4,
+            quiz_count = 8,
+            question_count = 8
+        WHERE content_json IS NOT NULL;
+    END IF;
 END $$;
