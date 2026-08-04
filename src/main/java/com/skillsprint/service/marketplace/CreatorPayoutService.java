@@ -411,19 +411,37 @@ public class CreatorPayoutService {
         target.setDestinationQrObjectKey(source.getQrObjectKey());
     }
 
-    private String resolveQrViewUrl(String rawKey, String bankCode, String accountNumber, String accountHolder, Integer amount) {
-        if (rawKey != null && (rawKey.startsWith("http://") || rawKey.startsWith("https://") || rawKey.startsWith("data:"))) {
-            return rawKey;
+    private String normalizeAccountHolderName(String rawHolder, String creatorFullName) {
+        if (creatorFullName != null && !creatorFullName.isBlank()) {
+            return stripAccentsToUpper(creatorFullName);
         }
-        String viewUrl = s3PresignedUrlService.createViewUrl(rawKey);
-        if (viewUrl != null && !viewUrl.contains("payout-qr/")) {
-            return viewUrl;
+        if (rawHolder != null && !rawHolder.isBlank()) {
+            String trimmed = rawHolder.trim().toUpperCase();
+            if (trimmed.length() > 3 && !trimmed.matches("^[A-Z\\s]{1,5}$")) {
+                return trimmed;
+            }
         }
+        return "CREATOR";
+    }
 
+    private static String stripAccentsToUpper(String src) {
+        if (src == null) return "CREATOR";
+        String nfdNormalizedString = java.text.Normalizer.normalize(src, java.text.Normalizer.Form.NFD);
+        String pattern = "\\p{InCombiningDiacriticalMarks}+";
+        return java.util.regex.Pattern.compile(pattern)
+                .matcher(nfdNormalizedString)
+                .replaceAll("")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .toUpperCase()
+                .trim();
+    }
+
+    private String resolveQrViewUrl(String rawKey, String bankCode, String accountNumber, String accountHolder, Integer amount) {
         String safeBankCode = (bankCode != null && !bankCode.isBlank()) ? bankCode.trim().toUpperCase() : "MB";
         String safeAccNo = (accountNumber != null && !accountNumber.isBlank()) ? accountNumber.trim() : "0987654321";
         String safeHolder = (accountHolder != null && !accountHolder.isBlank()) ? accountHolder.trim().toUpperCase() : "CREATOR";
-        int safeAmount = (amount != null && amount > 0) ? amount : 500000;
+        int safeAmount = (amount != null && amount > 0) ? amount : 50000;
         String encodedHolder;
         try {
             encodedHolder = java.net.URLEncoder.encode(safeHolder, java.nio.charset.StandardCharsets.UTF_8.name());
@@ -435,17 +453,22 @@ public class CreatorPayoutService {
     }
 
     private CreatorPayoutDestinationResponse toDestinationResponse(CreatorPayoutDestination destination) {
+        String safeHolder = normalizeAccountHolderName(
+                destination.getAccountHolder(),
+                destination.getCreator() != null ? destination.getCreator().getFullName() : null
+        );
+
         return CreatorPayoutDestinationResponse.builder()
                 .destinationId(destination.getDestinationId())
                 .bankName(destination.getBankName())
                 .bankCode(destination.getBankCode())
-                .accountHolder(destination.getAccountHolder())
+                .accountHolder(safeHolder)
                 .accountNumberMasked(null)
                 .qrViewUrl(resolveQrViewUrl(
                         destination.getQrObjectKey(),
                         destination.getBankCode(),
                         destination.getAccountNumberEncrypted(),
-                        destination.getAccountHolder(),
+                        safeHolder,
                         500000
                 ))
                 .updatedAt(destination.getUpdatedAt())
@@ -453,10 +476,8 @@ public class CreatorPayoutService {
     }
 
     private CreatorPayoutResponse toPayoutResponse(CreatorPayout payout, boolean includeQrViewUrl) {
-        String accountHolder = payout.getDestinationAccountHolder();
-        if (accountHolder == null || accountHolder.isBlank()) {
-            accountHolder = payout.getCreator() != null ? payout.getCreator().getFullName() : "CREATOR";
-        }
+        String creatorFullName = payout.getCreator() != null ? payout.getCreator().getFullName() : null;
+        String accountHolder = normalizeAccountHolderName(payout.getDestinationAccountHolder(), creatorFullName);
 
         String qrViewUrl = null;
         if (includeQrViewUrl) {
