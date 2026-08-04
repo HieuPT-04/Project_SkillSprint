@@ -46,19 +46,28 @@ INSERT INTO v75_creator_payout_qr_assets (
         'creator-payouts/a2bfc927-8678-eae1-0d53-4e5fc7e105e4/qr/1ea23b2d-d42c-43bb-ba2c-6062a502a6ee.png'
     );
 
-UPDATE creator_payout_destinations AS destination
-SET qr_object_key = asset.new_object_key,
-    updated_at = CURRENT_TIMESTAMP
-FROM v75_creator_payout_qr_assets AS asset
-WHERE destination.destination_id = asset.destination_id
-  AND destination.creator_id = asset.creator_id
-  AND destination.qr_object_key = asset.old_object_key;
+DO $$
+BEGIN
+    -- The deployment migration check starts from a minimal V70 baseline that
+    -- intentionally omits marketplace tables. Production has the full schema.
+    IF to_regclass('public.creator_payout_destinations') IS NOT NULL THEN
+        UPDATE creator_payout_destinations AS destination
+        SET qr_object_key = asset.new_object_key,
+            updated_at = CURRENT_TIMESTAMP
+        FROM v75_creator_payout_qr_assets AS asset
+        WHERE destination.destination_id = asset.destination_id
+          AND destination.creator_id = asset.creator_id
+          AND destination.qr_object_key = asset.old_object_key;
+    END IF;
 
--- Payouts retain a destination snapshot, so their placeholder key must be
--- repaired separately from the creator's current destination.
-UPDATE creator_payouts AS payout
-SET destination_qr_object_key = asset.new_object_key
-FROM v75_creator_payout_qr_assets AS asset
-WHERE payout.destination_id = asset.destination_id
-  AND payout.creator_id = asset.creator_id
-  AND payout.destination_qr_object_key = asset.old_object_key;
+    -- Payouts retain a destination snapshot, so their placeholder key must be
+    -- repaired separately from the creator's current destination.
+    IF to_regclass('public.creator_payouts') IS NOT NULL THEN
+        UPDATE creator_payouts AS payout
+        SET destination_qr_object_key = asset.new_object_key
+        FROM v75_creator_payout_qr_assets AS asset
+        WHERE payout.destination_id = asset.destination_id
+          AND payout.creator_id = asset.creator_id
+          AND payout.destination_qr_object_key = asset.old_object_key;
+    END IF;
+END $$;
